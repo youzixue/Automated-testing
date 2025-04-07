@@ -1,0 +1,41 @@
+---
+description: 所有敏感信息必须通过环境变量或安全存储提供，绝不硬编码敏感数据
+globs: ["**/*.py", "**/*.json", "**/*.yaml", "**/*.yml"]
+alwaysApply: true
+priority: 40
+---
+# 安全数据处理
+
+敏感信息必须通过环境变量或安全存储提供，确保安全性。
+
+## 关键实践
+- 不在代码或配置文件中硬编码敏感信息
+- 使用环境变量传递敏感数据
+- 测试数据中的敏感信息需脱敏处理
+- 日志中不记录完整敏感信息
+
+## 敏感信息类型
+- 密码
+- API密钥
+- 认证令牌
+- 个人身份信息(PII)
+- 连接字符串
+
+## 示例代码
+```python
+# 错误方式：硬编码敏感信息
+def login_admin():
+    return login("admin", "admin123")  # 不要这样做!
+
+# 正确方式：使用环境变量
+def login_admin():
+    admin_user = os.environ.get("TEST_ADMIN_USER")
+    admin_pass = os.environ.get("TEST_ADMIN_PASS")
+    return login(admin_user, admin_pass)
+
+# 正确方式：敏感信息日志处理
+logger.info(f"使用用户 {username} 登录")  # 不记录密码
+```
+
+## 文件参考
+- @src/utils/security.py

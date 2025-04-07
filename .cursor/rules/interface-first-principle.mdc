@@ -1,0 +1,60 @@
+---
+description: 确保所有功能模块先定义抽象接口再实现具体类，提高代码可扩展性和可测试性
+globs: ["src/**/*.py"]
+alwaysApply: true
+priority: 80
+---
+# 接口先行原则
+
+该框架必须遵循"接口先行"的设计原则，所有功能模块必须先定义抽象接口，再实现具体类。
+
+## 关键实践
+- 使用ABC抽象基类定义接口
+- 所有公共方法必须在接口中声明
+- 实现类必须显式继承并实现所有抽象方法
+- 优先引用接口类型而非具体实现类
+
+## 示例代码
+```python
+from abc import ABC, abstractmethod
+from typing import Optional, List
+
+class BaseDriver(ABC):  # 正确：定义接口
+    @abstractmethod
+    def navigate(self, url: str) -> None:
+        """导航到指定URL"""
+        pass
+        
+    @abstractmethod
+    def get_element(self, selector: str) -> "WebElement":
+        """获取元素对象"""
+        pass
+        
+    @abstractmethod
+    def get_elements(self, selector: str) -> List["WebElement"]:
+        """获取匹配的所有元素"""
+        pass
+
+class WebDriver(BaseDriver):  # 正确：实现接口
+    def navigate(self, url: str) -> None:
+        # 实现导航功能
+        pass
+    
+    def get_element(self, selector: str) -> "WebElement":
+        # 实现元素查找
+        pass
+        
+    def get_elements(self, selector: str) -> List["WebElement"]:
+        # 实现多元素查找
+        pass
+```
+
+## 接口设计原则
+- 保持接口精简，遵循单一职责原则
+- 接口方法应表达"做什么"而非"怎么做"
+- 设计接口时考虑向后兼容性
+- 避免在接口中暴露实现细节
+
+## 文件参考
+- @src/core/base/driver.py
+- @src/core/base/element.py

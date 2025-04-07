@@ -1,0 +1,51 @@
+---
+description: 所有公共API必须有完整的文档字符串，包含参数、返回值和异常说明
+globs: ["**/*.py"]
+alwaysApply: true
+priority: 20
+---
+# 文档完备性
+
+所有公共API必须有完整文档字符串，确保可用性和可维护性。
+
+## 关键实践
+- 使用Google风格文档字符串
+- 包含参数说明、返回值和异常说明
+- 保持文档与代码同步更新
+- 直接实现业务功能代码，不提供示例代码
+
+## 文档生成工具
+- 使用Sphinx自动从文档字符串生成API文档
+- 配置自动构建流程，确保文档与代码同步
+- 文档生成应集成到CI/CD流程中
+
+## 文档字符串格式
+```python
+def wait_for_element(selector: str, 
+                    condition: str = "visible", 
+                    timeout: Optional[int] = None) -> WebElement:
+    """等待并返回满足条件的元素。
+    
+    在指定的超时时间内等待元素满足指定条件，并返回该元素。
+    
+    Args:
+        selector: 元素选择器表达式
+        condition: 等待条件，可选值：
+            - "present": 元素存在于DOM
+            - "visible": 元素可见(默认)
+            - "clickable": 元素可点击
+        timeout: 超时时间(秒)，None使用默认超时设置
+        
+    Returns:
+        满足条件的WebElement对象
+        
+    Raises:
+        TimeoutError: 在指定时间内未满足条件
+        ElementNotFoundError: 元素不存在
+    """
+    # 直接实现真实业务代码，不要添加示例
+```
+
+## 文件参考
+- @src/core/base/driver.py
+- @src/core/base/element.py

@@ -1,0 +1,48 @@
+# OMP系统登录测试数据
+url: "https://test.cmpo1914.com:3006/omp/"  # 线上测试环境URL
+
+# 测试用户数据
+users:
+  # 有效用户
+  valid:
+    username: "autotest"
+    password: "123456+a"
+    expected_result: "success"
+
+  # 无效用户名
+  invalid_username:
+    username: "invalid_user"
+    password: "123456+a"
+    expected_error: "用户名或密码错误"
+    use_random: true  # 使用随机用户名避免账号锁定
+
+  # 无效密码
+  invalid_password:
+    username: "autotest"
+    password: "wrong_password"
+    expected_error: "用户名或密码错误"
+
+  # 无效验证码
+  invalid_captcha:
+    username: "autotest"
+    password: "123456+a"
+    captcha: "wrong_captcha"
+    expected_error: "验证码错误"
+
+  # 特殊字符用户名/密码
+  special_characters:
+    username: "user@#$%"
+    password: "pass^&*()"
+    expected_error: "用户名或密码错误" # 假设特殊字符不允许
+
+# 验证码设置
+captcha:
+  enabled: true
+  max_retry: 3
+  timeout: 5  # 验证码识别超时时间(秒)
+  use_ocr: true  # 使用OCR识别验证码
+  
+  # 验证码测试场景
+  test_cases:
+    invalid:
+      use_random: true  # 使用随机错误值测试验证码失败场景，而非硬编码值 

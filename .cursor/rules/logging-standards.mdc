@@ -1,0 +1,46 @@
+---
+description: 确保所有类使用标准化日志器，遵循统一的日志级别和格式
+globs: ["**/*.py"]
+alwaysApply: true
+priority: 20
+---
+# 日志标准化
+
+所有类必须使用标准化日志器，遵循统一日志级别和格式。
+
+## 关键实践
+- 每个类使用以类名命名的专属日志器
+- 遵循标准日志级别(ERROR/WARNING/INFO/DEBUG)
+- 使用统一日志格式包含时间戳、级别、来源
+- 捕获的异常必须记录日志
+
+## 日志级别使用指南
+- ERROR: 影响测试执行的错误
+- WARNING: 需要注意但不影响测试的问题
+- INFO: 测试步骤和重要操作
+- DEBUG: 详细的技术信息，用于排障
+
+## 示例代码
+```python
+import logging
+
+class LoginPage:
+    def __init__(self, driver):
+        self.driver = driver
+        self.logger = logging.getLogger(self.__class__.__name__)
+    
+    def login(self, username, password):
+        self.logger.info(f"执行登录操作: 用户名={username}")
+        try:
+            # 登录操作
+            self.logger.debug("找到登录元素")
+            # ...
+            self.logger.info("登录成功")
+            return True
+        except Exception as e:
+            self.logger.error(f"登录失败: {e}", exc_info=True)
+            raise
+```
+
+## 文件参考
+- @src/utils/logger.py

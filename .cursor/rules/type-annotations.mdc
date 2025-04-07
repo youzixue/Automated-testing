@@ -1,0 +1,38 @@
+---
+description: 强制在所有公共API中使用类型注解，提高代码可读性和静态类型检查能力
+globs: ["**/*.py"]
+alwaysApply: true
+priority: 80
+---
+# 类型注解强制
+
+所有公共API必须使用类型注解，提高代码可读性和自检查能力。
+
+## 关键实践
+- 所有方法参数必须有类型注解
+- 所有返回值必须有类型注解
+- 使用typing模块提供复杂类型
+- 为通用类型定义类型别名
+
+## 示例代码
+```python
+from typing import List, Dict, Optional, Union, Any
+
+# 正确：使用完整类型注解
+def find_elements(selector: str, timeout: Optional[int] = None) -> List[WebElement]:
+    """查找所有匹配的元素"""
+    pass
+
+# 正确：使用Union表示多种可能的返回类型
+def screenshot(path: Optional[str] = None) -> Union[str, bytes]:
+    """获取截图，返回路径或二进制数据"""
+    pass
+    
+# 不推荐：缺少类型注解
+def click_element(selector):
+    pass
+```
+
+## 文件参考
+- @src/core/base/driver.py
+- @src/core/base/element.py

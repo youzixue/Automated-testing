@@ -1,0 +1,135 @@
+---
+description: 确保所有资源获取操作使用上下文管理器，防止资源泄漏
+globs: ["**/*.py"]
+alwaysApply: true
+priority: 60
+---
+# 资源自动释放
+
+所有资源获取必须使用上下文管理器确保释放，防止资源泄漏。
+
+## 关键实践
+- 驱动类必须实现__enter__和__exit__方法
+- 使用with语句管理资源生命周期
+- 实现自动资源清理机制
+- 手动获取的资源必须在finally块中释放
+
+## 示例代码
+```python
+# 正确：使用上下文管理器
+with WebDriver(browser_type="chromium") as driver:
+    page = LoginPage(driver)
+    page.login("user", "pass")
+    # 测试代码...
+# 退出with块自动关闭driver
+
+# 不推荐：手动管理资源
+driver = WebDriver(browser_type="chromium")
+try:
+    page = LoginPage(driver)
+    page.login("user", "pass")
+finally:
+    driver.quit()  # 必须手动关闭
+```
+
+## 异步资源管理
+```python
+import asyncio
+from contextlib import asynccontextmanager
+
+class AsyncResource:
+    """支持异步上下文管理的资源类"""
+    
+    async def __aenter__(self):
+        """异步资源获取"""
+        await self.initialize()
+        return self
+        
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """异步资源释放"""
+        await self.cleanup()
+        
+    async def initialize(self):
+        """初始化资源，子类必须实现"""
+        pass
+        
+    async def cleanup(self):
+        """清理资源，子类必须实现"""
+        pass
+
+# 使用示例
+async def test_async():
+    async with AsyncResource() as resource:
+        # 使用异步资源
+        await resource.some_operation()
+```
+
+## 资源池化管理
+```python
+from queue import Queue
+import threading
+
+class ResourcePool:
+    """资源池，管理可复用的资源"""
+    
+    def __init__(self, factory, initial_size=5, max_size=10):
+        """
+        Args:
+            factory: 创建资源的工厂函数
+            initial_size: 初始资源数量
+            max_size: 最大资源数量
+        """
+        self.factory = factory
+        self.max_size = max_size
+        self._pool = Queue()
+        self._lock = threading.RLock()
+        self._created_count = 0
+        
+        # 预创建资源
+        for _ in range(initial_size):
+            self._add_resource()
+            
+    def _add_resource(self):
+        """创建并添加新资源到池中"""
+        if self._created_count < self.max_size:
+            resource = self.factory()
+            self._pool.put(resource)
+            self._created_count += 1
+            
+    def acquire(self):
+        """获取资源"""
+        with self._lock:
+            if self._pool.empty() and self._created_count < self.max_size:
+                self._add_resource()
+                
+        return _PoolResource(self, self._pool.get())
+        
+    def release(self, resource):
+        """释放资源回池"""
+        self._pool.put(resource)
+        
+class _PoolResource:
+    """资源池资源的包装类，支持上下文管理"""
+    
+    def __init__(self, pool, resource):
+        self.pool = pool
+        self.resource = resource
+        
+    def __enter__(self):
+        return self.resource
+        
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.pool.release(self.resource)
+
+# 使用示例
+driver_pool = ResourcePool(lambda: WebDriver(browser_type="chromium"))
+
+def test_with_pool():
+    with driver_pool.acquire() as driver:
+        # 使用driver
+        driver.navigate("https://example.com")
+```
+
+## 文件参考
+- @src/core/base/driver.py
+- @src/web/driver.py

@@ -1,0 +1,50 @@
+---
+description: 确保测试数据与测试逻辑分离，使用fixtures或工厂方法提供数据
+globs: ["tests/**/*.py", "data/**/*"]
+alwaysApply: true
+priority: 50
+---
+# 测试数据分离
+
+测试数据必须与测试逻辑分离，使用fixtures或工厂方法提供。
+
+## 关键实践
+- 测试数据存储在独立文件(YAML/JSON/CSV)
+- 使用pytest fixtures提供测试数据
+- 数据工厂生成动态测试数据
+- 参数化测试运行多组数据
+
+## 示例代码
+```python
+# conftest.py
+@pytest.fixture
+def test_users():
+    return [
+        {"username": "valid_user", "password": "valid_pass", "expected": "success"},
+        {"username": "invalid_user", "password": "wrong_pass", "expected": "failure"}
+    ]
+
+# test_login.py
+@pytest.mark.parametrize("user_index", [0, 1])
+def test_login_scenarios(test_users, user_index, web_driver):
+    user = test_users[user_index]
+    login_page = LoginPage(web_driver)
+    result = login_page.login(user["username"], user["password"])
+    assert result.status == user["expected"]
+```
+
+## 数据工厂示例
+```python
+class UserFactory:
+    @staticmethod
+    def create_valid_user():
+        return {
+            "username": f"valid_user_{random.randint(1000, 9999)}",
+            "password": "Valid@Pass123",
+            "expected": "success"
+        }
+```
+
+## 文件参考
+- @tests/conftest.py
+- @data/

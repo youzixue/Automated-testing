@@ -1,0 +1,195 @@
+name: 自动化测试
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    - cron: '0 1 * * 1-5'  # 工作日每天凌晨1点运行
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  lint:
+    name: 代码检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: 设置Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          
+      - name: 安装Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.7.1
+          
+      - name: 依赖缓存
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pypoetry
+          key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
+            
+      - name: 安装依赖
+        run: poetry install --with dev
+        
+      - name: 运行Pylint
+        run: poetry run pylint src tests
+        
+      - name: 运行MyPy
+        run: poetry run mypy src
+        
+  test:
+    name: 自动化测试
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        test-group: [web, api, unit]
+      fail-fast: false  # 允许其他测试组继续运行，即使一组失败
+        
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: 设置Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          
+      - name: 安装Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.7.1
+          
+      - name: 依赖缓存
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pypoetry
+          key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
+            
+      - name: Playwright缓存
+        if: matrix.test-group == 'web'
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+            
+      - name: 安装依赖
+        run: poetry install
+        
+      - name: 安装Playwright浏览器
+        if: matrix.test-group == 'web'
+        run: poetry run playwright install chromium
+        
+      - name: 运行单元测试
+        if: matrix.test-group == 'unit'
+        run: poetry run pytest tests/unit/ --cov=src --cov-report=xml
+      
+      - name: 运行Web测试
+        if: matrix.test-group == 'web'
+        run: poetry run pytest tests/web/ -m "not slow" --alluredir=./allure-results
+        env:
+          ENV: test
+          TEST_ADMIN_PASSWORD: ${{ secrets.TEST_ADMIN_PASSWORD }}
+          TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+          
+      - name: 运行API测试
+        if: matrix.test-group == 'api'
+        run: poetry run pytest tests/api/ --alluredir=./allure-results
+        env:
+          ENV: test
+          TEST_ADMIN_PASSWORD: ${{ secrets.TEST_ADMIN_PASSWORD }}
+          TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+      
+      - name: 上传测试覆盖率报告
+        if: matrix.test-group == 'unit'
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: true
+          
+      - name: 上传Allure结果
+        if: always() && (matrix.test-group == 'web' || matrix.test-group == 'api')
+        uses: actions/upload-artifact@v3
+        with:
+          name: allure-results-${{ matrix.test-group }}
+          path: output/allure-results/
+          retention-days: 5
+          
+  report:
+    name: 生成报告
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: 下载Allure结果
+        uses: actions/download-artifact@v3
+        with:
+          path: output/allure-results
+          
+      - name: 合并Allure结果
+        run: |
+          mkdir merged-allure-results
+          cp -r output/allure-results/allure-results-*/* merged-allure-results/ || true
+          ls -l merged-allure-results
+          
+      - name: 生成Allure报告
+        uses: simple-elf/allure-report-action@master
+        with:
+          allure_results: merged-allure-results
+          allure_report: allure-report
+          
+      - name: 发布报告到GitHub Pages
+        if: github.event_name != 'pull_request'
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./allure-report
+          publish_branch: gh-pages
+      
+      - name: 设置Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          
+      - name: 安装Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.7.1
+      
+      - name: 依赖缓存
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pypoetry
+          key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
+      
+      - name: 安装依赖
+        run: poetry install
+          
+      - name: 发送邮件通知
+        if: always()
+        run: |
+          poetry run python scripts/generate_report.py --env test --allure-results merged-allure-results --notify
+        env:
+          ENV: test
+          EMAIL_ENABLED: 'true'
+          EMAIL_SMTP_SERVER: ${{ secrets.EMAIL_SMTP_SERVER }}
+          EMAIL_SMTP_PORT: ${{ secrets.EMAIL_SMTP_PORT }}
+          EMAIL_USE_SSL: 'true'
+          EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
+          EMAIL_RECIPIENTS: ${{ secrets.EMAIL_RECIPIENTS }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          CI_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REPORT_URL: ${{ github.server_url }}/${{ github.repository }}/pages 

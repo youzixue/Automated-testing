@@ -1,0 +1,50 @@
+---
+description: 各测试平台的特定实现标准
+globs: ["src/**/*.py", "tests/**/*.py"]
+alwaysApply: true
+priority: 70
+---
+# 平台测试标准
+
+## Web测试规范
+- 使用Playwright作为自动化引擎
+- 页面对象必须放在src/web/pages/目录
+- 测试用例必须放在tests/web/目录
+- 必须使用智能等待策略，禁止使用固定等待
+- 必须支持Chrome、Firefox、Edge浏览器
+
+## API测试规范
+- 使用httpx库作为请求客户端 
+- 服务对象必须放在src/api/services/目录
+- 测试用例必须放在tests/api/目录
+- API响应必须进行结构化验证
+- 必须处理各种状态码和错误情况
+
+## 移动测试规范
+- 使用Appium作为自动化引擎
+- 屏幕对象必须放在src/mobile/screens/目录
+- 测试用例必须放在tests/mobile/目录
+- 必须处理设备间差异和权限请求
+- 支持Android和iOS平台
+
+## 微信测试规范
+- 使用Playwright(网页版/小程序)和Appium(移动端)组合作为自动化引擎
+- 组件必须放在src/wechat/components/目录
+- 测试用例必须放在tests/wechat/目录
+- 必须处理微信特有交互模式
+- 支持网页版、小程序和移动端微信应用
+
+## 安全测试规范
+- 使用OWASP ZAP作为安全测试工具
+- 安全测试脚本必须放在src/security/目录
+- 测试用例必须放在tests/security/目录
+- 必须包含SQL注入、XSS等常见漏洞测试
+- 敏感数据必须脱敏处理
+
+## 文件参考
+- @src/web/
+- @src/api/
+- @src/mobile/
+- @src/wechat/
+- @src/security/
+- @tests/

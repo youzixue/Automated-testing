@@ -1,0 +1,50 @@
+---
+description: 所有可变配置必须从外部配置文件加载，不允许硬编码配置值
+globs: ["**/*.py", "config/**/*"]
+alwaysApply: true
+priority: 40
+---
+# 配置外部化
+
+所有可变配置必须从外部配置文件加载，不硬编码。
+
+## 关键实践
+- 在config目录中存储所有配置文件
+- 使用YAML/JSON格式存储配置
+- 通过环境变量支持不同环境配置
+- 实现配置验证确保完整性
+
+## 配置层次结构
+1. 默认配置文件(config/settings.yaml)
+2. 环境特定配置(config/env/dev.yaml)
+3. 本地开发配置(config/local.yaml，不提交到版本控制)
+4. 环境变量(覆盖优先级最高)
+
+## 示例代码
+```python
+# 配置加载
+def load_config(env='dev'):
+    # 加载默认配置
+    config = yaml.safe_load(open('config/settings.yaml'))
+    
+    # 加载环境配置
+    env_config = f'config/env/{env}.yaml'
+    if os.path.exists(env_config):
+        env_data = yaml.safe_load(open(env_config))
+        config = deep_merge(config, env_data)
+    
+    # 加载本地配置(如存在)
+    local_config = 'config/local.yaml'
+    if os.path.exists(local_config):
+        local_data = yaml.safe_load(open(local_config))
+        config = deep_merge(config, local_data)
+    
+    # 环境变量覆盖
+    config = override_from_env(config)
+    
+    return config
+```
+
+## 文件参考
+- @config/settings.yaml
+- @src/utils/config/manager.py

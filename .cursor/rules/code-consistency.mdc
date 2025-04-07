@@ -1,0 +1,86 @@
+---
+description: 所有新代码必须与项目现有代码保持一致的命名、格式和设计模式
+globs: ["**/*.py"]
+alwaysApply: true
+priority: 90
+---
+# 代码风格一致性
+
+所有新代码必须与项目现有代码保持一致的命名、格式和设计模式。
+
+## 关键实践
+- 新代码必须采用与相关模块相同的命名风格
+- 类名、方法名和变量名需遵循已有代码的命名规范
+- 文档字符串格式必须一致（使用Google风格）
+- 异常处理模式必须遵循项目规范
+- 日志记录方式必须保持一致
+
+## 命名风格规范
+- 类名：使用CamelCase（如`WebDriver`, `LoginPage`）
+- 方法名：使用snake_case（如`get_element`, `wait_for_visible`）
+- 常量：使用大写SNAKE_CASE（如`DEFAULT_TIMEOUT`, `ERROR_MESSAGES`）
+- 私有方法/属性：以下划线开头（如`_initialize`, `_driver`）
+
+## 代码格式规范
+- 所有Python代码必须通过Black格式化，配置在pyproject.toml
+- 最大行长度限制为100字符
+- 所有代码必须通过pylint静态分析检查
+- 新代码必须添加适当的类型注解，并通过mypy检查
+- 提交前必须运行pre-commit
+
+## 代码检查步骤
+1. 分析相关模块的现有代码风格
+2. 确保新代码与之保持一致
+3. 检查类结构和方法签名一致性
+4. 确认日志格式和级别使用统一
+5. 验证注释和文档一致性
+
+## 编码风格示例
+```python
+class WebElementFinder:
+    """元素查找器，负责定位DOM元素。
+    
+    提供多种元素查找策略，支持显式等待。
+    
+    属性:
+        driver: WebDriver实例
+        default_timeout: 默认等待超时时间(秒)
+    """
+    
+    def __init__(self, driver, default_timeout=10):
+        """初始化元素查找器。
+        
+        Args:
+            driver: WebDriver实例
+            default_timeout: 默认超时时间(秒)
+        """
+        self._driver = driver
+        self._default_timeout = default_timeout
+        self._logger = get_logger(self.__class__.__name__)
+        
+    def find_element(self, selector, timeout=None):
+        """查找单个元素。
+        
+        Args:
+            selector: 元素选择器
+            timeout: 超时时间(秒)，None使用默认值
+            
+        Returns:
+            WebElement: 找到的元素
+            
+        Raises:
+            ElementNotFoundError: 元素未找到
+        """
+        try:
+            actual_timeout = timeout or self._default_timeout
+            self._logger.debug(f"查找元素: {selector}, 超时: {actual_timeout}秒")
+            # 实现代码...
+        except Exception as e:
+            self._logger.error(f"查找元素失败: {e}")
+            raise ElementNotFoundError(f"未找到元素 {selector}: {e}")
+```
+
+## 文件参考
+- @src/core/base/element.py
+- @src/core/base/driver.py
+- @src/utils/logger.py

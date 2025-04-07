@@ -1,0 +1,82 @@
+[tool.poetry]
+name = "automated-testing"
+version = "0.1.0"
+description = "自动化测试框架，集成Playwright、OCR和Allure报告"
+authors = ["Youzixue <863819494@qq.com>"]
+readme = "README.md"
+packages = [{include = "src"}]
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.12"
+playwright = "^1.40.0"
+pytest = "^7.4.0"
+pytest-playwright = "^0.4.0"
+allure-pytest = "^2.13.2"
+ddddocr = "^1.4.7"
+pyyaml = "^6.0.1"
+pydantic = "^2.5.2"
+pytest-xdist = "^3.3.1"
+pytest-rerunfailures = "^12.0"
+pytest-html = "^4.1.1"
+loguru = "^0.7.2"
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.11.0"
+pylint = "^3.0.2"
+mypy = "^1.7.1"
+pytest-cov = "^4.1.0"
+pre-commit = "^3.5.0"
+pytest-mock = "^3.12.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.pylint.messages_control]
+disable = [
+    "missing-module-docstring",
+    "missing-class-docstring",
+    "missing-function-docstring",
+]
+
+[tool.pylint.format]
+max-line-length = 100
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+strict_optional = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+markers = [
+    "web: Web UI tests",
+    "api: API tests",
+    "mobile: Mobile tests",
+    "wechat: WeChat tests",
+    "smoke: Smoke tests",
+    "regression: Regression tests",
+    "slow: Slow running tests",
+    "ui: Tests that require UI",
+    "security: Security tests",
+    "performance: Performance tests",
+    "login: Login related tests",
+] 

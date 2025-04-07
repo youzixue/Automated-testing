@@ -1,0 +1,68 @@
+---
+description: 在开始任何开发任务前，必须首先阅读项目文档，包括README.md和架构设计文档
+globs: ["**/*.py"]
+alwaysApply: true
+priority: 20
+---
+# 项目文档优先
+
+在开始任何开发任务前，必须首先阅读项目文档，包括README.md和docs/enhanced_architecture.md掌握整体架构
+
+## 关键实践
+- 首先详细研读docs/enhanced_architecture.md掌握整体架构
+- 了解项目的分层结构和设计原则
+- 按照文档指导组织代码和功能
+- 新功能必须符合已有的设计理念
+
+## 文档阅读顺序
+1. README.md - 了解项目整体思路和使用方式
+2. docs/enhanced_architecture.md - 理解技术架构
+3. .cursor/rules/ - 掌握代码规范
+4. 相关功能模块的实现代码
+
+## 文档更新责任
+- 代码更改需要同步更新相关文档
+- 发现文档与代码不一致时应当修正
+- 新功能实现后应补充相应文档说明
+
+## 项目结构遵循
+项目目录结构必须遵循七层架构设计:
+
+【第1层】测试用例层 (Tests):
+- tests/unit/ - 单元测试
+- tests/integration/ - 集成测试
+- tests/web/ - Web测试用例
+- tests/api/ - API测试用例
+- tests/mobile/ - 移动测试用例
+
+【第2层】固件层 (Fixtures):
+- tests/conftest.py - 全局测试固件 
+- tests/web/conftest.py - Web测试固件
+- tests/api/conftest.py - API测试固件
+- tests/mobile/conftest.py - 移动测试固件
+
+【第3层】业务对象层 (Business):
+- src/web/pages/ - Web页面对象
+- src/api/services/ - API服务对象
+- src/mobile/screens/ - 移动页面对象
+- data/ - 测试数据
+
+【第4层】平台实现层 (Platform):
+- src/web/ - Web测试平台实现
+- src/api/ - API测试平台实现
+- src/mobile/ - 移动测试平台实现
+- src/wechat/ - 微信测试平台实现
+- src/security/ - 安全测试实现
+
+【第5层】核心抽象层 (Core):
+- src/core/base/ - 核心接口定义
+
+【第6层】工具层 (Utils):
+- src/utils/ - 通用工具类
+
+【第7层】外部集成层 (External):
+- 在pyproject.toml中声明，不直接修改
+
+## 文件参考
+- @README.md
+- @docs/enhanced_architecture.md

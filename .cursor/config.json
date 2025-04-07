@@ -1,0 +1,29 @@
+{
+  "indexing": {
+    "exclude": [
+      ".venv/**",
+      ".git/**",
+      "__pycache__/**",
+      "*.pyc",
+      "*.pyo",
+      "*.pyd",
+      "logs/**",
+      "reports/**",
+      "data/**/*.json",
+      "data/**/*.csv"
+    ],
+    "include": [
+      "src/**/*.py",
+      "tests/**/*.py",
+      "config/**/*.py",
+      "scripts/**/*.py"
+    ],
+    "maxFileSizeBytes": 1048576,
+    "maxIndexingTimeSeconds": 120
+  },
+  "useIndexedSearch": true,
+  "performance": {
+    "maxThreads": 4,
+    "chunkSize": 1000
+  }
+}

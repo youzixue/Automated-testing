@@ -1,0 +1,73 @@
+---
+description: 确保代码集成到持续集成和持续部署流程，保证代码质量和自动化测试执行
+globs: [".github/workflows/**/*.yml", "ci/**/*"]
+alwaysApply: true
+---
+# CI/CD集成规范
+
+所有代码变更必须通过CI/CD流程验证，确保代码质量和自动化测试执行。
+
+## 关键实践
+- 每次提交必须触发自动化测试
+- 合并到主分支前必须通过所有测试和质量检查
+- 测试覆盖率必须达到指定阈值
+- 自动化部署到测试环境验证功能
+- 与CI/CD流程相关的辅助脚本应统一存放在 ci/scripts/ 目录下
+
+## CI流程包含步骤
+1. 代码静态分析(pylint, flake8)
+2. 单元测试执行
+3. 集成测试执行
+4. 代码覆盖率检查
+5. 安全漏洞扫描
+6. 构建测试环境
+
+## 环境准备
+- CI环境必须使用poetry安装项目依赖
+- 必须使用缓存加速依赖安装过程
+- 测试环境必须与开发环境保持一致
+- 必须配置适当的Python版本（3.11+）
+
+## GitHub Actions工作流示例
+```yaml
+name: Test and Lint
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.11
+    - name: Install Poetry
+      run: |
+        curl -sSL https://install.python-poetry.org | python3 -
+    - name: Cache Poetry dependencies
+      uses: actions/cache@v2
+      with:
+        path: ~/.cache/pypoetry
+        key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
+    - name: Install dependencies
+      run: |
+        poetry install
+    - name: Lint with pylint
+      run: |
+        poetry run pylint src tests
+    - name: Test with pytest
+      run: |
+        poetry run pytest --cov=src tests/
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v1
+```
+
+## 文件参考
+- @.github/workflows/test.yml
+- @ci/scripts/

@@ -1,0 +1,42 @@
+---
+description: 确保环境配置统一，遵循项目标准
+globs: ["**/*.py", "pyproject.toml", ".env*"]
+alwaysApply: true
+priority: 40
+---
+# 环境配置标准化
+
+## 支持的环境
+- Windows: Python 3.11+, 遵循docs/enhanced_architecture.md#Windows环境
+- MacOS: Python 3.11+, 遵循docs/enhanced_architecture.md#MacOS环境
+- Linux: Python 3.11+, 遵循docs/enhanced_architecture.md#Linux环境
+- Docker: 使用项目根目录的Dockerfile
+
+## 依赖管理规范
+- 所有Python依赖必须在pyproject.toml的[tool.poetry.dependencies]部分管理
+- 开发环境依赖必须在[tool.poetry.group.dev.dependencies]部分管理
+- 禁止直接使用pip install安装未在pyproject.toml中声明的包
+- 版本更新必须经过测试验证后才能提交
+- 使用poetry命令管理依赖，而非直接修改pyproject.toml
+
+## 环境变量规范
+- 敏感配置必须通过环境变量提供，不得硬编码
+- 环境变量必须在.env.example中提供示例（不含实际值）
+- 本地开发环境变量存放在.env文件（不提交到版本控制）
+- CI/CD环境变量通过CI系统安全机制提供
+
+## 各平台特定配置
+- Web测试: 必须支持Chrome, Firefox, Edge三种浏览器
+- 移动测试: 必须支持Android真机、模拟器和iOS模拟器
+- 微信测试: 必须配置wxauto环境，详见docs/wxauto_setup.md
+
+## 工具配置规范
+- Black: 代码格式化工具，配置在pyproject.toml的[tool.black]部分
+- Pylint: 代码静态分析工具，配置在pyproject.toml的[tool.pylint]部分
+- MyPy: 类型检查工具，配置在pyproject.toml的[tool.mypy]部分
+- Pytest: 测试框架，配置在pyproject.toml的[tool.pytest.ini_options]部分
+
+## 文档参考
+- @docs/enhanced_architecture.md
+- @pyproject.toml
+- @.env.example

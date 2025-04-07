@@ -1,0 +1,77 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+/tests/__pycache__/
+
+# Virtual Environments
+.env
+.venv
+venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+/.DS_Store
+/docs/.DS_Store
+
+# Generated output files
+/output/
+
+# Local configuration
+config/env/local.yaml
+config/local.yaml
+
+# Playwright specific (some might be covered by /output/)
+.playwright-screenshots/
+.auth/
+.cookies/
+playwright-report/
+test-results/
+
+# Temporary files
+tmp/
+temp/
+
+# Sensitive data
+*.p12
+*.pem
+*.key 

@@ -1,0 +1,92 @@
+---
+description: 使用特定的异常类型替代通用异常，提高代码可维护性和错误处理精确性
+globs: ["**/*.py"]
+alwaysApply: true
+priority: 80
+---
+# 异常专一性
+
+使用专门的异常类型而非通用异常，提高代码可维护性和可调试性。
+
+## 关键实践
+- 定义框架专用的基础异常类
+- 为不同错误场景创建专用异常子类
+- 捕获具体异常而非通用Exception
+- 异常类名应清晰表明错误类型
+
+## 异常层次结构
+```python
+# 基础异常
+class AutomationError(Exception):
+    """自动化测试框架基础异常类"""
+    pass
+
+# 元素相关异常
+class ElementError(AutomationError):
+    """元素操作相关异常基类"""
+    pass
+    
+class ElementNotFoundError(ElementError):
+    """元素未找到异常"""
+    pass
+    
+class ElementNotVisibleError(ElementError):
+    """元素不可见异常"""
+    pass
+    
+class ElementNotInteractableError(ElementError):
+    """元素不可交互异常"""
+    pass
+
+# 驱动相关异常
+class DriverError(AutomationError):
+    """驱动操作相关异常基类"""
+    pass
+    
+class DriverInitError(DriverError):
+    """驱动初始化异常"""
+    pass
+    
+class NavigationError(DriverError):
+    """页面导航异常"""
+    pass
+
+# 其他异常类型
+class TimeoutError(AutomationError):
+    """操作超时异常"""
+    pass
+    
+class ConfigError(AutomationError):
+    """配置错误异常"""
+    pass
+    
+class ApiError(AutomationError):
+    """API相关异常基类"""
+    pass
+    
+class ApiRequestError(ApiError):
+    """API请求异常"""
+    pass
+```
+
+## 异常命名规范
+- 所有异常类名以Error结尾
+- 异常类名应明确表达错误类型
+- 异常类需包含详细的文档字符串
+- 子系统异常应继承相应的基础异常类
+
+## 示例代码
+```python
+try:
+    element.click()
+except ElementNotVisibleError as e:
+    logger.warning(f"元素不可见: {e}")
+    wait_for_element_visible(element)
+    element.click()
+except ElementNotInteractableError as e:
+    logger.error(f"元素不可交互: {e}")
+    raise
+```
+
+## 文件参考
+- @src/core/base/errors.py

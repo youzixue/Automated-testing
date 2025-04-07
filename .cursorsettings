@@ -1,0 +1,18 @@
+{
+  "indexExcludedDirectories": [
+    ".venv",
+    ".git",
+    "__pycache__",
+    "logs",
+    "reports"
+  ],
+  "indexPrioritizedDirectories": [
+    "src/core",
+    "src/utils",
+    "tests/unit",
+    "tests/integration"
+  ],
+  "enableFastIndexing": true,
+  "memoryLimit": "high",
+  "useLocalModelWhenPossible": true
+}
