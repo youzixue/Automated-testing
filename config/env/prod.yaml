@@ -1,0 +1,67 @@
+# 生产环境配置
+environment: prod
+
+web:
+  base_url: "${env:WEB_BASE_URL}" # 从环境变量获取生产环境 Web URL
+  browser: "${env:BROWSER:-chromium}" # 默认使用 chromium
+  headless: ${env:HEADLESS:-true} # 生产环境默认使用无头模式
+  timeout: ${env:DEFAULT_TIMEOUT:-30} # 生产环境可能需要更长的超时
+  slow_mo: ${env:SLOW_MO:-0} # 生产环境通常不需要慢放
+  screenshot_on_failure: false # 生产环境不保存截图，避免敏感信息泄露
+  # URL 成功模式 (仅在生产环境使用)
+  urls:
+    success_patterns:
+      - "/workbench/workbench-manage" # 实际登录成功后的路径
+
+api:
+  base_url: "${env:API_BASE_URL}" # 从环境变量获取生产环境 API URL
+  timeout: ${env:DEFAULT_TIMEOUT:-30} # 使用较长的超时时间
+  verify_ssl: true # 必须验证SSL证书
+  retry_attempts: 3 # 生产环境增加重试次数
+
+# 登录信息 (引用生产环境变量)
+credentials:
+  admin:
+    username: "${env:PROD_ADMIN_USERNAME}" # 必须来自环境变量
+    password: "${env:PROD_ADMIN_PASSWORD}" # 必须来自环境变量
+  default:
+    username: "${env:PROD_DEFAULT_USERNAME}" # 必须来自环境变量
+    password: "${env:PROD_DEFAULT_PASSWORD}" # 必须来自环境变量
+
+# 生产环境邮件配置
+notification:
+  email:
+    enabled: ${env:EMAIL_ENABLED:-true} # 生产环境默认启用邮件
+    smtp_server: "${env:EMAIL_SMTP_SERVER}" # 必须来自环境变量
+    smtp_port: ${env:EMAIL_SMTP_PORT:-465} # 可以有默认值
+    sender: "${env:EMAIL_SENDER}" # 必须来自环境变量
+    password: "${env:EMAIL_PASSWORD}" # 必须来自环境变量
+    use_ssl: ${env:EMAIL_USE_SSL:-true} # 可以有默认值
+    pop3_server: "${env:EMAIL_POP3_SERVER}" # 必须来自环境变量
+    pop3_port: ${env:EMAIL_POP3_PORT:-995} # 可以有默认值
+    pop3_use_ssl: ${env:EMAIL_POP3_USE_SSL:-true} # 可以有默认值
+    recipients: "${env:EMAIL_RECIPIENTS}" # 必须来自环境变量
+    # 生产环境邮件模板
+    templates:
+      alert: "生产环境告警模板"
+      report: "生产环境测试报告模板"
+
+# 日志设置
+log:
+  level: "${env:LOG_LEVEL:-WARNING}" # 生产环境默认使用WARNING级别
+  console:
+    enabled: ${env:LOG_CONSOLE_ENABLED:-true} # 默认启用控制台日志
+    color: false # 生产环境日志通常不使用彩色
+  file:
+    enabled: ${env:LOG_FILE_ENABLED:-true} # 默认启用文件日志
+    path: "logs/prod" # 生产环境日志存放位置
+    max_size: 50 # MB，生产环境可能需要更大的日志文件
+    backup_count: 10 # 保留更多备份文件
+    
+# 性能监控配置
+monitoring:
+  enabled: true
+  metrics_collection_interval: 60 # 秒
+  alert_threshold: 
+    response_time: 2000 # 毫秒
+    error_rate: 0.01 # 1% 
