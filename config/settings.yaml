@@ -1,71 +1,42 @@
+# 通用基础配置，会被环境配置和环境变量覆盖
 web:
   output:
-    directory: "output/web"  # 输出文件保存目录
-  # 通用框架设置示例 (具体值通常由项目或环境配置覆盖)
+    directory: "output/web" # 默认输出目录
   timeouts:
-    page_load: 10
-    element_wait: 2
-    # 移除了特定页面的 state_stabilize 和 success_check
+    default: ${env:DEFAULT_TIMEOUT:-10} # 默认超时时间(秒)
+  screenshot:
+    on_failure: true # 默认在失败时截图
 
-# 注意: 所有特定于应用程序 UI 的选择器 (Selectors) 
-# 应该由使用此框架的具体项目在其自己的配置文件中定义。
-# 这个核心 settings.yaml 不应包含与特定 UI 强耦合的选择器。
+# 通用邮件默认配置 (环境可覆盖)
+notification:
+  email:
+    enabled: ${env:EMAIL_ENABLED:-false} # 默认禁用
+    use_ssl: ${env:EMAIL_USE_SSL:-true}
+    smtp_port: ${env:EMAIL_SMTP_PORT:-465} # 常用 SSL 端口
+    pop3_port: ${env:EMAIL_POP3_PORT:-995} # 常用 SSL 端口
+    pop3_use_ssl: ${env:EMAIL_POP3_USE_SSL:-true}
 
-# 示例: 项目特定的配置文件 (例如 project_config.yaml) 可能包含如下内容:
-# login_page:
-#   selectors:
-#     username_input: "input[name='username']"
-#     password_input: "input[name='password']"
-#     login_button: "button#login"
-# dashboard_page:
-#   selectors:
-#     welcome_message: ".welcome"
+# 日志配置 (环境可覆盖)
+log:
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  level: ${env:LOG_LEVEL:-INFO}
+  file:
+    enabled: ${env:LOG_FILE_ENABLED:-true}
+    path: "logs"
+    max_size: 10 # MB
+    backup_count: 5
+  console:
+    enabled: ${env:LOG_CONSOLE_ENABLED:-true}
+    color: true
 
-  login:
-    captcha:
-      test_override: ${TEST_CAPTCHA_VALUE}  # 从环境变量获取
-      max_attempts: 3
-      retry_interval: 1
-      wait_after_input: 1
-      wait_for_refresh: 0.5
-      min_length: 4
-    timeouts:
-      page_load: 10
-      element_wait: 2
-      state_stabilize: 0.5
-      success_check: 2
-    urls:
-      success_patterns:
-        - "/omp/home"
-        - "/omp/index"
-    selectors:
-      username_input: "input[type='text'][placeholder='用户名']"
-      password_input: "input[type='password']"
-      captcha_input: "input[type='text'][maxlength='4'][placeholder='验证码']"
-      captcha_image: "img[src*='api/captcha/getCode']"
-      login_button: "button.el-button.login-form__btn"
-      error_message: ".el-message--error"
-      validation_error_selectors:
-        - ".is-invalid"
-        - "[aria-invalid='true']"
-        - ".error"
-        - ".has-error"
-      adjacent_error_selectors:
-        - ".error-message"
-        - ".invalid-feedback"
-        - ".form-error"
-      error_indicators:
-        - ".ant-message-error"
+# 浏览器默认配置 (环境可覆盖)
+browser:
+  default: ${env:BROWSER:-chromium}
+  headless: ${env:HEADLESS:-true}
+  slow_mo: ${env:SLOW_MO:-0} # 毫秒
 
-  dashboard: # 添加 dashboard 配置段
-    selectors:
-      welcome_message: "h1.welcome, .welcome-message, .dashboard-welcome"
-      user_info: ".user-info, .profile-summary"
-      dashboard_content: ".dashboard-content, .main-content"
-      notification_panel: ".notifications, .alert-panel"
-      # 导航栏选择器
-      nav_root: "nav.main-nav, .navbar, header"
-      home_link: "${web.dashboard.selectors.nav_root} a.home, ${web.dashboard.selectors.nav_root} a[href*='home']"
-      profile_link: "${web.dashboard.selectors.nav_root} a.profile, ${web.dashboard.selectors.nav_root} a[href*='profile']"
-      settings_link: "${web.dashboard.selectors.nav_root} a.settings, ${web.dashboard.selectors.nav_root} a[href*='settings']"
-      logout_button: "${web.dashboard.selectors.nav_root} a.logout, ${web.dashboard.selectors.nav_root} button.logout, ${web.dashboard.selectors.nav_root} a[href*='logout']"
+# 注意: 所有特定于应用程序 UI 的选择器 (Selectors)
+# 应该直接定义在对应的 Page Object 类中，而非放在配置文件中，
+# 这样可以提高代码的内聚性和可维护性。
+
+# 注意: URL 模式和页面特定超时等设置应放在环境配置文件中。
