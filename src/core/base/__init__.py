@@ -1,13 +1,11 @@
 """
 Core base components for the test automation framework.
 
-Includes base classes and interfaces for drivers, elements, pages, and errors.
+Includes base classes and interfaces for drivers, pages, and errors.
 """
 
 # Import core interfaces and base classes
 from .driver import BaseDriver
-from .element import BaseElement
-from .page import BasePage, CompositePage
 from .wait import WaitStrategy, ElementCondition
 from .config_defs import ConfigLevel, CONFIG_PRIORITY_ORDER, CONFIG_MERGE_ORDER
 from .log_interfaces import LogLevel, LogFormatter, LogHandler, Logger
@@ -33,8 +31,6 @@ from .errors import (
     SecurityError,
     ResourceError,
     ReportGenerationError,
-    # Deprecated / Internal Errors (consider removal or making private)
-    # LogError, # Removed, managed by utils.log now
     FrameworkError,
 )
 
@@ -45,9 +41,6 @@ from .conditions import ExpectedCondition, ElementStateCondition, VisibilityCond
 __all__ = [
     # Base interfaces and classes
     "BaseDriver",
-    "BaseElement",
-    "BasePage",
-    "CompositePage",
     "WaitStrategy",
     "ElementCondition",
     "ExpectedCondition",
@@ -77,13 +70,10 @@ __all__ = [
     "ApiError",
     "ApiRequestError",
     "DataError",
-    
     "TestSetupError",
     "TestTeardownError",
     "SecurityError",
     "ResourceError",
     "ReportGenerationError",
-
-    # Internal/Advanced Errors (use with caution)
     "FrameworkError",
 ] 

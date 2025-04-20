@@ -6,12 +6,12 @@
 
 import os
 import json
-import logging
 from typing import Any, Dict, Type, Optional
 from abc import ABC, abstractmethod
 
 from src.utils.patterns import Singleton
 from src.core.base.errors import ConfigurationError
+from src.utils.log.manager import get_logger
 
 
 class ConfigLoader(ABC):
@@ -57,7 +57,7 @@ class YamlConfigLoader(ConfigLoader):
     
     def __init__(self):
         """初始化YAML配置加载器。"""
-        self._logger = logging.getLogger(self.__class__.__name__)
+        self._logger = get_logger(self.__class__.__name__)
     
     def load(self, path: str) -> Dict[str, Any]:
         """从YAML文件加载配置。
@@ -115,7 +115,7 @@ class JsonConfigLoader(ConfigLoader):
     
     def __init__(self):
         """初始化JSON配置加载器。"""
-        self._logger = logging.getLogger(self.__class__.__name__)
+        self._logger = get_logger(self.__class__.__name__)
     
     def load(self, path: str) -> Dict[str, Any]:
         """从JSON文件加载配置。
@@ -167,7 +167,7 @@ class EnvConfigLoader(ConfigLoader):
         Args:
             prefix: 环境变量前缀，默认为"APP_"
         """
-        self._logger = logging.getLogger(self.__class__.__name__)
+        self._logger = get_logger(self.__class__.__name__)
         self._prefix = prefix
     
     def load(self, path: str = None) -> Dict[str, Any]:

@@ -22,7 +22,7 @@ log:
   level: ${env:LOG_LEVEL:-INFO}
   file:
     enabled: ${env:LOG_FILE_ENABLED:-true}
-    path: "logs"
+    path: ${env:LOG_FILE_PATH:-output/logs/${env:APP_ENV:-dev}}
     max_size: 10 # MB
     backup_count: 5
   console:
@@ -35,8 +35,7 @@ browser:
   headless: ${env:HEADLESS:-true}
   slow_mo: ${env:SLOW_MO:-0} # 毫秒
 
-# 注意: 所有特定于应用程序 UI 的选择器 (Selectors)
-# 应该直接定义在对应的 Page Object 类中，而非放在配置文件中，
-# 这样可以提高代码的内聚性和可维护性。
-
-# 注意: URL 模式和页面特定超时等设置应放在环境配置文件中。
+# 截图配置 (环境可覆盖)
+screenshot:
+  output_dir: ${env:SCREENSHOT_DIR:-output/screenshots}
+  report_dir: ${env:REPORT_SCREENSHOT_DIR:-output/reports/screenshots}

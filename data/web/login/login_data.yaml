@@ -6,7 +6,7 @@ users:
   # 有效用户
   valid:
     username: "autotest"
-    password: "123456+a"
+    password: "223456+a"
     expected_result: "success"
 
   # 无效用户名
@@ -29,11 +29,17 @@ users:
     captcha: "wrong_captcha"
     expected_error: "验证码错误"
 
-  # 特殊字符用户名/密码
-  special_characters:
-    username: "user@#$%"
-    password: "pass^&*()"
-    expected_error: "用户名或密码错误" # 假设特殊字符不允许
+  # 用户名为空
+  empty_username:
+    username: ""
+    password: "123456+a"
+    expected_error: "用户名不能为空"
+
+  # 密码为空
+  empty_password:
+    username: "autotest"
+    password: ""
+    expected_error: "密码不能为空"
 
 # 验证码设置
 captcha:
@@ -41,8 +47,3 @@ captcha:
   max_retry: 3
   timeout: 5  # 验证码识别超时时间(秒)
   use_ocr: true  # 使用OCR识别验证码
-  
-  # 验证码测试场景
-  test_cases:
-    invalid:
-      use_random: true  # 使用随机错误值测试验证码失败场景，而非硬编码值 

@@ -10,17 +10,17 @@ class ConfigLevel(Enum):
     TEST = auto()        # 测试特定配置 (通常通过 fixture 或测试代码动态加载/覆盖)
     LOCAL = auto()       # 本地覆盖文件 (e.g., config/local.yaml, 不提交到版本控制)
     ENV_VAR = auto()     # 环境变量覆盖 (最高优先级)
-    # 注意: GLOBAL 级别已移除，settings.yaml 作为 DEFAULT
+    # 注意:settings.yaml 作为 DEFAULT
 
-# 定义配置合并和优先级顺序
-# 优先级高的层级会覆盖优先级低的层级
+# 配置优先级顺序（高优先级会覆盖低优先级）
 CONFIG_PRIORITY_ORDER = [
-    ConfigLevel.ENV_VAR,
-    ConfigLevel.LOCAL,
-    ConfigLevel.TEST,
-    ConfigLevel.ENVIRONMENT,
-    ConfigLevel.DEFAULT, # GLOBAL 已被 DEFAULT 替代
+    ConfigLevel.ENV_VAR,      # 环境变量，最高优先级
+    ConfigLevel.LOCAL,        # 本地覆盖
+    ConfigLevel.TEST,         # 测试特定
+    ConfigLevel.ENVIRONMENT,  # 环境特定
+    ConfigLevel.DEFAULT,      # 默认基础配置
 ]
 
-# 合并顺序与优先级相反，确保高优先级最后合并
+# 配置合并顺序（应先加载低优先级，最后加载高优先级，保证高优先级覆盖低优先级）
+# 实际合并时，先加载DEFAULT，依次叠加，最后加载ENV_VAR
 CONFIG_MERGE_ORDER = list(reversed(CONFIG_PRIORITY_ORDER)) 

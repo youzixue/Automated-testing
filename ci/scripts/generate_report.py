@@ -1,374 +1,175 @@
-#!/usr/bin/env python3
 """
-报告生成脚本，用于生成测试报告并发送邮件通知
+Allure报告生成与上传工具：
+- 生成Allure HTML报告
+- 写入环境信息、executor、categories
+- 创建.nojekyll文件
+- 上传报告到远端服务器
+- 修正远端权限
 """
-
 import os
-import sys
-import smtplib
-import argparse
 import subprocess
-from pathlib import Path
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.mime.application import MIMEApplication
-from datetime import datetime
-import yaml
+import json
+import time
+import shutil
+import platform
+import sys
 
-def load_config(env="dev"):
-    """加载配置文件
-    
-    Args:
-        env: 环境名称，默认为dev
-        
-    Returns:
-        dict: 配置字典
-    """
-    root_dir = Path(__file__).parent.parent.absolute()
-    
-    # 加载全局配置
-    global_config_path = os.path.join(root_dir, "config", "settings.yaml")
-    with open(global_config_path, "r", encoding="utf-8") as file:
-        config = yaml.safe_load(file)
-    
-    # 加载环境配置并合并
-    env_config_path = os.path.join(root_dir, "config", "env", f"{env}.yaml")
-    if os.path.exists(env_config_path):
-        with open(env_config_path, "r", encoding="utf-8") as file:
-            env_config = yaml.safe_load(file)
-            # 简单合并，实际项目中可能需要深度合并
-            for section, values in env_config.items():
-                if section in config and isinstance(config[section], dict):
-                    config[section].update(values)
-                else:
-                    config[section] = values
-    
-    return config
-
-def generate_html_report(report_dir):
-    """生成HTML测试报告
-    
-    Args:
-        report_dir: 报告目录
-        
-    Returns:
-        str: 报告路径
-    """
-    output_dir = os.path.join(report_dir, "html")
-    os.makedirs(output_dir, exist_ok=True)
-    
-    # 调用pytest生成HTML报告
-    subprocess.run([
-        "pytest", 
-        "--html", os.path.join(output_dir, "report.html"),
-        "--self-contained-html"
-    ], check=False)
-    
-    return os.path.join(output_dir, "report.html")
-
-def generate_allure_report(report_dir, allure_results_dir):
-    """生成Allure测试报告
-    
-    Args:
-        report_dir: 报告输出目录
-        allure_results_dir: Allure结果目录
-        
-    Returns:
-        str: 报告路径
-    """
-    output_dir = os.path.join(report_dir, "allure")
-    os.makedirs(output_dir, exist_ok=True)
-    
-    # 调用allure命令生成报告
-    subprocess.run([
-        "allure", "generate", 
-        allure_results_dir,
-        "-o", output_dir,
-        "--clean"
-    ], check=False)
-    
-    return output_dir
-
-def send_email_notification(config, report_path, summary):
-    """发送邮件通知
-    
-    Args:
-        config: 配置字典
-        report_path: 报告路径
-        summary: 测试摘要
-        
-    Returns:
-        bool: 是否发送成功
-    """
-    email_config = config["notification"]["email"]
-    
-    # 从环境变量覆盖配置
-    if os.environ.get("EMAIL_ENABLED") is not None:
-        email_config["enabled"] = os.environ.get("EMAIL_ENABLED").lower() in ("true", "1", "yes")
-    
-    if not email_config["enabled"]:
-        print("邮件通知未启用")
-        return False
-    
-    # 更新SMTP配置
-    email_config["smtp_server"] = os.environ.get("EMAIL_SMTP_SERVER", email_config["smtp_server"])
-    if os.environ.get("EMAIL_SMTP_PORT"):
-        email_config["smtp_port"] = int(os.environ.get("EMAIL_SMTP_PORT"))
-    email_config["use_ssl"] = os.environ.get("EMAIL_USE_SSL", "").lower() in ("true", "1", "yes")
-    email_config["use_tls"] = os.environ.get("EMAIL_USE_TLS", "").lower() in ("true", "1", "yes")
-    email_config["sender_email"] = os.environ.get("EMAIL_SENDER", email_config["sender_email"])
-    
-    if os.environ.get("EMAIL_RECIPIENTS"):
-        email_config["recipients"] = [r.strip() for r in os.environ.get("EMAIL_RECIPIENTS", "").split(",")]
-    
-    # 准备邮件内容
-    msg = MIMEMultipart()
-    msg["Subject"] = email_config["subject_template"].format(
-        status="PASS" if summary["failed"] == 0 else "FAIL",
-        datetime=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    )
-    msg["From"] = email_config["sender_email"]
-    msg["To"] = ", ".join(email_config["recipients"])
-    
-    # 构建增强的邮件正文
-    body_html = generate_email_body(summary, report_path)
-    msg.attach(MIMEText(body_html, "html"))
-    
-    # 附加报告
-    if email_config["attach_report"] and os.path.exists(report_path):
-        with open(report_path, "rb") as file:
-            attachment = MIMEApplication(file.read(), Name=os.path.basename(report_path))
-        attachment["Content-Disposition"] = f'attachment; filename="{os.path.basename(report_path)}"'
-        msg.attach(attachment)
-    
-    # 发送邮件
+def write_allure_environment():
+    """生成Allure环境信息文件，供报告展示。"""
+    env_dir = "output/reports/allure-results"
+    os.makedirs(env_dir, exist_ok=True)
     try:
-        if email_config["use_ssl"]:
-            smtp = smtplib.SMTP_SSL(email_config["smtp_server"], email_config["smtp_port"])
+        win_ver = platform.win32_ver() if hasattr(platform, "win32_ver") else ("", "", "")
+        if platform.system() == "Windows":
+            try:
+                if hasattr(sys, 'getwindowsversion'):
+                    win_version = sys.getwindowsversion()
+                    build_number = win_version.build
+                    if build_number >= 22000:
+                        os_info = f"Windows 11 ({platform.version()})"
+                    else:
+                        os_info = f"Windows 10 ({platform.version()})"
+                else:
+                    os_info = f"Windows {platform.release()} ({platform.version()})"
+            except Exception as e:
+                os_info = f"Windows {platform.release()}"
+        elif platform.system() == "Darwin":
+            os_info = f"macOS {platform.release()} ({platform.mac_ver()[0]})"
         else:
-            smtp = smtplib.SMTP(email_config["smtp_server"], email_config["smtp_port"])
-            if email_config["use_tls"]:
-                smtp.starttls()
-        
-        # 实际应用中应从环境变量或安全存储获取
-        smtp_password = os.environ.get("EMAIL_PASSWORD", "")
-        if smtp_password:
-            smtp.login(email_config["sender_email"], smtp_password)
-        
-        smtp.send_message(msg)
-        smtp.quit()
-        print(f"邮件已发送至 {', '.join(email_config['recipients'])}")
+            os_info = f"{platform.system()} {platform.release()}"
+    except Exception as e:
+        os_info = platform.system()
+    env_vars = {
+        "APP_ENV": os.environ.get('APP_ENV', 'test'),
+        "PYTHON_VERSION": f"{sys.version}",
+        "OS": os_info,
+        "TEST_FRAMEWORK": "pytest",
+        "UI_AUTOMATION": "Playwright",
+        "API_AUTOMATION": "httpx",
+        "REPORT_TOOL": f"Allure {os.environ.get('ALLURE_VERSION', '2.x')}"
+    }
+    env_file = os.path.join(env_dir, "environment.properties")
+    with open(env_file, "w", encoding="utf-8") as f:
+        for key, value in env_vars.items():
+            f.write(f"{key}={value}\n")
+    env_xml = os.path.join(env_dir, "environment.xml")
+    xml_content = f"""<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<environment>\n"""
+    for key, value in env_vars.items():
+        xml_content += f"    <parameter>\n        <key>{key}</key>\n        <value>{value}</value>\n    </parameter>\n"
+    xml_content += "</environment>"
+    with open(env_xml, "w", encoding="utf-8") as f:
+        f.write(xml_content)
+    env_json = os.path.join(env_dir, "environment.json")
+    env_data = [{"name": key, "values": [value]} for key, value in env_vars.items()]
+    with open(env_json, "w", encoding="utf-8") as f:
+        json.dump(env_data, f, ensure_ascii=False, indent=2)
+
+def write_allure_executor():
+    """生成Allure运行器信息，供报告展示。"""
+    env_dir = "output/reports/allure-results"
+    os.makedirs(env_dir, exist_ok=True)
+    ci_name = os.environ.get("CI_NAME", "本地执行")
+    ci_build = os.environ.get("CI_BUILD_NUMBER")
+    readable_time = time.strftime("%Y%m%d-%H:%M:%S")
+    if not ci_build or not ci_build.isdigit():
+        ci_build = readable_time
+    ci_url = os.environ.get("CI_BUILD_URL", "")
+    report_url = os.environ.get("ALLURE_PUBLIC_URL", "")
+    build_order = int(time.strftime('%m%d%H%M'))
+    executor_info = {
+        "name": ci_name,
+        "type": "jenkins",
+        "buildName": f"{ci_build}",
+        "buildOrder": build_order,
+        "reportUrl": report_url,
+        "buildUrl": ci_url
+    }
+    executor_file = os.path.join(env_dir, "executor.json")
+    with open(executor_file, "w", encoding="utf-8") as f:
+        json.dump(executor_info, f, ensure_ascii=False, indent=2)
+
+def write_allure_categories():
+    """生成Allure 2.33.0兼容的categories.json到allure-results目录，类别名称为中文"""
+    env_dir = "output/reports/allure-results"
+    os.makedirs(env_dir, exist_ok=True)
+    categories = [
+        {
+            "name": "产品缺陷",
+            "matchedStatuses": ["failed"],
+            "messageRegex": ".*",
+            "traceRegex": ".*",
+            "flaky": False
+        },
+        {
+            "name": "用例缺陷",
+            "matchedStatuses": ["broken"],
+            "messageRegex": ".*",
+            "traceRegex": ".*",
+            "flaky": False
+        },
+        {
+            "name": "跳过用例",
+            "matchedStatuses": ["skipped"],
+            "flaky": False
+        }
+    ]
+    categories_file = os.path.join(env_dir, "categories.json")
+    with open(categories_file, "w", encoding="utf-8") as f:
+        json.dump(categories, f, ensure_ascii=False, indent=2)
+
+def create_nojekyll_file(path):
+    """在指定目录创建.nojekyll文件"""
+    if os.path.exists(path):
+        no_jekyll_file = os.path.join(path, ".nojekyll")
+        if not os.path.exists(no_jekyll_file):
+            with open(no_jekyll_file, "w") as f:
+                f.write("")
+
+def generate_allure_report():
+    allure_cmd = os.environ.get("ALLURE_CMD", "allure")
+    report_dir = "output/reports/allure-report"
+    try:
+        allure_gen_cmd = [
+            allure_cmd, "generate", "output/reports/allure-results",
+            "--clean", "-o", report_dir
+        ]
+        print(f"[INFO] 执行Allure报告生成命令: {' '.join(allure_gen_cmd)}")
+        subprocess.run(allure_gen_cmd, check=True)
+        print("[INFO] Allure报告生成成功")
+        static_dirs = [
+            "output/reports/allure-report",
+            "output/reports/allure-report/data",
+            "output/reports/allure-report/history"
+        ]
+        for static_dir in static_dirs:
+            create_nojekyll_file(static_dir)
         return True
     except Exception as e:
-        print(f"发送邮件失败: {e}")
+        print(f"[ERROR] Allure报告生成出错: {e}")
         return False
 
-def generate_email_body(summary, report_path):
-    """生成美观的HTML邮件正文
-    
-    Args:
-        summary: 测试结果摘要
-        report_path: 报告路径
-        
-    Returns:
-        str: HTML邮件正文
-    """
-    # 获取可能的CI环境变量
-    ci_run_url = os.environ.get("CI_RUN_URL", "")
-    report_url = os.environ.get("REPORT_URL", "")
-    is_ci = bool(ci_run_url)
-    
-    # 测试结果状态
-    status = "通过" if summary["failed"] == 0 else "失败"
-    status_color = "green" if summary["failed"] == 0 else "red"
-    
-    # 构建HTML邮件
-    html = f"""
-    <html>
-    <head>
-        <style>
-            body {{ font-family: Arial, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5; }}
-            .container {{ max-width: 800px; margin: 0 auto; padding: 20px; background-color: #ffffff; }}
-            .header {{ background-color: #4a86e8; color: white; padding: 10px 20px; text-align: center; }}
-            .content {{ padding: 20px; }}
-            .summary {{ background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin-bottom: 20px; }}
-            .passed {{ color: green; }}
-            .failed {{ color: red; }}
-            .skipped {{ color: orange; }}
-            .status-badge {{ 
-                display: inline-block; 
-                padding: 5px 15px; 
-                border-radius: 15px; 
-                color: white; 
-                background-color: {status_color};
-                font-weight: bold;
-            }}
-            table {{ border-collapse: collapse; width: 100%; margin-top: 20px; }}
-            th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
-            th {{ background-color: #f2f2f2; }}
-            .links {{ margin-top: 20px; background-color: #f0f7ff; padding: 15px; border-radius: 5px; }}
-            .links a {{ color: #4a86e8; text-decoration: none; }}
-            .links a:hover {{ text-decoration: underline; }}
-            .footer {{ margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; font-size: 12px; color: #777; }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <h2>自动化测试报告</h2>
-            </div>
-            <div class="content">
-                <h3>测试执行结果: <span class="status-badge">{status}</span></h3>
-                
-                <div class="summary">
-                    <p><strong>测试摘要:</strong></p>
-                    <ul>
-                        <li><span class="passed">通过: {summary.get('passed', 0)}</span></li>
-                        <li><span class="failed">失败: {summary.get('failed', 0)}</span></li>
-                        <li><span class="skipped">跳过: {summary.get('skipped', 0)}</span></li>
-                        <li>总计: {summary.get('total', 0)}</li>
-                    </ul>
-                    <p>执行时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-                </div>
-    """
-    
-    # 如果在CI环境中运行，添加链接
-    if is_ci:
-        html += f"""
-                <div class="links">
-                    <p><strong>报告链接:</strong></p>
-                    <ul>
-                        <li><a href="{ci_run_url}" target="_blank">CI运行详情</a></li>
-                        <li><a href="{report_url}" target="_blank">Allure测试报告</a></li>
-                    </ul>
-                </div>
-        """
-    
-    # 添加环境信息
-    env = os.environ.get("ENV", "dev")
-    html += f"""
-                <div class="environment">
-                    <p><strong>环境信息:</strong></p>
-                    <table>
-                        <tr>
-                            <th>环境</th>
-                            <td>{env}</td>
-                        </tr>
-                        <tr>
-                            <th>执行方式</th>
-                            <td>{'CI/CD' if is_ci else '手动'}</td>
-                        </tr>
-                        <tr>
-                            <th>报告路径</th>
-                            <td>{report_path}</td>
-                        </tr>
-                    </table>
-                </div>
-                
-                <div class="footer">
-                    <p>此邮件由自动化测试框架自动生成，请勿回复。</p>
-                </div>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
-    
-    return html
+def upload_report_to_ecs(local_report_dir, remote_user, remote_host, remote_dir):
+    remote_report_dir = f"{remote_dir}/allure-report"
+    print(f"[INFO] 清空远端allure-report目录: {remote_report_dir}")
+    subprocess.run([
+        "ssh", f"{remote_user}@{remote_host}", f"rm -rf {remote_report_dir}"
+    ], check=True)
+    print(f"[INFO] 上传本地allure-report目录: {local_report_dir} -> {remote_dir}")
+    subprocess.run([
+        "scp", "-r", "-o", "StrictHostKeyChecking=no",
+        local_report_dir,
+        f"{remote_user}@{remote_host}:{remote_dir}"
+    ], check=True)
+    print("[INFO] Allure报告全量上传成功")
+    return True
 
-def parse_test_results(result_dir):
-    """解析测试结果
-    
-    Args:
-        result_dir: 结果目录路径
-        
-    Returns:
-        dict: 测试结果摘要
-    """
-    # 尝试从Allure结果解析
-    try:
-        # 计算结果文件数量
-        passed = 0
-        failed = 0
-        skipped = 0
-        
-        result_dir_path = Path(result_dir)
-        if result_dir_path.exists():
-            for file in result_dir_path.glob("*-result.json"):
-                with open(file, "r", encoding="utf-8") as f:
-                    content = f.read()
-                    if '"status":"passed"' in content:
-                        passed += 1
-                    elif '"status":"failed"' in content:
-                        failed += 1
-                    elif '"status":"skipped"' in content:
-                        skipped += 1
-        
-        total = passed + failed + skipped
-        if total > 0:
-            return {
-                "passed": passed,
-                "failed": failed,
-                "skipped": skipped,
-                "total": total
-            }
-    except Exception as e:
-        print(f"解析Allure结果失败: {e}")
-    
-    # 使用默认统计数据作为后备
-    return {
-        "passed": 10,
-        "failed": 2,
-        "skipped": 1,
-        "total": 13
-    }
-
-def main():
-    """主函数"""
-    parser = argparse.ArgumentParser(description="生成测试报告并发送通知")
-    parser.add_argument("--env", choices=["dev", "test", "prod"], default="dev",
-                      help="要使用的环境配置")
-    parser.add_argument("--allure-results", type=str, required=True,
-                      help="Allure结果目录")
-    parser.add_argument("--notify", action="store_true",
-                      help="发送邮件通知")
-    args = parser.parse_args()
-    
-    # 获取项目根目录
-    root_dir = Path(__file__).parent.parent.absolute()
-    os.chdir(root_dir)
-    
-    # 加载配置
-    print(f"加载配置: {args.env}")
-    config = load_config(args.env)
-    
-    # 创建报告目录
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    report_dir = os.path.join(root_dir, "reports", timestamp)
-    os.makedirs(report_dir, exist_ok=True)
-    
-    # 生成Allure报告
-    print("生成Allure报告...")
-    allure_report_path = generate_allure_report(report_dir, args.allure_results)
-    print(f"Allure报告已生成: {allure_report_path}")
-    
-    # 生成HTML报告(用于邮件附件)
-    print("生成HTML报告...")
-    html_report_path = generate_html_report(report_dir)
-    print(f"HTML报告已生成: {html_report_path}")
-    
-    # 解析测试结果
-    test_summary = parse_test_results(args.allure_results)
-    print(f"测试结果: 通过={test_summary['passed']}, 失败={test_summary['failed']}, "
-          f"跳过={test_summary['skipped']}, 总计={test_summary['total']}")
-    
-    # 发送邮件通知
-    if args.notify:
-        print("发送邮件通知...")
-        send_email_notification(config, html_report_path, test_summary)
-    
-    print("报告生成完成")
-    return 0
-
-if __name__ == "__main__":
-    sys.exit(main()) 
+def fix_permissions(remote_user, remote_host, remote_dir, nginx_user="nginx"):
+    remote_report_dir = f"{remote_dir}/allure-report"
+    print(f"[INFO] 修正远端allure-report目录权限: {remote_report_dir} -> {nginx_user}")
+    subprocess.run([
+        "ssh", f"{remote_user}@{remote_host}",
+        f"sudo chown -R {nginx_user}:{nginx_user} {remote_report_dir} && "
+        f"sudo find {remote_report_dir} -type d -exec chmod 755 {{}} \\; && "
+        f"sudo find {remote_report_dir} -type f -exec chmod 644 {{}} \\;"
+    ], check=True)
+    print("[INFO] 权限修正成功")

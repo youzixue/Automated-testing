@@ -31,6 +31,7 @@
 ## 代码规范
 
 - 所有Python代码必须遵循PEP 8规范
+- 代码格式化遵循 Black 规范，建议通过 pre-commit 自动执行
 - 所有公共API必须有完整的文档字符串
 - 所有公共方法必须有类型注解
 - 单元测试覆盖率必须达到80%以上
@@ -46,8 +47,11 @@
 ## 开发环境设置
 
 ```bash
-# 安装开发依赖
-poetry install --with dev
+# 安装所有依赖并同步环境（移除未声明包）
+poetry install --sync
+
+# 安装 pre-commit 钩子（首次设置或更新配置后运行）
+poetry run pre-commit install
 
 # 运行代码检查
 poetry run pylint src tests

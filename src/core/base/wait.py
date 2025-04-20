@@ -117,6 +117,3 @@ class WaitStrategy(Generic[T], ABC):
             TimeoutError: 在指定时间内未满足任何条件
         """
         pass
-
-# 注意：RetryStrategy类已被移除，统一使用src/utils/error_handling.py中的retry装饰器实现
-# 避免重复功能的实现 

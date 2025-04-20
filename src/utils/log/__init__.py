@@ -5,7 +5,7 @@
 """
 
 # Import LogManager and get_logger function
-from .manager import LogManager, get_logger
+from .manager import get_logger
 
 # Remove import from old location
 # from .interfaces import LogLevel, LogFormatter, LogHandler, Logger
@@ -13,7 +13,6 @@ from .manager import LogManager, get_logger
 # No need to re-export interfaces from here if they are in core.base
 
 __all__ = [
-    "LogManager",
     "get_logger",
     # "LogLevel",  # Don't export from here
     # "LogFormatter",

@@ -8,25 +8,50 @@ packages = [{include = "src"}]
 
 [tool.poetry.dependencies]
 python = ">=3.11,<3.12"
-playwright = "^1.40.0"
-pytest = "^7.4.0"
-pytest-playwright = "^0.4.0"
-allure-pytest = "^2.13.2"
-ddddocr = "^1.4.7"
-pyyaml = "^6.0.1"
-pydantic = "^2.5.2"
-pytest-xdist = "^3.3.1"
-pytest-rerunfailures = "^12.0"
-pytest-html = "^4.1.1"
-loguru = "^0.7.2"
+playwright = "1.51.0"
+python-dotenv = "1.1.0"
+pillow = "9.5.0"
+ddddocr = "1.5.6"
+pyyaml = "6.0.2"
+numpy = "2.2.4"
+onnxruntime = "1.21.0"
 
 [tool.poetry.group.dev.dependencies]
-black = "^23.11.0"
-pylint = "^3.0.2"
-mypy = "^1.7.1"
-pytest-cov = "^4.1.0"
-pre-commit = "^3.5.0"
-pytest-mock = "^3.12.0"
+astroid = "3.3.9"
+cfgv = "3.4.0"
+click = "8.1.8"
+colorama = "0.4.6"
+coverage = "7.8.0"
+dill = "0.3.9"
+distlib = "0.3.9"
+filelock = "3.18.0"
+identify = "2.6.9"
+iniconfig = "2.1.0"
+isort = "6.0.1"
+mccabe = "0.7.0"
+mypy-extensions = "1.0.0"
+nodeenv = "1.9.1"
+packaging = "24.2"
+pathspec = "0.12.1"
+platformdirs = "4.3.7"
+pluggy = "1.5.0"
+tomlkit = "0.13.2"
+virtualenv = "20.30.0"
+
+# Moved from dependencies
+pytest = "8.3.5"
+pytest-playwright = "0.4.4"
+allure-pytest = "2.14.0"
+pytest-xdist = "3.6.1"
+pytest-rerunfailures = "12.0"
+pytest-html = "4.1.1"
+pytest-asyncio = "0.26.0"
+pytest-cov = "4.1.0"
+pytest-mock = "3.14.0"
+pre-commit = "3.8.0"
+black = "23.12.1"
+pylint = "3.3.6"
+mypy = "1.15.0"
 
 [build-system]
 requires = ["poetry-core"]
@@ -79,4 +104,39 @@ markers = [
     "security: Security tests",
     "performance: Performance tests",
     "login: Login related tests",
-] 
+]
+# pytest-xdist并发执行建议：
+# 推荐命令：pytest -n auto  # 自动根据CPU核心数并发
+# 或 pytest -n 4  # 指定4个worker并发
+# 如需每个worker独立临时目录，可加--dist=loadscope
+# 如需自动重试失败用例，可加--reruns=2 
+
+[tool.deptry]
+# 告诉 deptry 项目的本地源码目录
+known_first_party = ["src", "tests", "ci"]
+
+# 解决包名和导入模块名不一致的问题
+[tool.deptry.package_module_name_map]
+"python-dotenv" = ["dotenv"]
+"pillow" = ["PIL"]
+"pyyaml" = ["yaml"]
+
+# 忽略 pytest 及其插件被误报为未使用（它们通过命令行调用）
+ignore_unused = [
+    "pytest",
+    "pytest-playwright",
+    "allure-pytest",
+    "pytest-xdist",
+    "pytest-rerunfailures",
+    "pytest-html",
+    "pytest-cov",
+    "pytest-mock",
+    "pytest-asyncio",  # 添加 pytest-asyncio
+    "pytest-base-url", # 添加 pytest-base-url
+    "pytest-metadata"  # 添加 pytest-metadata
+]
+
+# 如果有其他需要忽略的特定模块报错，可以添加到这里
+# ignore_missing = []
+# ignore_misplaced_dev = []
+# ignore_transitive = [] 

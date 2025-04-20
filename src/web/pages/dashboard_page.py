@@ -1,197 +1,160 @@
-"""
-仪表盘页面对象。
+from __future__ import annotations
+from typing import List, Optional
+from src.core.base.driver import BaseDriver
+from src.utils.log.manager import get_logger
+from src.core.base.errors import ElementNotFoundError
 
-展示页面对象模式在仪表盘场景中的实现，包含页面元素、操作以及组件封装。
-"""
+class DashboardPage:
+    """仪表盘页面对象，封装欢迎语、导航栏、统计卡片等核心元素和操作。"""
 
-import logging
-from typing import Optional, List, Any
+    # 元素定位符
+    USERNAME_TEXT = ".user .name"  # 用户名显示
+    SIDEBAR_MENU = ".el-menu"
+    MAIN_CARD = ".main-card, .dashboard-card"
+    QUICK_ENTRY = ".quick-entry, .dashboard-quick-entry"
+    WELCOME_MESSAGE = ".welcome-message"
+    LOGOUT_BUTTON = ".logout-btn"
 
-from src.core.base.errors import ElementNotFoundError, TimeoutError
-from src.web.driver import WebDriver
-from src.web.element import WebElement
-from src.core.base.page import CompositePage
-from src.utils.config.manager import get_config
+    def __init__(self, driver: BaseDriver):
+        self.driver = driver
+        self.logger = get_logger(self.__class__.__name__)
 
-
-class DashboardPage(CompositePage[WebDriver, WebElement]):
-    """仪表盘页面对象。
-    
-    封装仪表盘页面的元素和操作，作为登录成功后的页面验证和后续操作的入口。
-    """
-    
-    def __init__(self, driver: WebDriver, url: Optional[str] = None):
-        """初始化仪表盘页面对象。
-        
+    async def is_logged_in(self, expected_username: Optional[str] = None) -> bool:
+        """
+        判断是否已登录成功（用户名和侧边栏可见）。
         Args:
-            driver: WebDriver实例
-            url: 仪表盘页面URL
-        """
-        super().__init__(driver, driver.wait_strategy, url, title="仪表盘")
-        
-        # 从配置加载选择器
-        config = get_config()
-        dashboard_config = config.get("web", {}).get("dashboard", {})
-        self._selectors = dashboard_config.get("selectors", {})
-        self._logger.debug(f"加载到的 dashboard selectors: {self._selectors}")
-    
-    # 使用 @property 动态获取选择器
-    @property
-    def WELCOME_MESSAGE(self) -> str:
-        return self._selectors.get("welcome_message")
-        
-    @property
-    def USER_INFO(self) -> str:
-        return self._selectors.get("user_info")
-        
-    @property
-    def DASHBOARD_CONTENT(self) -> str:
-        return self._selectors.get("dashboard_content")
-        
-    @property
-    def NOTIFICATION_PANEL(self) -> str:
-        return self._selectors.get("notification_panel")
-        
-    @property
-    def HOME_LINK(self) -> str:
-        return self._selectors.get("home_link")
-        
-    @property
-    def PROFILE_LINK(self) -> str:
-        return self._selectors.get("profile_link")
-        
-    @property
-    def SETTINGS_LINK(self) -> str:
-        return self._selectors.get("settings_link")
-        
-    @property
-    def LOGOUT_BUTTON(self) -> str:
-        return self._selectors.get("logout_button")
-    
-    def is_loaded(self) -> bool:
-        """检查仪表盘页面是否已加载。
-        
-        通过验证欢迎信息元素的存在来确认页面已加载。
-        
+            expected_username: 期望用户名
         Returns:
-            页面是否已加载
+            bool: 是否已登录
         """
+        self.logger.info(f"[is_logged_in] 检查登录状态，期望用户名: {expected_username}")
         try:
-            welcome_element = self.get_element(self.WELCOME_MESSAGE)
-            return welcome_element.is_visible()
-        except ElementNotFoundError:
+            user_ok = await self.driver.has_element(self.USERNAME_TEXT)
+            menu_ok = await self.driver.has_element(self.SIDEBAR_MENU)
+            self.logger.debug(f"[is_logged_in] user_ok={user_ok}, menu_ok={menu_ok}")
+            if not user_ok or not menu_ok:
+                self.logger.warning("[is_logged_in] 用户名或侧边栏元素未找到，判定未登录")
+                return False
+            if expected_username:
+                el = await self.driver.get_element(self.USERNAME_TEXT)
+                if not el:
+                    self.logger.error("[is_logged_in] 未找到用户名元素")
+                    raise ElementNotFoundError("未找到用户名元素")
+                username = await el.inner_text()
+                self.logger.info(f"[is_logged_in] 页面用户名: {repr(username.strip())}, 期望: {repr(expected_username)}")
+                result = username.strip() == expected_username
+                if not result:
+                    self.logger.warning(f"[is_logged_in] 用户名不匹配: 实际={username.strip()}, 期望={expected_username}")
+                return result
+            self.logger.info("[is_logged_in] 登录状态判定为已登录")
+            return True
+        except Exception as e:
+            self.logger.warning(f"Dashboard登录状态检测失败: {e}")
             return False
-    
-    def get_welcome_message(self) -> str:
-        """获取欢迎信息文本。
-        
-        Returns:
-            欢迎信息文本
-            
-        Raises:
-            ElementNotFoundError: 欢迎信息元素未找到
+
+    async def wait_until_logged_in(self, expected_username: Optional[str] = None, timeout: float = 10) -> DashboardPage:
         """
-        welcome_element = self.get_element(self.WELCOME_MESSAGE)
-        return welcome_element.get_text()
-    
-    def get_user_info(self) -> str:
-        """获取用户信息文本。
-        
-        Returns:
-            用户信息文本
-            
-        Raises:
-            ElementNotFoundError: 用户信息元素未找到
-        """
-        user_info_element = self.get_element(self.USER_INFO)
-        return user_info_element.get_text()
-    
-    def get_notifications(self) -> List[str]:
-        """获取通知信息列表。
-        
-        Returns:
-            通知信息文本列表
-            
-        Raises:
-            ElementNotFoundError: 通知面板元素未找到
-        """
-        try:
-            notification_elements = self.get_elements(f"{self.NOTIFICATION_PANEL} .notification, {self.NOTIFICATION_PANEL} .alert")
-            return [element.get_text() for element in notification_elements]
-        except ElementNotFoundError:
-            return []
-    
-    def click_home(self) -> None:
-        """点击首页链接。"""
-        self._logger.debug("点击首页链接")
-        home_link = self.get_element(self.HOME_LINK)
-        home_link.click()
-    
-    def click_profile(self) -> None:
-        """点击个人资料链接。"""
-        self._logger.debug("点击个人资料链接")
-        profile_link = self.get_element(self.PROFILE_LINK)
-        profile_link.click()
-    
-    def click_settings(self) -> None:
-        """点击设置链接。"""
-        self._logger.debug("点击设置链接")
-        settings_link = self.get_element(self.SETTINGS_LINK)
-        settings_link.click()
-    
-    def click_logout(self) -> None:
-        """点击登出按钮。
-        
-        Raises:
-            ElementNotFoundError: 登出按钮未找到
-            TimeoutError: 登出操作超时
-        """
-        self._logger.info("执行登出操作")
-        logout_button = self.get_element(self.LOGOUT_BUTTON)
-        logout_button.click()
-        
-        # 等待登出后的页面加载 - 使用 Driver 的方法
-        # 等待登出后的页面加载
-        self._driver.wait_for_navigation()
-    
-    @classmethod
-    def open(cls, driver: WebDriver, url: str) -> 'DashboardPage':
-        """打开仪表盘页面。
-        
+        等待登录成功（用户名和侧边栏可见）。
         Args:
-            driver: WebDriver实例
-            url: 仪表盘页面URL
-            
+            expected_username: 期望用户名
+            timeout: 超时时间
         Returns:
-            DashboardPage实例
-            
+            DashboardPage: self
         Raises:
-            NavigationError: 导航失败
-            TimeoutError: 页面加载超时
+            ElementNotFoundError: 未找到关键元素
         """
-        page = cls(driver, url)
-        page.navigate()
-        page.wait_until_loaded()
-        return page 
+        self.logger.info(f"[wait_until_logged_in] 等待登录，期望用户名: {expected_username}, 超时: {timeout}s")
+        await self.driver.wait_for_element(self.USERNAME_TEXT, timeout=timeout)
+        await self.driver.wait_for_element(self.SIDEBAR_MENU, timeout=timeout)
+        if expected_username:
+            el = await self.driver.get_element(self.USERNAME_TEXT)
+            if not el:
+                self.logger.error("[wait_until_logged_in] 未找到用户名元素")
+                raise ElementNotFoundError("未找到用户名元素")
+            username = await el.inner_text()
+            self.logger.info(f"[wait_until_logged_in] 页面用户名: {repr(username.strip())}, 期望: {repr(expected_username)}")
+            assert username.strip() == expected_username, f"用户名断言失败: 期望{expected_username}, 实际{username}"
+        self.logger.info("[wait_until_logged_in] 登录成功")
+        return self
 
-    def wait_until_loaded(self, timeout: Optional[float] = None) -> 'DashboardPage':
-        """等待仪表盘页面加载完成。
-
-        Args:
-            timeout: 超时时间(秒)，None表示使用默认超时时间
-
+    async def get_welcome_message(self) -> str:
+        """
+        获取欢迎语内容。
         Returns:
-            当前页面对象(用于链式调用)
-
+            str: 欢迎语
         Raises:
-            TimeoutError: 在指定时间内页面未加载完成
+            ElementNotFoundError: 未找到欢迎语元素
         """
-        self.logger.info(f"等待仪表盘页面加载... (超时: {timeout or self.wait.timeout} 秒)")
-        try:
-            # 使用 wait_until 等待 is_loaded 返回 True
-            self.wait.wait_until(self.is_loaded, timeout=timeout, message="等待仪表盘页面加载超时")
-            self.logger.info("仪表盘页面加载完成")
-            return self
-        except TimeoutError as e:
-            self.logger.error(f"仪表盘页面加载失败: {e}")
-            raise 
+        self.logger.info("[get_welcome_message] 获取欢迎语内容")
+        el = await self.driver.get_element(self.WELCOME_MESSAGE)
+        if not el:
+            self.logger.error("[get_welcome_message] 未找到欢迎语元素")
+            raise ElementNotFoundError("未找到欢迎语元素")
+        msg = await el.inner_text()
+        self.logger.info(f"[get_welcome_message] 欢迎语内容: {msg}")
+        return msg
+
+    async def click_logout(self) -> None:
+        """
+        点击退出登录按钮。
+        Raises:
+            ElementNotFoundError: 未找到退出按钮
+        """
+        self.logger.info("[click_logout] 尝试点击退出按钮")
+        el = await self.driver.get_element(self.LOGOUT_BUTTON)
+        if not el:
+            self.logger.error("[click_logout] 未找到退出按钮")
+            raise ElementNotFoundError("未找到退出按钮")
+        await el.click()
+        self.logger.info("[click_logout] 已点击退出按钮")
+
+    async def get_sidebar_menus(self) -> List[str]:
+        """
+        获取侧边栏所有菜单项文本。
+        Returns:
+            List[str]: 菜单项文本列表
+        Raises:
+            ElementNotFoundError: 未找到菜单项
+        """
+        self.logger.info("[get_sidebar_menus] 获取侧边栏菜单项")
+        elements = await self.driver.get_elements(f"{self.SIDEBAR_MENU} .el-menu-item")
+        if not elements:
+            self.logger.error("[get_sidebar_menus] 未找到侧边栏菜单项")
+            raise ElementNotFoundError("未找到侧边栏菜单项")
+        texts = [await el.inner_text() for el in elements]
+        self.logger.info(f"[get_sidebar_menus] 菜单项: {texts}")
+        return texts
+
+    async def get_main_cards(self) -> List[str]:
+        """
+        获取主要统计卡片内容。
+        Returns:
+            List[str]: 卡片内容列表
+        Raises:
+            ElementNotFoundError: 未找到卡片
+        """
+        self.logger.info("[get_main_cards] 获取主要统计卡片内容")
+        elements = await self.driver.get_elements(self.MAIN_CARD)
+        if not elements:
+            self.logger.error("[get_main_cards] 未找到主要统计卡片")
+            raise ElementNotFoundError("未找到主要统计卡片")
+        texts = [await el.inner_text() for el in elements]
+        self.logger.info(f"[get_main_cards] 卡片内容: {texts}")
+        return texts
+
+    async def get_quick_entries(self) -> List[str]:
+        """
+        获取快捷入口内容。
+        Returns:
+            List[str]: 快捷入口内容列表
+        Raises:
+            ElementNotFoundError: 未找到快捷入口
+        """
+        self.logger.info("[get_quick_entries] 获取快捷入口内容")
+        elements = await self.driver.get_elements(self.QUICK_ENTRY)
+        if not elements:
+            self.logger.error("[get_quick_entries] 未找到快捷入口")
+            raise ElementNotFoundError("未找到快捷入口")
+        texts = [await el.inner_text() for el in elements]
+        self.logger.info(f"[get_quick_entries] 快捷入口内容: {texts}")
+        return texts
