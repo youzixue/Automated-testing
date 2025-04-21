@@ -7,8 +7,8 @@ readme = "README.md"
 packages = [{include = "src"}]
 
 [[tool.poetry.source]]
-name = "tuna"
-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+name = "aliyun"
+url = "https://mirrors.aliyun.com/pypi/simple/"
 
 [tool.poetry.dependencies]
 python = ">=3.11,<3.12"
