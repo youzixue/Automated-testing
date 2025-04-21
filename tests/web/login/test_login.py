@@ -220,7 +220,9 @@ async def test_login_scenarios(
                         f"期望账号或密码错误，实际弹窗内容: {error_text}"
                     return
                 if expected_result == "success":
-                    login_success = await login_page.wait_for_login_result(expected_username=user_data["username"])
+                    # 支持后续参数化expected_url_pattern，默认/workbench
+                    expected_url_pattern = user_data.get("expected_url_pattern", "/workbench")
+                    login_success = await login_page.wait_for_login_result(expected_url_pattern=expected_url_pattern)
                     assert login_success, f"有效账号登录应成功，实际: {login_success}"
                 else:
                     assert not login_success, f"无效账号({scenario_key})登录应失败，实际: {login_success}"

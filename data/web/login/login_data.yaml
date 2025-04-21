@@ -1,17 +1,11 @@
-# OMP系统登录测试数据
-url: "https://test.cmpo1914.com:3006/omp/"  # 线上测试环境URL
-
 # 测试用户数据
 users:
   # 有效用户
   valid:
-    username: "autotest"
-    password: "223456+a"
     expected_result: "success"
 
   # 无效用户名
   invalid_username:
-    username: "invalid_user"
     password: "123456+a"
     expected_error: "用户名或密码错误"
     use_random: true  # 使用随机用户名避免账号锁定
@@ -31,14 +25,12 @@ users:
 
   # 用户名为空
   empty_username:
-    username: ""
     password: "123456+a"
     expected_error: "用户名不能为空"
 
   # 密码为空
   empty_password:
     username: "autotest"
-    password: ""
     expected_error: "密码不能为空"
 
 # 验证码设置
