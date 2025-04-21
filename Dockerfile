@@ -3,26 +3,30 @@ FROM python:3.11-slim
 WORKDIR /app
 COPY . /app
 
-# 配置pip阿里云源
+# 配置pip多源兜底（阿里云+清华）
 RUN mkdir -p /root/.pip && \
     echo "[global]" > /root/.pip/pip.conf && \
-    echo "index-url = https://mirrors.aliyun.com/pypi/simple/" >> /root/.pip/pip.conf
+    echo "index-url = https://mirrors.aliyun.com/pypi/simple/" >> /root/.pip/pip.conf && \
+    echo "[global]" > /root/.pip/pip_tuna.conf && \
+    echo "index-url = https://pypi.tuna.tsinghua.edu.cn/simple" >> /root/.pip/pip_tuna.conf
 
 # 升级pip并安装poetry
 RUN pip install --upgrade pip \
     && pip install "poetry>=1.5.0"
 
-# 配置poetry阿里云源（加速，保险起见）
-RUN poetry config repositories.aliyun https://mirrors.aliyun.com/pypi/simple/
+# 配置poetry多源兜底（阿里云+清华）
+RUN poetry config repositories.aliyun https://mirrors.aliyun.com/pypi/simple/ \
+    && poetry config repositories.tuna https://pypi.tuna.tsinghua.edu.cn/simple
 
-# 安装项目依赖（会自动走pyproject.toml里配置的aliyun源）
+# 安装项目依赖（pyproject.toml里配置多源）
 RUN poetry install
 
 # playwright浏览器下载加速（可选）
 ENV PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright
 
-# 安装playwright及其浏览器
+# 安装playwright及其浏览器（多源兜底）
 RUN pip install playwright -i https://mirrors.aliyun.com/pypi/simple/ \
+    || pip install playwright -i https://pypi.tuna.tsinghua.edu.cn/simple \
     && playwright install
 
 # 安装Playwright和Allure CLI所需的全部系统依赖
