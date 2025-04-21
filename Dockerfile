@@ -32,13 +32,13 @@ RUN pip install playwright -i https://mirrors.aliyun.com/pypi/simple/ \
     || pip install playwright -i https://pypi.tuna.tsinghua.edu.cn/simple \
     && playwright install
 
-# 安装Playwright和Allure CLI所需的全部系统依赖
-RUN apt-get update && apt-get install -y \
-    wget openjdk-11-jre-headless unzip \
-    libglib2.0-0 libgobject-2.0-0 libnss3 libnssutil3 libsmime3 libnspr4 \
-    libdbus-1-3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libgio-2.0-0 libexpat1 \
+# 安装Playwright和Allure CLI所需的全部系统依赖（适配Debian 12 Bookworm）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget openjdk-17-jre-headless unzip \
+    libglib2.0-0 libnss3 libnspr4 \
+    libdbus-1-3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libexpat1 \
     libx11-6 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxrandr2 libgbm1 \
-    libxcb1 libxkbcommon0 libpango-1.0-0 libcairo2 libasound2 libatspi0 \
+    libxcb1 libxkbcommon0 libpango-1.0-0 libcairo2 libasound2 libatspi2.0-0 \
     fonts-liberation libappindicator3-1 lsb-release \
     && wget https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.zip \
     && unzip allure-2.27.0.zip -d /opt/ \
