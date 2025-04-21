@@ -12,11 +12,11 @@ RUN mkdir -p /root/.pip && \
 RUN pip install --upgrade pip \
     && pip install "poetry>=1.5.0"
 
-# 配置poetry国内源并强制使用
+# 配置poetry国内源（加速，保险起见）
 RUN poetry config repositories.tuna https://pypi.tuna.tsinghua.edu.cn/simple
 
-# 强制所有依赖都从tuna源下载
-RUN poetry install -r tuna
+# 安装项目依赖（会自动走pyproject.toml里配置的tuna源）
+RUN poetry install
 
 # playwright浏览器下载加速（可选）
 ENV PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright
