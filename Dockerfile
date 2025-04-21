@@ -25,11 +25,14 @@ ENV PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright
 RUN pip install playwright -i https://pypi.tuna.tsinghua.edu.cn/simple \
     && playwright install
 
-# 安装Allure CLI及Playwright依赖的系统包
-RUN apt-get update && apt-get install -y wget openjdk-11-jre-headless unzip \
-    libnss3 libatk-bridge2.0-0 libatk1.0-0 libcups2 libdrm2 libxkbcommon0 \
-    libxcomposite1 libxdamage1 libxrandr2 libgbm1 libasound2 libpangocairo-1.0-0 \
-    libpango-1.0-0 libgtk-3-0 libxss1 libxtst6 fonts-liberation libappindicator3-1 lsb-release \
+# 安装Playwright和Allure CLI所需的全部系统依赖
+RUN apt-get update && apt-get install -y \
+    wget openjdk-11-jre-headless unzip \
+    libglib2.0-0 libgobject-2.0-0 libnss3 libnssutil3 libsmime3 libnspr4 \
+    libdbus-1-3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libgio-2.0-0 libexpat1 \
+    libx11-6 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxrandr2 libgbm1 \
+    libxcb1 libxkbcommon0 libpango-1.0-0 libcairo2 libasound2 libatspi0 \
+    fonts-liberation libappindicator3-1 lsb-release \
     && wget https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.zip \
     && unzip allure-2.27.0.zip -d /opt/ \
     && ln -s /opt/allure-2.27.0/bin/allure /usr/bin/allure \
