@@ -10,6 +10,10 @@ packages = [{include = "src"}]
 name = "aliyun"
 url = "https://mirrors.aliyun.com/pypi/simple/"
 
+[[tool.poetry.source]]
+name = "tuna"
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+
 [tool.poetry.dependencies]
 python = ">=3.11,<3.12"
 playwright = "1.51.0"
