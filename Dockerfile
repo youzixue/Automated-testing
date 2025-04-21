@@ -3,9 +3,10 @@ FROM python:3.11-slim
 WORKDIR /app
 COPY . /app
 
-# 配置pip国内源
+# 配置pip国内源（修正写法）
 RUN mkdir -p /root/.pip && \
-    echo -e "[global]\nindex-url = https://pypi.tuna.tsinghua.edu.cn/simple" > /root/.pip/pip.conf
+    echo "[global]" > /root/.pip/pip.conf && \
+    echo "index-url = https://pypi.tuna.tsinghua.edu.cn/simple" >> /root/.pip/pip.conf
 
 # 升级pip并安装poetry
 RUN pip install --upgrade pip \
