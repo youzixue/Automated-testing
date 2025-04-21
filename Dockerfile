@@ -18,6 +18,9 @@ RUN pip install --upgrade pip \
 RUN poetry config repositories.aliyun https://mirrors.aliyun.com/pypi/simple/ \
     && poetry config repositories.tuna https://pypi.tuna.tsinghua.edu.cn/simple
 
+# 增加 Poetry 的网络超时时间（单位：秒）
+ENV POETRY_REQUESTS_TIMEOUT=300
+
 # 安装项目依赖（pyproject.toml里配置多源）
 RUN poetry install
 
