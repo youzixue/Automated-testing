@@ -6,6 +6,11 @@ authors = ["Youzixue <863819494@qq.com>"]
 readme = "README.md"
 packages = [{include = "src"}]
 
+[[tool.poetry.source]]
+name = "tuna"
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true
+
 [tool.poetry.dependencies]
 python = ">=3.11,<3.12"
 playwright = "1.51.0"
