@@ -22,11 +22,11 @@ api:
 # 登录信息 (引用生产环境变量)
 credentials:
   admin:
-    username: "${env:PROD_ADMIN_USERNAME}" # 必须来自环境变量
-    password: "${env:PROD_ADMIN_PASSWORD}" # 必须来自环境变量
+    username: "${env:PROD_ADMIN_USERNAME}"
+    password: "${env:PROD_ADMIN_PASSWORD}"
   default:
-    username: "${env:PROD_DEFAULT_USERNAME}" # 必须来自环境变量
-    password: "${env:PROD_DEFAULT_PASSWORD}" # 必须来自环境变量
+    username: "${env:PROD_DEFAULT_USERNAME}"
+    password: "${env:PROD_DEFAULT_PASSWORD}"
 
 # 生产环境邮件配置
 notification:

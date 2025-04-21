@@ -184,28 +184,31 @@ class OmpLoginPage:
     async def wait_for_login_result(
         self,
         timeout: float = 10,
-        expected_username: Optional[str] = None
+        expected_url_pattern: str = "/workbench"
     ) -> bool:
         """
-        智能判断登录是否成功。
-        - 等待dashboard用户名和侧边栏元素出现
+        智能判断登录是否成功（基于URL跳转）。
+        - 等待URL跳转到包含expected_url_pattern
         - 检查是否有登录错误提示
 
         Args:
             timeout: 超时时间（秒）
-            expected_username: 期望用户名
+            expected_url_pattern: 登录成功后URL应包含的路径片段
 
         Returns:
             bool: 是否登录成功
         """
-        from src.web.pages.dashboard_page import DashboardPage
-        dashboard = DashboardPage(self.driver)
         try:
-            await dashboard.wait_until_logged_in(expected_username=expected_username, timeout=timeout)
-            self.logger.info("检测到用户名和侧边栏，登录成功")
+            # 直接访问Playwright原生page对象
+            page = getattr(self.driver, 'page', None)
+            if not page:
+                self.logger.error("Driver未包含page对象，无法判断URL跳转")
+                return False
+            await page.wait_for_url(f"**{expected_url_pattern}**", timeout=timeout * 1000)
+            self.logger.info(f"检测到URL跳转到包含{expected_url_pattern}，登录成功")
             return True
         except Exception as e:
-            self.logger.warning(f"登录失败或等待超时: {e}")
+            self.logger.warning(f"登录后未跳转到预期页面: {e}")
             # 检查登录错误提示
             try:
                 if await self.driver.has_element('.login-error', timeout=2):
