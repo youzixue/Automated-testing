@@ -17,6 +17,7 @@
 - [13. 参考与扩展](#13-参考与扩展)
 - [14. 主流CI平台Docker集成示例](#14-主流ci平台docker集成示例)
 - [15. 常见问题FAQ](#15-常见问题faq)
+- [16. 邮件通知集成](#16-邮件通知集成)
 - [变更记录](#变更记录)
 
 > **如有环境/流程变更，请同步更新本手册，确保团队成员操作一致。**
@@ -153,19 +154,35 @@
 ---
 
 ## 7. Allure CLI（测试报告工具）
-- 下载并解压：
+- 下载并解压（支持两种格式：.tgz或.zip）：
   ```bash
+  # 方法1：使用.tgz格式
   cd /opt
   wget https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.tgz
   tar -zxvf allure-2.27.0.tgz
   sudo mv allure-2.27.0 /opt/allure
   sudo ln -s /opt/allure/bin/allure /usr/bin/allure
+  
+  # 方法2：使用.zip格式（与Dockerfile一致）
+  cd /opt
+  wget https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.zip
+  unzip allure-2.27.0.zip
+  sudo mv allure-2.27.0 /opt/allure
+  sudo ln -s /opt/allure/bin/allure /usr/bin/allure
+  
+  # 验证安装
   allure --version
   ```
 - Allure依赖Java 8+，如未安装请执行：
   ```bash
+  # CentOS/RHEL
   yum install java-1.8.0-openjdk -y
-  export JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk
+  
+  # Ubuntu/Debian
+  apt-get update && apt-get install -y openjdk-8-jre
+  
+  # 设置JAVA_HOME（所有系统）
+  export JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java))))
   export PATH=$JAVA_HOME/bin:$PATH
   ```
 - output/allure-results和output/allure-report目录分别用于存放测试结果和HTML报告，output目录已在.gitignore中全局忽略，避免无用文件提交。
@@ -214,13 +231,45 @@
 - Dockerfile标准写法（项目根目录）：
   ```dockerfile
   FROM python:3.11-slim
+
   WORKDIR /app
   COPY . /app
-  RUN pip install poetry \
-      && poetry install \
-      && pip install playwright \
-      && playwright install
-  CMD ["pytest", "--alluredir=output/allure-results"]
+
+  # 切换为国内阿里云APT源，加速依赖安装（确保文件存在）
+  RUN if [ -f /etc/apt/sources.list ]; then \
+        sed -i 's@http://deb.debian.org@https://mirrors.aliyun.com/debian@g' /etc/apt/sources.list && \
+        sed -i 's@http://security.debian.org@https://mirrors.aliyun.com/debian-security@g' /etc/apt/sources.list; \
+      fi
+
+  # 安装 Playwright 依赖库和常用工具
+  RUN apt-get update && apt-get install -y --no-install-recommends \
+      wget openjdk-17-jre-headless unzip \
+      libglib2.0-0 libnss3 libnspr4 \
+      libdbus-1-3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libexpat1 \
+      libx11-6 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxrandr2 libgbm1 \
+      libxcb1 libxkbcommon0 libpango-1.0-0 libcairo2 libasound2 libatspi2.0-0 \
+      fonts-liberation libappindicator3-1 lsb-release \
+      && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+  # 配置pip多源兜底
+  RUN mkdir -p /root/.pip && \
+      echo "[global]" > /root/.pip/pip.conf && \
+      echo "index-url = https://mirrors.aliyun.com/pypi/simple/" >> /root/.pip/pip.conf
+
+  # 升级pip并安装poetry
+  RUN pip install --upgrade pip \
+      && pip install "poetry>=1.5.0"
+
+  # 安装项目依赖
+  RUN poetry install
+
+  # playwright浏览器下载加速
+  ENV PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright
+
+  # 安装playwright及其浏览器
+  RUN pip install playwright && playwright install
+
+  CMD ["bash", "-c", "poetry run pytest --alluredir=output/allure-results && allure generate output/allure-results -o output/allure-report --clean"]
   ```
 - 本地构建与运行：
   ```bash
@@ -266,7 +315,7 @@
   docker run --rm \
     -v /usr/share/nginx/html/allure-report:/app/output/allure-report \
     automated-testing:latest \
-    bash -c "pytest --alluredir=/app/output/allure-report && allure generate /app/output/allure-report -o /app/output/allure-report --clean"
+    bash -c "poetry run pytest --alluredir=/app/output/allure-report && allure generate /app/output/allure-report -o /app/output/allure-report --clean"
   ```
 - **为什么这样做？**
   - 这样pytest和allure生成的报告会直接写到Web服务目录，报告生成后Web服务立刻可访问，无需手动拷贝。
@@ -297,7 +346,7 @@
     -e WEB_BASE_URL=https://xxx.com \
     -v /usr/share/nginx/html/allure-report:/app/output/allure-report \
     automated-testing:latest \
-    bash -c "pytest --alluredir=/app/output/allure-report && allure generate /app/output/allure-report -o /app/output/allure-report --clean"
+    bash -c "poetry run pytest --alluredir=/app/output/allure-report && allure generate /app/output/allure-report -o /app/output/allure-report --clean"
   ```
 - 参数说明：
   - `--rm`：容器运行结束后自动删除，保持环境整洁。
@@ -369,7 +418,7 @@ pipeline {
                   -e TEST_DEFAULT_PASSWORD=$TEST_DEFAULT_PASSWORD \
                   -v /usr/share/nginx/html/allure-report:/app/output/allure-report \
                   automated-testing:latest \
-                  bash -c "pytest --alluredir=/app/output/allure-report && allure generate /app/output/allure-report -o /app/output/allure-report --clean"
+                  bash -c "poetry run pytest --alluredir=/app/output/allure-report && allure generate /app/output/allure-report -o /app/output/allure-report --clean"
                 '''
             }
         }
@@ -392,7 +441,7 @@ pipeline {
   - `-e ...`：传递环境变量，适配不同环境和敏感信息。
   - `-v /usr/share/nginx/html/allure-report:/app/output/allure-report`：将宿主机Web服务报告目录挂载到容器内，报告生成后Web服务可直接访问。
   - `automated-testing:latest`：指定要运行的镜像。
-  - `bash -c "pytest ... && allure generate ..."`：先运行pytest生成Allure原始结果，再生成HTML报告。
+  - `bash -c "poetry run pytest ... && allure generate ..."`：先运行pytest生成Allure原始结果，再生成HTML报告。
 - `archiveArtifacts`：将Allure报告归档为Jenkins产物，便于后续下载和发布。
 
 ---
@@ -423,7 +472,7 @@ test:
       -e TEST_DEFAULT_PASSWORD=$TEST_DEFAULT_PASSWORD \
       -v /usr/share/nginx/html/allure-report:/app/output/allure-report \
       automated-testing:latest \
-      bash -c "pytest --alluredir=/app/output/allure-report && allure generate /app/output/allure-report -o /app/output/allure-report --clean"
+      bash -c "poetry run pytest --alluredir=/app/output/allure-report && allure generate /app/output/allure-report -o /app/output/allure-report --clean"
   artifacts:
     paths:
       - output/allure-report
@@ -465,12 +514,109 @@ test:
   - A: 推荐用凭据/变量机制，不要明文写在脚本里，详见各平台示例。
 - **Q: Playwright/Allure安装慢或报错？**
   - A: 优先切换国内镜像源，或参考官方FAQ。
+- **Q: Playwright依赖库缺失如何解决？**
+  - A: 确保Dockerfile中安装了所有必要的依赖，libglib2.0-0、libnss3等。
 - **Q: output目录产物如何归档？**
   - A: 推荐用CI平台的产物归档功能，便于追溯和发布。
 - **Q: 产物目录与Web服务目录不一致怎么办？**
   - A: 建议统一挂载，或在测试后用脚本同步到Web服务目录。
+- **Q: 为什么要使用poetry run pytest而不是直接pytest？**
+  - A: 确保在正确的虚拟环境中运行，避免依赖问题。
+
+---
+
+## 16. 邮件通知集成
+
+测试完成后自动发送邮件通知是CI/CD自动化的重要环节，下面提供几种实现方式。
+
+### 16.1 Python脚本发送邮件
+
+推荐使用Python的yagmail库发送邮件，简单易用：
+
+```python
+# ci/scripts/send_report_email.py
+import yagmail
+import os
+
+# 邮件配置（建议通过环境变量注入）
+user = os.environ.get("EMAIL_SENDER")
+password = os.environ.get("EMAIL_PASSWORD")
+to = os.environ.get("EMAIL_RECIPIENTS").split(",")
+allure_url = os.environ.get("ALLURE_PUBLIC_URL")
+
+subject = "自动化测试报告"
+content = f"本次自动化测试已完成，Allure报告地址：{allure_url}"
+
+yag = yagmail.SMTP(user=user, password=password, host='smtp.qiye.aliyun.com')
+yag.send(to=to, subject=subject, contents=content)
+print("邮件已发送")
+```
+
+### 16.2 Jenkins集成邮件通知
+
+在Jenkinsfile中添加邮件通知：
+
+```groovy
+post {
+    always {
+        archiveArtifacts artifacts: 'output/allure-report/**', allowEmptyArchive: true
+        
+        script {
+            def testSummary = sh(script: 'cat output/allure-report/widgets/summary.json || echo "{}"', returnStdout: true).trim()
+            def allureUrl = "http://your-jenkins-server/allure-report/${env.BUILD_NUMBER}/"
+            
+            emailext (
+                subject: "测试结果: ${currentBuild.currentResult} - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """
+                    <p>测试结果: ${currentBuild.currentResult}</p>
+                    <p>任务: ${env.JOB_NAME} #${env.BUILD_NUMBER}</p>
+                    <p>Allure报告: <a href="${allureUrl}">${allureUrl}</a></p>
+                    <p>变更详情: ${env.CHANGE_URL ?: '无'}</p>
+                """,
+                to: '$DEFAULT_RECIPIENTS',
+                mimeType: 'text/html'
+            )
+        }
+    }
+}
+```
+
+### 16.3 GitLab CI邮件通知
+
+使用GitLab CI/CD内置的邮件通知或自定义脚本：
+
+```yaml
+stages:
+  - test
+  - notify
+
+test:
+  # ... 上面的测试步骤 ...
+
+notify:
+  stage: notify
+  image: python:3.11
+  script:
+    - pip install yagmail
+    - python ci/scripts/send_report_email.py
+  dependencies:
+    - test
+  only:
+    - main
+```
+
+### 16.4 邮件通知最佳实践
+
+- **只发送必要信息**：邮件内容简洁，关键测试指标和报告链接即可
+- **区分通知级别**：成功和失败用不同主题，便于接收者快速识别
+- **HTML格式增强可读性**：使用HTML格式，关键数据用表格呈现
+- **安全保障**：邮箱账号密码通过CI平台变量/凭据管理注入
+- **防止邮件轰炸**：仅在重要分支（如main、develop）构建后发送
+- **便于跟踪分析**：在邮件中包含构建编号、分支/提交信息、报告链接等
 
 ---
 
 ### 变更记录
 - 2024-06-XX：结构化重构，补充目录结构、环境变量、依赖管理、测试数据分离、CI/CD与Docker集成、主流CI平台集成示例、常见问题FAQ等内容，优化章节编号和格式。
+- 2024-06-XX：更新Dockerfile示例，增加Playwright依赖安装说明，统一使用poetry run命令执行测试，补充FAQ内容。
+- 2024-06-XX：新增邮件通知集成章节，提供Python脚本、Jenkins和GitLab CI的邮件通知实现方式。

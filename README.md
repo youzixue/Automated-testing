@@ -11,11 +11,32 @@
 6. **工具层（src/utils/）**：通用工具、OCR、日志、数据工厂等。
 7. **外部集成层（pyproject.toml）**：依赖声明与管理。
 
+## 环境变量配置说明
+
+- 所有环境变量请参考 `.env.example`，复制为 `.env` 后补充实际值。
+- **本地开发推荐配置：**
+  - `UPLOAD_REPORT=true`  # 需要上传Allure报告到远程Web服务时设为true
+  - `EMAIL_ENABLED=false` # 本地调试建议关闭邮件通知，避免骚扰
+- **CI/CD环境推荐配置：**
+  - `UPLOAD_REPORT=false` # CI执行机和Web服务同一台时设为false（默认即可）
+  - `EMAIL_ENABLED=true`  # 自动发送测试报告邮件
+- 详细注释已在 `.env.example` 中给出，团队成员请按需调整。
+
 ## 快速开始
 1. 安装依赖：`poetry install`
-2. 配置环境变量：复制 `.env.example` 为 `.env` 并补充实际值
+2. 配置环境变量：复制 `.env.example` 为 `.env` 并补充实际值（见上文说明）
 3. 运行测试：`pytest -n auto --alluredir=output/allure`
 4. 查看报告：`allure serve output/allure`
+
+## CI/CD集成与自动化
+- 推荐CI/CD流水线仅调用主控脚本：
+  ```bash
+  python ci/scripts/run_and_notify.py
+  # 或在Docker容器中：
+  docker run ... automated-testing:latest bash -c "python ci/scripts/run_and_notify.py"
+  ```
+- 邮件通知、Allure报告上传等行为均可通过环境变量灵活控制，无需修改代码。
+- 详细CI/CD集成方案见 docs/自动环境部署&CICD集成.md
 
 ## 主要特性
 - Playwright 跨浏览器 UI 自动化

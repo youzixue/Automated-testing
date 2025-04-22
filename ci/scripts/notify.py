@@ -8,6 +8,10 @@ import os
 import time
 import platform
 import sys
+
+# 将项目根目录添加到系统路径
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
 from src.utils.email_notifier import EmailNotifier
 
 def send_report_email(summary, upload_success):
