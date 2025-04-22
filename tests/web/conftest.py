@@ -1,23 +1,33 @@
+"""
+Web测试专用的pytest固件配置。
+提供Web UI测试所需的浏览器、页面对象、数据和截图功能。
+"""
+
 import os
+import asyncio
+from pathlib import Path
 from dotenv import load_dotenv
 import pytest
 import pytest_asyncio
-from playwright.async_api import async_playwright, Page, Browser
 import yaml
-from pathlib import Path
+import allure
+from playwright.async_api import async_playwright, Page, Browser
+
 from src.utils.screenshot import save_screenshot, gen_screenshot_filename
 from src.utils.config.manager import get_config
-import allure
-import asyncio
 
 # 明确指定.env路径，保证任何目录运行都能加载
-load_dotenv(dotenv_path=os.path.abspath(os.path.join(os.path.dirname(__file__), '../../.env')))
+project_root = Path(__file__).parents[2]
+env_path = project_root / '.env'
+load_dotenv(dotenv_path=str(env_path))
+
 
 @pytest_asyncio.fixture(scope="session")
 async def playwright_instance():
     """全局Playwright上下文"""
     async with async_playwright() as p:
         yield p
+
 
 @pytest_asyncio.fixture(scope="function")
 async def browser():
@@ -29,6 +39,7 @@ async def browser():
         yield browser
         await browser.close()
 
+
 @pytest_asyncio.fixture
 async def page(browser: Browser) -> Page:
     """新建页面，自动关闭"""
@@ -36,12 +47,14 @@ async def page(browser: Browser) -> Page:
     yield page
     await page.close()
 
+
 @pytest.fixture
 def login_data():
     """加载登录测试数据（YAML）。"""
-    data_path = Path(__file__).parent.parent.parent / "data/web/login/login_data.yaml"
+    data_path = project_root / "data/web/login/login_data.yaml"
     with open(data_path, encoding="utf-8") as f:
         return yaml.safe_load(f)
+
 
 @pytest.fixture
 def test_users(login_data):
@@ -55,11 +68,13 @@ def test_users(login_data):
 
     return users
 
+
 @pytest.fixture
 def login_url():
     """提供登录页面URL（通过统一配置获取）"""
     config = get_config()
     return config["web"]["base_url"]
+
 
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_makereport(item, call):
