@@ -6,6 +6,7 @@ authors = ["Youzixue <863819494@qq.com>"]
 readme = "README.md"
 packages = [{include = "src"}]
 
+# 配置PyPI源，优先使用国内镜像加速
 [[tool.poetry.source]]
 name = "tuna"
 url = "https://pypi.tuna.tsinghua.edu.cn/simple"
@@ -14,17 +15,55 @@ url = "https://pypi.tuna.tsinghua.edu.cn/simple"
 name = "aliyun"
 url = "https://mirrors.aliyun.com/pypi/simple/"
 
+# ==============================================
+# 依赖管理
+# ==============================================
+
+# 主要依赖
 [tool.poetry.dependencies]
 python = ">=3.11,<3.12"
-playwright = "1.51.0"
-python-dotenv = "1.1.0"
-pillow = "9.5.0"
-ddddocr = "1.5.6"
-pyyaml = "6.0.2"
-numpy = "2.2.4"
-onnxruntime = "1.21.0"
 
+# 核心依赖
+playwright = "1.51.0"          # Web端自动化测试引擎
+python-dotenv = "1.1.0"        # 环境变量管理
+pyyaml = "6.0.2"               # 配置文件解析
+
+# OCR相关依赖
+pillow = "9.5.0"               # 图像处理
+ddddocr = "1.5.6"              # 验证码识别
+numpy = "2.2.4"                # 数值计算
+onnxruntime = "1.21.0"         # OCR推理引擎
+
+# API测试依赖
+httpx = "0.27.0"               # HTTP客户端
+
+# 数据验证
+pydantic = "2.6.3"             # 数据模型和验证
+jsonschema = "4.21.1"          # JSON结构验证
+
+# 移动端测试
+Appium-Python-Client = "3.1.0" # 移动端自动化测试
+
+# 开发工具依赖
 [tool.poetry.group.dev.dependencies]
+# 代码质量工具
+black = "23.12.1"              # 代码格式化
+pylint = "3.3.6"               # 代码静态分析
+mypy = "1.15.0"                # 类型检查
+pre-commit = "3.8.0"           # Git提交前检查
+
+# 测试框架
+pytest = "8.3.5"               # 测试框架
+pytest-playwright = "0.4.4"    # Playwright集成
+allure-pytest = "2.14.0"       # Allure报告集成
+pytest-xdist = "3.6.1"         # 并行测试
+pytest-rerunfailures = "12.0"  # 失败用例重试
+pytest-html = "4.1.1"          # HTML报告
+pytest-asyncio = "0.26.0"      # 异步测试
+pytest-cov = "4.1.0"           # 覆盖率报告
+pytest-mock = "3.14.0"         # Mock支持
+
+# 工具依赖
 astroid = "3.3.9"
 cfgv = "3.4.0"
 click = "8.1.8"
@@ -46,29 +85,24 @@ pluggy = "1.5.0"
 tomlkit = "0.13.2"
 virtualenv = "20.30.0"
 
-# Moved from dependencies
-pytest = "8.3.5"
-pytest-playwright = "0.4.4"
-allure-pytest = "2.14.0"
-pytest-xdist = "3.6.1"
-pytest-rerunfailures = "12.0"
-pytest-html = "4.1.1"
-pytest-asyncio = "0.26.0"
-pytest-cov = "4.1.0"
-pytest-mock = "3.14.0"
-pre-commit = "3.8.0"
-black = "23.12.1"
-pylint = "3.3.6"
-mypy = "1.15.0"
+# ==============================================
+# 构建系统
+# ==============================================
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
+# ==============================================
+# 工具配置
+# ==============================================
+
+# Black格式化工具配置
 [tool.black]
 line-length = 100
 target-version = ["py311"]
 
+# Pylint配置
 [tool.pylint.messages_control]
 disable = [
     "missing-module-docstring",
@@ -79,6 +113,7 @@ disable = [
 [tool.pylint.format]
 max-line-length = 100
 
+# MyPy类型检查配置
 [tool.mypy]
 python_version = "3.11"
 warn_return_any = true
@@ -95,41 +130,37 @@ module = "tests.*"
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
 
+# Pytest配置
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
+pythonpath = ["."]
+addopts = "-ra --tb=short --strict-markers"
+log_cli = true
+log_cli_level = "INFO"
 markers = [
-    "web: Web UI tests",
-    "api: API tests",
-    "mobile: Mobile tests",
-    "wechat: WeChat tests",
-    "smoke: Smoke tests",
-    "regression: Regression tests",
-    "slow: Slow running tests",
-    "ui: Tests that require UI",
-    "security: Security tests",
-    "performance: Performance tests",
-    "login: Login related tests",
+    "web: web端自动化用例",
+    "api: 接口自动化用例", 
+    "mobile: 移动端自动化用例",
+    "smoke: 冒烟测试",
+    "regression: 回归测试",
+    "slow: 慢速用例"
 ]
-# pytest-xdist并发执行建议：
-# 推荐命令：pytest -n auto  # 自动根据CPU核心数并发
-# 或 pytest -n 4  # 指定4个worker并发
-# 如需每个worker独立临时目录，可加--dist=loadscope
-# 如需自动重试失败用例，可加--reruns=2 
 
+# Deptry依赖检查工具配置
 [tool.deptry]
-# 告诉 deptry 项目的本地源码目录
+# 本地源码目录
 known_first_party = ["src", "tests", "ci"]
 
-# 解决包名和导入模块名不一致的问题
+# 包名和导入模块名映射
 [tool.deptry.package_module_name_map]
 "python-dotenv" = ["dotenv"]
 "pillow" = ["PIL"]
 "pyyaml" = ["yaml"]
 
-# 忽略 pytest 及其插件被误报为未使用（它们通过命令行调用）
+# 忽略未使用依赖的检查
 ignore_unused = [
     "pytest",
     "pytest-playwright",
@@ -139,12 +170,12 @@ ignore_unused = [
     "pytest-html",
     "pytest-cov",
     "pytest-mock",
-    "pytest-asyncio",  # 添加 pytest-asyncio
-    "pytest-base-url", # 添加 pytest-base-url
-    "pytest-metadata"  # 添加 pytest-metadata
+    "pytest-asyncio",
+    "pytest-base-url", 
+    "pytest-metadata"
 ]
 
-# 如果有其他需要忽略的特定模块报错，可以添加到这里
+# 注释掉的规则可根据需要启用
 # ignore_missing = []
 # ignore_misplaced_dev = []
 # ignore_transitive = [] 
