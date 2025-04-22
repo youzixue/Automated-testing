@@ -32,7 +32,9 @@ RUN pip install playwright -i https://mirrors.aliyun.com/pypi/simple/ \
     || pip install playwright -i https://pypi.tuna.tsinghua.edu.cn/simple \
     && playwright install
 
-# 安装Playwright和Allure CLI所需的全部系统依赖（适配Debian 12 Bookworm）
+# 复制本地下载的Allure CLI安装包到镜像
+COPY allure-2.27.0.zip /tmp/
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget openjdk-17-jre-headless unzip \
     libglib2.0-0 libnss3 libnspr4 \
@@ -40,10 +42,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libx11-6 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxrandr2 libgbm1 \
     libxcb1 libxkbcommon0 libpango-1.0-0 libcairo2 libasound2 libatspi2.0-0 \
     fonts-liberation libappindicator3-1 lsb-release \
-    && wget https://mirrors.tuna.tsinghua.edu.cn/allure/allure-2.27.0.zip \
-    && unzip allure-2.27.0.zip -d /opt/ \
+    && unzip /tmp/allure-2.27.0.zip -d /opt/ \
     && ln -s /opt/allure-2.27.0/bin/allure /usr/bin/allure \
-    && rm allure-2.27.0.zip \
+    && rm /tmp/allure-2.27.0.zip \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 CMD ["bash", "-c", "pytest --alluredir=output/allure-results && allure generate output/allure-results -o output/allure-report --clean"]
