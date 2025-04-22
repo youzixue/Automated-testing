@@ -1,16 +1,20 @@
-FROM python:3.11-slim
+FROM python:3.11.9-slim
 
 WORKDIR /app
 
 # 先只复制依赖声明文件，利用缓存加速依赖安装
 COPY pyproject.toml poetry.lock /app/
 
-# 切换为清华大学APT源，加速依赖安装（确保全部替换deb.debian.org和security.debian.org）
-RUN sed -i 's@http://deb.debian.org@https://mirrors.tuna.tsinghua.edu.cn@g' /etc/apt/sources.list && \
-    sed -i 's@http://security.debian.org@https://mirrors.tuna.tsinghua.edu.cn/debian-security@g' /etc/apt/sources.list
+# 配置清华APT源（处理sources.list可能不存在的情况）
+RUN apt-get update && apt-get install -y --no-install-recommends apt-transport-https ca-certificates && \
+    mkdir -p /etc/apt/sources.list.d && \
+    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian bookworm main contrib non-free non-free-firmware" > /etc/apt/sources.list && \
+    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian bookworm-updates main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
+    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian-security bookworm-security main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
+    apt-get update
 
 # 安装 Playwright 依赖库和常用工具
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get install -y --no-install-recommends \
     wget openjdk-17-jre-headless unzip \
     libglib2.0-0 libnss3 libnspr4 \
     libdbus-1-3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libexpat1 \
