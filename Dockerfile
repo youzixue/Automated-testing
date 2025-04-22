@@ -5,12 +5,12 @@ WORKDIR /app
 # 先只复制依赖声明文件，利用缓存加速依赖安装
 COPY pyproject.toml poetry.lock /app/
 
-# 配置清华APT源（处理sources.list可能不存在的情况）
-RUN apt-get update && apt-get install -y --no-install-recommends apt-transport-https ca-certificates && \
-    mkdir -p /etc/apt/sources.list.d && \
+# 配置清华APT源（在任何apt操作前设置源）
+RUN mkdir -p /etc/apt/sources.list.d && \
     echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian bookworm main contrib non-free non-free-firmware" > /etc/apt/sources.list && \
     echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian bookworm-updates main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
     echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian-security bookworm-security main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
+    apt-get update && apt-get install -y --no-install-recommends apt-transport-https ca-certificates && \
     apt-get update
 
 # 安装 Playwright 依赖库和常用工具
