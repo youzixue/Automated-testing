@@ -42,8 +42,8 @@ RUN poetry config repositories.aliyun https://mirrors.aliyun.com/pypi/simple/ \
 # 增加 Poetry 的网络超时时间（单位：秒）
 ENV POETRY_REQUESTS_TIMEOUT=300
 
-# 安装项目依赖（pyproject.toml里配置多源）
-RUN poetry install
+# 安装项目依赖（--no-root表示只安装依赖，不安装当前项目）
+RUN poetry install --no-root
 
 # playwright浏览器下载加速（可选）
 ENV PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright

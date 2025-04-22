@@ -28,15 +28,31 @@
 3. 运行测试：`pytest -n auto --alluredir=output/allure`
 4. 查看报告：`allure serve output/allure`
 
-## CI/CD集成与自动化
-- 推荐CI/CD流水线仅调用主控脚本：
-  ```bash
-  python ci/scripts/run_and_notify.py
-  # 或在Docker容器中：
-  docker run ... automated-testing:latest bash -c "python ci/scripts/run_and_notify.py"
-  ```
-- 邮件通知、Allure报告上传等行为均可通过环境变量灵活控制，无需修改代码。
-- 详细CI/CD集成方案见 docs/自动环境部署&CICD集成.md
+## Docker 开发环境
+
+### 构建镜像
+```bash
+docker build -t automated-testing:dev .
+```
+
+### 本地开发（代码热更新）
+```bash
+docker run --rm \
+  -e CI_NAME="本地Docker开发" \
+  -v /your/project/path:/app \
+  -v /usr/share/nginx/html/allure-report:/app/output/reports/allure-report \
+  automated-testing:dev \
+  bash -c "poetry run python ci/scripts/run_and_notify.py"
+```
+
+### CI/CD 环境
+```bash
+docker run --rm \
+  -e CI_NAME="CI自动化服务器" \
+  -v /usr/share/nginx/html/allure-report:/app/output/reports/allure-report \
+  automated-testing:latest \
+  bash -c "poetry run python ci/scripts/run_and_notify.py"
+```
 
 ## 主要特性
 - Playwright 跨浏览器 UI 自动化
