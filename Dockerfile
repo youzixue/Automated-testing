@@ -40,7 +40,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libx11-6 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxrandr2 libgbm1 \
     libxcb1 libxkbcommon0 libpango-1.0-0 libcairo2 libasound2 libatspi2.0-0 \
     fonts-liberation libappindicator3-1 lsb-release \
-    && wget https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.zip \
+    && wget https://mirrors.tuna.tsinghua.edu.cn/allure/allure-2.27.0.zip \
     && unzip allure-2.27.0.zip -d /opt/ \
     && ln -s /opt/allure-2.27.0/bin/allure /usr/bin/allure \
     && rm allure-2.27.0.zip \
