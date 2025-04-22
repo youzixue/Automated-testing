@@ -51,4 +51,4 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm /tmp/allure-2.27.0.zip \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-CMD ["bash", "-c", "pytest --alluredir=output/allure-results && allure generate output/allure-results -o output/allure-report --clean"]
+CMD ["bash", "-c", "poetry run pytest --alluredir=output/allure-results && allure generate output/allure-results -o output/allure-report --clean"]
