@@ -101,3 +101,45 @@
 - 这样配置后，无论本地、CI、Docker环境，`from src.xxx` 都能正常导入。
 - `pytest.ini` 与 `pyproject.toml` 并存是主流最佳实践，分别管理测试和依赖/工具链配置，互不冲突。
 - 团队成员和CI/CD环境无需关心PYTHONPATH，直接运行测试命令即可。
+
+## Docker开发与CI/CD最佳实践
+
+本项目推荐如下Docker使用模式，兼顾开发效率与环境一致性：
+
+### 1. 本地开发/调试
+- **镜像只需构建一次**（依赖变动时重建）：
+  ```bash
+  docker build -t automated-testing:dev .
+  ```
+- **运行时挂载本地代码目录，代码热更新**：
+  ```bash
+  docker run --rm \
+    -e ...（你的环境变量） \
+    -v /your/project/path:/app \
+    automated-testing:dev \
+    bash -c "poetry run python ci/scripts/run_and_notify.py"
+  ```
+  > `/your/project/path` 替换为你本地项目根目录绝对路径。
+- **优点**：代码改动立即生效，无需重建镜像，极大提升开发效率。
+
+### 2. CI/CD与生产环境
+- **每次合并/发布自动重建镜像，保证环境一致性**：
+  ```bash
+  docker build -t automated-testing:latest .
+  ```
+- **运行时不挂载代码目录，只挂载报告目录**：
+  ```bash
+  docker run --rm \
+    -e ...（你的环境变量） \
+    -v /usr/share/nginx/html/allure-report:/app/output/reports/allure-report \
+    automated-testing:latest \
+    bash -c "poetry run python ci/scripts/run_and_notify.py"
+  ```
+- **优点**：环境、依赖、代码版本完全一致，测试结果可复现、可追溯。
+
+### 3. Dockerfile分层构建说明
+- 采用分层构建，先COPY依赖声明文件并安装依赖，再COPY全部代码，最大化利用缓存加速构建。
+- 依赖不变时，构建速度极快。
+
+---
+如需进一步定制Dockerfile、CI/CD流水线或本地/远程环境切换脚本，详见项目内文档或联系维护者。
