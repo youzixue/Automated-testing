@@ -1,7 +1,9 @@
 FROM python:3.11-slim
 
 WORKDIR /app
-COPY . /app
+
+# 先只复制依赖声明文件，利用缓存加速依赖安装
+COPY pyproject.toml poetry.lock /app/
 
 # 切换为国内阿里云APT源，加速依赖安装（确保文件存在）
 RUN if [ -f /etc/apt/sources.list ]; then \
@@ -47,6 +49,9 @@ ENV PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright
 RUN pip install playwright -i https://mirrors.aliyun.com/pypi/simple/ \
     || pip install playwright -i https://pypi.tuna.tsinghua.edu.cn/simple \
     && playwright install
+
+# 复制全部项目代码（依赖已装好，代码变动不会导致依赖重装）
+COPY . /app
 
 # 复制本地下载的Allure CLI安装包到镜像
 COPY allure-2.27.0.zip /tmp/
