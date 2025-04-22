@@ -5,11 +5,9 @@ WORKDIR /app
 # 先只复制依赖声明文件，利用缓存加速依赖安装
 COPY pyproject.toml poetry.lock /app/
 
-# 切换为国内阿里云APT源，加速依赖安装（确保文件存在）
-RUN if [ -f /etc/apt/sources.list ]; then \
-      sed -i 's@http://deb.debian.org@https://mirrors.aliyun.com/debian@g' /etc/apt/sources.list && \
-      sed -i 's@http://security.debian.org@https://mirrors.aliyun.com/debian-security@g' /etc/apt/sources.list; \
-    fi
+# 切换为清华大学APT源，加速依赖安装（确保全部替换deb.debian.org和security.debian.org）
+RUN sed -i 's@http://deb.debian.org@https://mirrors.tuna.tsinghua.edu.cn@g' /etc/apt/sources.list && \
+    sed -i 's@http://security.debian.org@https://mirrors.tuna.tsinghua.edu.cn/debian-security@g' /etc/apt/sources.list
 
 # 安装 Playwright 依赖库和常用工具
 RUN apt-get update && apt-get install -y --no-install-recommends \
