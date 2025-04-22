@@ -57,7 +57,7 @@ def send_report_email(summary, upload_success):
     report_generation_time = time.strftime("%Y-%m-%d %H:%M:%S")
     pass_rate_percent = f"{summary.get('passed', 0)}/{summary.get('total', 0)}"
     subject = f"【自动化测试】测试报告 [{report_generation_time}] - 通过率: {pass_rate_percent}"
-    if upload_success and public_url:
+    if public_url:
         report_link = public_url
         button_html = f'<a href="{report_link}" target="_blank" style="display: inline-block; padding: 10px 20px; font-size: 16px; color: #ffffff; background-color: #007bff; border-radius: 5px; text-decoration: none;">查看完整报告</a>'
     else:
