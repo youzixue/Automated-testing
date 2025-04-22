@@ -35,6 +35,10 @@ RUN pip install playwright -i https://mirrors.aliyun.com/pypi/simple/ \
 # 复制本地下载的Allure CLI安装包到镜像
 COPY allure-2.27.0.zip /tmp/
 
+# 切换为国内阿里云APT源，加速依赖安装
+RUN sed -i 's@http://deb.debian.org@https://mirrors.aliyun.com@g' /etc/apt/sources.list \
+    && sed -i 's@http://security.debian.org@https://mirrors.aliyun.com@g' /etc/apt/sources.list
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget openjdk-17-jre-headless unzip \
     libglib2.0-0 libnss3 libnspr4 \
