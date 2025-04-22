@@ -3,6 +3,22 @@ FROM python:3.11-slim
 WORKDIR /app
 COPY . /app
 
+# 切换为国内阿里云APT源，加速依赖安装（确保文件存在）
+RUN if [ -f /etc/apt/sources.list ]; then \
+      sed -i 's@http://deb.debian.org@https://mirrors.aliyun.com/debian@g' /etc/apt/sources.list && \
+      sed -i 's@http://security.debian.org@https://mirrors.aliyun.com/debian-security@g' /etc/apt/sources.list; \
+    fi
+
+# 安装 Playwright 依赖库和常用工具
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget openjdk-17-jre-headless unzip \
+    libglib2.0-0 libnss3 libnspr4 \
+    libdbus-1-3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libexpat1 \
+    libx11-6 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxrandr2 libgbm1 \
+    libxcb1 libxkbcommon0 libpango-1.0-0 libcairo2 libasound2 libatspi2.0-0 \
+    fonts-liberation libappindicator3-1 lsb-release \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # 配置pip多源兜底（阿里云+清华）
 RUN mkdir -p /root/.pip && \
     echo "[global]" > /root/.pip/pip.conf && \
@@ -35,20 +51,8 @@ RUN pip install playwright -i https://mirrors.aliyun.com/pypi/simple/ \
 # 复制本地下载的Allure CLI安装包到镜像
 COPY allure-2.27.0.zip /tmp/
 
-# 切换为国内阿里云APT源，加速依赖安装
-RUN sed -i 's@http://deb.debian.org@https://mirrors.aliyun.com@g' /etc/apt/sources.list \
-    && sed -i 's@http://security.debian.org@https://mirrors.aliyun.com@g' /etc/apt/sources.list
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget openjdk-17-jre-headless unzip \
-    libglib2.0-0 libnss3 libnspr4 \
-    libdbus-1-3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libexpat1 \
-    libx11-6 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxrandr2 libgbm1 \
-    libxcb1 libxkbcommon0 libpango-1.0-0 libcairo2 libasound2 libatspi2.0-0 \
-    fonts-liberation libappindicator3-1 lsb-release \
-    && unzip /tmp/allure-2.27.0.zip -d /opt/ \
+RUN unzip /tmp/allure-2.27.0.zip -d /opt/ \
     && ln -s /opt/allure-2.27.0/bin/allure /usr/bin/allure \
-    && rm /tmp/allure-2.27.0.zip \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+    && rm /tmp/allure-2.27.0.zip
 
 CMD ["bash", "-c", "poetry run pytest --alluredir=output/allure-results && allure generate output/allure-results -o output/allure-report --clean"]
