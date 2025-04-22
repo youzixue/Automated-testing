@@ -43,3 +43,15 @@
 
 ---
 如需扩展新平台、业务或工具，请先查阅相关目录下 README。
+
+## Docker环境下Allure CLI安装说明
+
+- 由于国内网络环境限制，建议在构建Docker镜像前，手动下载 Allure CLI 安装包（allure-2.27.0.zip）并放置于项目根目录（与Dockerfile同级）。
+- Dockerfile 会自动将该zip包COPY进镜像并完成解压与安装，无需外网下载。
+- **注意：allure-2.27.0.zip 不建议提交到Git仓库，请在.gitignore中添加 `allure-*.zip` 进行忽略。**
+- 下载地址（需科学上网）：https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.zip
+- 构建命令示例：
+  ```bash
+  docker build -t automated-testing:latest .
+  ```
+- 如需团队协作，请在文档或Wiki中明确说明此操作，确保所有成员一致。
