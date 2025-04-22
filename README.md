@@ -39,7 +39,37 @@ docker build -t automated-testing:dev .
 ```bash
 docker run --rm \
   -e CI_NAME="本地Docker开发" \
-  -v /your/project/path:/app \
+  -e APP_ENV=test \
+  -e WEB_BASE_URL="https://test.example.com/web/" \
+  -e API_BASE_URL="https://test.example.com/api/" \
+  -e TEST_DEFAULT_USERNAME="your_test_user" \
+  -e TEST_DEFAULT_PASSWORD="your_test_password" \
+  -e EMAIL_ENABLED=false \
+  -v $(pwd):/app \
+  -v /usr/share/nginx/html/allure-report:/app/output/reports/allure-report \
+  automated-testing:dev \
+  bash -c "poetry run python ci/scripts/run_and_notify.py"
+```
+
+### 完整参数运行（含邮件通知）
+```bash
+docker run --rm \
+  -e CI_NAME="本地Docker测试" \
+  -e APP_ENV=test \
+  -e WEB_BASE_URL="https://test.example.com/web/" \
+  -e API_BASE_URL="https://test.example.com/api/" \
+  -e TEST_DEFAULT_USERNAME="your_test_user" \
+  -e TEST_DEFAULT_PASSWORD="your_test_password" \
+  -e EMAIL_ENABLED=true \
+  -e EMAIL_SMTP_SERVER="smtp.example.com" \
+  -e EMAIL_SMTP_PORT=465 \
+  -e EMAIL_SENDER="sender@example.com" \
+  -e EMAIL_PASSWORD="your_email_password" \
+  -e EMAIL_USE_SSL=true \
+  -e EMAIL_RECIPIENTS="recipient@example.com" \
+  -e ALLURE_PUBLIC_URL="http://your-server:8000/allure-report/index.html" \
+  -e WEB_SERVER_USER="nginx" \
+  -v $(pwd):/app \
   -v /usr/share/nginx/html/allure-report:/app/output/reports/allure-report \
   automated-testing:dev \
   bash -c "poetry run python ci/scripts/run_and_notify.py"
@@ -49,8 +79,34 @@ docker run --rm \
 ```bash
 docker run --rm \
   -e CI_NAME="CI自动化服务器" \
+  -e CI=true \
+  -e APP_ENV=test \
+  -e WEB_BASE_URL="https://test.example.com/web/" \
+  -e API_BASE_URL="https://test.example.com/api/" \
+  -e TEST_DEFAULT_USERNAME="your_test_user" \
+  -e TEST_DEFAULT_PASSWORD="your_test_password" \
+  -e EMAIL_ENABLED=true \
+  -e EMAIL_SMTP_SERVER="smtp.example.com" \
+  -e EMAIL_SMTP_PORT=465 \
+  -e EMAIL_SENDER="sender@example.com" \
+  -e EMAIL_PASSWORD="your_email_password" \
+  -e EMAIL_RECIPIENTS="recipient@example.com" \
+  -e ALLURE_PUBLIC_URL="http://your-server:8000/allure-report/index.html" \
+  -e WEB_SERVER_USER="nginx" \
   -v /usr/share/nginx/html/allure-report:/app/output/reports/allure-report \
   automated-testing:latest \
+  bash -c "poetry run python ci/scripts/run_and_notify.py"
+```
+
+### 使用环境变量文件
+```bash
+# 从.env文件加载所有环境变量
+docker run --rm \
+  --env-file .env \
+  -e CI_NAME="本地Docker测试" \
+  -v $(pwd):/app \
+  -v /usr/share/nginx/html/allure-report:/app/output/reports/allure-report \
+  automated-testing:dev \
   bash -c "poetry run python ci/scripts/run_and_notify.py"
 ```
 
@@ -95,27 +151,31 @@ docker run --rm \
 
 ## pytest 配置最佳实践
 
-本项目采用 `pytest.ini` 进行测试配置管理，确保所有环境下 `src` 包可被正确导入，测试行为一致。
+本项目采用 `pyproject.toml` 中的 `[tool.pytest.ini_options]` 进行测试配置管理，确保所有环境下 `src` 包可被正确导入，测试行为一致。
 
-- `pytest.ini` 主要内容如下：
+- 主要配置内容如下：
 
-  ```ini
-  [pytest]
-  pythonpath = .
-  addopts = -ra --tb=short --strict-markers
+  ```toml
+  [tool.pytest.ini_options]
+  testpaths = ["tests"]
+  python_files = "test_*.py"
+  python_classes = "Test*"
+  python_functions = "test_*"
+  pythonpath = ["."]
+  addopts = "-ra --tb=short --strict-markers"
   log_cli = true
-  log_cli_level = INFO
-  testpaths = tests
-  markers =
-      web: web端自动化用例
-      api: 接口自动化用例
-      mobile: 移动端自动化用例
-      slow: 慢速用例
-      smoke: 冒烟测试
-      regression: 回归测试
+  log_cli_level = "INFO"
+  markers = [
+      "web: web端自动化用例",
+      "api: 接口自动化用例", 
+      "mobile: 移动端自动化用例",
+      "smoke: 冒烟测试",
+      "regression: 回归测试",
+      "slow: 慢速用例"
+  ]
   ```
 - 这样配置后，无论本地、CI、Docker环境，`from src.xxx` 都能正常导入。
-- `pytest.ini` 与 `pyproject.toml` 并存是主流最佳实践，分别管理测试和依赖/工具链配置，互不冲突。
+- 将pytest配置集成到`pyproject.toml`是Python项目的现代最佳实践，避免了多个配置文件的管理复杂性。
 - 团队成员和CI/CD环境无需关心PYTHONPATH，直接运行测试命令即可。
 
 ## Docker开发与CI/CD最佳实践

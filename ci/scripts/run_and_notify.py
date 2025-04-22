@@ -76,9 +76,17 @@ def main():
             nginx_user = os.environ.get("WEB_SERVER_USER", "nginx")
             upload_success = fix_local_permissions(local_report_dir, nginx_user=nginx_user)
         else:
-            # 本地开发环境：跳过权限修正
-            print("[INFO] 本地开发环境，跳过权限修正")
-            upload_success = True
+            # 检查是否在Docker中运行
+            in_docker = os.path.exists('/.dockerenv') or os.environ.get('DOCKER_CONTAINER', '') == 'true'
+            if in_docker and not upload_report:
+                # Docker环境且不上传报告：修正本地权限
+                print("[INFO] 检测到Docker环境，修正报告目录权限")
+                nginx_user = os.environ.get("WEB_SERVER_USER", "nginx")
+                upload_success = fix_local_permissions(local_report_dir, nginx_user=nginx_user)
+            else:
+                # 本地开发环境：跳过权限修正
+                print("[INFO] 本地开发环境，跳过权限修正")
+                upload_success = True
     # 6. 邮件通知
     summary = get_allure_summary() or {}
     email_enabled = os.environ.get("EMAIL_ENABLED", "false").lower() == "true"
