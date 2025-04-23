@@ -1,6 +1,30 @@
-FROM mirrors.tuna.tsinghua.edu.cn/python:3.11-slim
+FROM ubuntu:22.04
 
 WORKDIR /app
+
+# 配置APT源为清华源
+RUN rm -rf /etc/apt/sources.list.d/* && \
+    echo "deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ jammy main restricted universe multiverse" > /etc/apt/sources.list && \
+    echo "deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ jammy-updates main restricted universe multiverse" >> /etc/apt/sources.list && \
+    echo "deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ jammy-backports main restricted universe multiverse" >> /etc/apt/sources.list && \
+    echo "deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ jammy-security main restricted universe multiverse" >> /etc/apt/sources.list && \
+    apt-get clean && \
+    apt-get update
+
+# 安装Python及必要工具
+RUN apt-get install -y --no-install-recommends \
+    python3.11 python3.11-dev python3.11-venv python3-pip python3-wheel \
+    build-essential wget openjdk-17-jre-headless unzip \
+    libglib2.0-0 libnss3 libnspr4 \
+    libdbus-1-3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libexpat1 \
+    libx11-6 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxrandr2 libgbm1 \
+    libxcb1 libxkbcommon0 libpango-1.0-0 libcairo2 libasound2 libatspi2.0-0 \
+    fonts-liberation libappindicator3-1 lsb-release \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# 创建软链接 python -> python3.11
+RUN ln -sf /usr/bin/python3.11 /usr/bin/python && \
+    ln -sf /usr/bin/pip3 /usr/bin/pip
 
 # 先只复制依赖声明文件，利用缓存加速依赖安装
 COPY pyproject.toml poetry.lock /app/
@@ -12,28 +36,9 @@ RUN mkdir -p /root/.pip && \
     echo "[global]" > /root/.pip/pip_tuna.conf && \
     echo "index-url = https://pypi.tuna.tsinghua.edu.cn/simple" >> /root/.pip/pip_tuna.conf
 
-# 彻底清理和重置APT源为清华源，确保不会使用官方源
-RUN rm -rf /etc/apt/sources.list.d/* && \
-    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian bookworm main contrib non-free non-free-firmware" > /etc/apt/sources.list && \
-    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian bookworm-updates main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
-    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian-security bookworm-security main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
-    apt-get clean && \
-    apt-get update && apt-get install -y --no-install-recommends apt-transport-https ca-certificates && \
-    apt-get update
-
-# 安装 Playwright 依赖库和常用工具
-RUN apt-get install -y --no-install-recommends \
-    wget openjdk-17-jre-headless unzip \
-    libglib2.0-0 libnss3 libnspr4 \
-    libdbus-1-3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libexpat1 \
-    libx11-6 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxrandr2 libgbm1 \
-    libxcb1 libxkbcommon0 libpango-1.0-0 libcairo2 libasound2 libatspi2.0-0 \
-    fonts-liberation libappindicator3-1 lsb-release \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
-
 # 升级pip并安装poetry
 RUN pip install --upgrade pip \
-    && pip install "poetry>=1.5.0"
+    && pip install "poetry==1.8.4"
 
 # 配置poetry多源兜底（阿里云+清华）
 RUN poetry config repositories.aliyun https://mirrors.aliyun.com/pypi/simple/ \
@@ -63,4 +68,4 @@ RUN unzip /tmp/allure-2.27.0.zip -d /opt/ \
     && ln -s /opt/allure-2.27.0/bin/allure /usr/bin/allure \
     && rm /tmp/allure-2.27.0.zip
 
-CMD ["bash", "-c", "poetry run pytest --alluredir=output/allure-results && allure generate output/allure-results -o output/allure-report --clean"]
+CMD ["bash", "-c", "poetry run pytest --alluredir=output/allure-results && allure generate output/allure-results -o output/allure-report --clean"] 
