@@ -1,9 +1,16 @@
-FROM python:3.11-slim
+FROM mirrors.tuna.tsinghua.edu.cn/python:3.11-slim
 
 WORKDIR /app
 
 # 先只复制依赖声明文件，利用缓存加速依赖安装
 COPY pyproject.toml poetry.lock /app/
+
+# 配置pip多源兜底（阿里云+清华）
+RUN mkdir -p /root/.pip && \
+    echo "[global]" > /root/.pip/pip.conf && \
+    echo "index-url = https://mirrors.aliyun.com/pypi/simple/" >> /root/.pip/pip.conf && \
+    echo "[global]" > /root/.pip/pip_tuna.conf && \
+    echo "index-url = https://pypi.tuna.tsinghua.edu.cn/simple" >> /root/.pip/pip_tuna.conf
 
 # 彻底清理和重置APT源为清华源，确保不会使用官方源
 RUN rm -rf /etc/apt/sources.list.d/* && \
@@ -23,13 +30,6 @@ RUN apt-get install -y --no-install-recommends \
     libxcb1 libxkbcommon0 libpango-1.0-0 libcairo2 libasound2 libatspi2.0-0 \
     fonts-liberation libappindicator3-1 lsb-release \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# 配置pip多源兜底（阿里云+清华）
-RUN mkdir -p /root/.pip && \
-    echo "[global]" > /root/.pip/pip.conf && \
-    echo "index-url = https://mirrors.aliyun.com/pypi/simple/" >> /root/.pip/pip.conf && \
-    echo "[global]" > /root/.pip/pip_tuna.conf && \
-    echo "index-url = https://pypi.tuna.tsinghua.edu.cn/simple" >> /root/.pip/pip_tuna.conf
 
 # 升级pip并安装poetry
 RUN pip install --upgrade pip \
