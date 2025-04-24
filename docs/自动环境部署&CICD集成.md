@@ -522,6 +522,24 @@ test:
   - A: 建议统一挂载，或在测试后用脚本同步到Web服务目录。
 - **Q: 为什么要使用poetry run pytest而不是直接pytest？**
   - A: 确保在正确的虚拟环境中运行，避免依赖问题。
+- **Q: Docker 拉取镜像（如 `docker pull` 或 `docker build` 时）失败，报错 `Connection timed out`、`Network is unreachable` 或 `context deadline exceeded`，如何解决？**
+  - A: 这通常是由于本地网络环境无法稳定连接到 Docker Hub (registry-1.docker.io) 或其他 Docker 仓库（包括配置的加速器）的网络问题。排查步骤如下：
+    1.  **基础网络检查**：确认本机能 `ping` 通外部地址（如 `baidu.com`, `8.8.8.8`）和网关。
+    2.  **DNS 检查**：使用 `nslookup <仓库域名>` 确认域名能正确解析。
+    3.  **端口连通性检查**：使用 `telnet <仓库域名> 443` 或 `nc -zv <仓库域名> 443` 检查 HTTPS 端口是否可达。即使 `ping` 通，端口也可能被防火墙阻止。
+    4.  **强烈推荐配置镜像加速器**：这是解决国内访问 Docker Hub 不稳定问题的最有效方法。编辑 `/etc/docker/daemon.json` 文件（如不存在则创建，需要 sudo 权限），添加 `registry-mirrors` 列表，例如：
+        ```json
+        {
+          "registry-mirrors": [
+            "https://docker.m.daocloud.io", // 示例，选择可用加速器
+            "https://hub-mirror.c.163.com"
+            // ... 其他可用加速器
+          ]
+        }
+        ```
+    5.  **验证并筛选加速器**：配置后，务必 `ping <加速器域名>` 并用 `nslookup <加速器域名>` 确认**所有**配置的加速器都能被解析和访问。如果某个加速器域名无法解析（报错"名称或服务未知"），**必须将其从 `daemon.json` 中移除**，否则 Docker 尝试失败后会回退到直连官方仓库，导致问题依旧。
+    6.  **重启 Docker 服务**：修改 `/etc/docker/daemon.json` 后，必须执行 `sudo systemctl daemon-reload && sudo systemctl restart docker` 使配置生效。
+    7.  **防火墙检查**：检查本地防火墙 (`ufw`, `firewalld`) 和路由器防火墙规则。
 
 ---
 
