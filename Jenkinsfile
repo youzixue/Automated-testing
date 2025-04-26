@@ -219,9 +219,6 @@ pipeline {
                            def allureReportHostPath = "${WORKSPACE}/output/reports/allure-report"
                            def scriptsHostPath = "${WORKSPACE}/ci/scripts" // 脚本在宿主机的路径
 
-                           echo "检查 Docker 镜像内部的 /app/ci/scripts/ 目录内容..."
-                           sh "docker run --rm --name check-scripts-${BUILD_NUMBER} ${env.DOCKER_IMAGE} ls -la /app/ci/scripts/ || echo '>>> 无法列出镜像内 /app/ci/scripts/ 目录 <<<'"
-
                            echo "写入 Allure 元数据文件到 ${allureResultsHostPath} (在容器内执行)..."
                            // 执行外部 Python 脚本
                            sh """
@@ -232,11 +229,10 @@ pipeline {
                              -e BUILD_URL=${env.BUILD_URL} \\
                              -e JOB_NAME=${env.JOB_NAME} \\
                              -v ${allureResultsHostPath}:/results_out:rw \\
-                             -v ${WORKSPACE}:/workspace_host:ro \\
                              -v /etc/localtime:/etc/localtime:ro \\
                              --user root \\
                              ${env.DOCKER_IMAGE} \\
-                             python /workspace_host/ci/scripts/write_allure_metadata.py /results_out
+                             python /app/ci/scripts/write_allure_metadata.py /results_out
                            """
                            echo "Allure 元数据写入完成。"
 
