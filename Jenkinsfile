@@ -231,7 +231,6 @@ pipeline {
                         def allureReportHostPath = "${WORKSPACE}/output/reports/allure-report"
 
                         echo "写入 Allure 元数据文件到 ${allureResultsHostPath} (在容器内执行)..."
-                        // **修改点:** 使用 docker run 执行 Python 脚本
                         sh """
                         docker run --rm --name write-metadata-${BUILD_NUMBER} \\
                           -e APP_ENV=${params.APP_ENV} \\
@@ -250,10 +249,7 @@ import os
 import json
 import datetime
 
-# Python 脚本现在写入到容器内挂载的 /results_out 目录
 allure_results_dir = '/results_out'
-
-# 从容器环境变量获取信息
 app_env = os.environ.get('APP_ENV', 'unknown')
 ci_name = os.environ.get('CI_NAME', 'Jenkins')
 build_number = os.environ.get('BUILD_NUMBER', 'unknown')
@@ -270,7 +266,7 @@ try:
     os.makedirs(allure_results_dir, exist_ok=True)
 except Exception as e:
     print(f'创建结果目录失败: {e}')
-    exit(1) # 创建失败则退出
+    exit(1)
 
 environment = {
     'APP_ENV': app_env,
@@ -284,7 +280,7 @@ try:
     env_file_path = os.path.join(allure_results_dir, 'environment.properties')
     with open(env_file_path, 'w', encoding='utf-8') as f:
         for key, value in environment.items():
-            f.write(f'{key}={value}\\n') # Python heredoc 不需要额外转义 \\n
+            f.write(f'{key}={value}\\n')
     print(f'环境信息写入成功: {env_file_path}')
 except Exception as e:
     print(f'写入环境信息失败: {e}')
@@ -305,21 +301,9 @@ except Exception as e:
     print(f'写入执行器信息失败: {e}')
 
 categories = [
-    {
-        'name': '测试失败',
-        'matchedStatuses': ['failed'],
-        'messageRegex': '.*AssertionError.*'
-    },
-    {
-        'name': '环境问题',
-        'matchedStatuses': ['broken', 'failed'],
-        'messageRegex': '.*(ConnectionError|TimeoutError|WebDriverException).*'
-    },
-    {
-        'name': '产品缺陷',
-        'matchedStatuses': ['failed'],
-        'messageRegex': '.*预期结果与实际结果不符.*'
-    }
+    {'name': '测试失败', 'matchedStatuses': ['failed'], 'messageRegex': '.*AssertionError.*'},
+    {'name': '环境问题', 'matchedStatuses': ['broken', 'failed'], 'messageRegex': '.*(ConnectionError|TimeoutError|WebDriverException).*'},
+    {'name': '产品缺陷', 'matchedStatuses': ['failed'], 'messageRegex': '.*预期结果与实际结果不符.*'}
 ]
 try:
     cat_file_path = os.path.join(allure_results_dir, 'categories.json')
@@ -379,12 +363,12 @@ EOF
                               mkdir -p /tmp/history_backup && \\
                               cp -rp /dest/history/* /tmp/history_backup/ || echo "No files to copy" && \\
                               echo "Ensuring UTF-8 encoding for JSON files..." && \\
-                              find /tmp/history_backup -name "*.json" -type f -exec sh -c '\\''\\
-                                FILE={} && \\
-                                TEMP_FILE=\\$(mktemp) && \\  # <-- 已修正：为 $FILE 和 $(mktemp) 添加 \ 转义 Groovy
-                                cat \\\$FILE > \\\$TEMP_FILE && \\
-                                mv \\\$TEMP_FILE \\\$FILE\\
-                              '\\'' \\; || echo "No JSON files found" \\
+                              find /tmp/history_backup -name "*.json" -type f -exec sh -c " \\ # <-- 修改：内层 sh -c 改用双引号
+                                FILE=\\"{}\\" && \\ # <-- 修改：用 \\\" 包裹 {}, 安全处理文件名
+                                TEMP_FILE=\\$(mktemp) && \\  # <-- 修改：\\$ 转义 Groovy, $(mktemp) Shell 执行
+                                cat \\\"\\\$FILE\\\" > \\\"\\\$TEMP_FILE\\\" && \\ # <-- 修改：\\$ 转义 Groovy, \\\" 转义 Shell 双引号
+                                mv \\\"\\\$TEMP_FILE\\\" \\\"\\\$FILE\\\" \\
+                              " \\; || echo "No JSON files found" \\ # <-- 修改：调整末尾引号和分号
                             else \\
                               echo "No history directory found, will create empty one" && \\
                               mkdir -p /dest/history && \\
@@ -395,7 +379,7 @@ EOF
                               echo "[]" > /dest/history/retry-trend.json \\
                             fi && \\
                             echo "History directory preserved."\\
-                          ' # End inner sh -c
+                          ' # End outer sh -c
 
                         # 复制报告并保持历史数据
                         docker run --rm --name report-copy-perm-${BUILD_NUMBER} \\
@@ -418,17 +402,17 @@ EOF
                               cp -rf /tmp/history/* /dest/history/ || echo "No history files to restore" \\
                             fi && \\
                             echo "Setting UTF-8 encoding for JSON files..." && \\
-                            find /dest -name "*.json" -type f -exec sh -c '\\''\\
-                              FILE={} && \\
-                              if [ -s \\\"\\\$FILE\\\" ]; then \\ # <-- 已修正：为 $FILE 添加 \ 转义 Groovy
-                                mv \\\"\\\$FILE\\\" \\\"\\\$FILE.bak\\\" && \\
-                                cat \\\"\\\$FILE.bak\\\" > \\\"\\\$FILE\\\" && \\
+                            find /dest -name "*.json" -type f -exec sh -c " \\ # <-- 修改：内层 sh -c 改用双引号
+                              FILE=\\"{}\\" && \\ # <-- 修改：用 \\\" 包裹 {}, 安全处理文件名
+                              if [ -s \\\"\\\$FILE\\\" ]; then \\ # <-- 修改：\\$ 转义 Groovy, \\\" 转义 Shell 双引号
+                                mv \\\"\\\$FILE\\\" \\\"\\\$FILE.bak\\\" && \\ # <-- 修改：同上
+                                cat \\\"\\\$FILE.bak\\\" > \\\"\\\$FILE\\\" && \\ # <-- 修改：同上
                                 rm \\\"\\\$FILE.bak\\\" \\
                               fi\\
-                            '\\'' \\; || echo "No JSON files to process" && \\
+                            " \\; || echo "No JSON files to process" && \\ # <-- 修改：调整末尾引号和分号
                             echo "Fixing permissions..." && \\
                             chmod -R 755 /dest/\\
-                          ' # End inner sh -c
+                          ' # End outer sh -c
                         echo "报告已复制到 Nginx 目录并修正权限。"
                         """
 
