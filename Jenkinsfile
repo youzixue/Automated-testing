@@ -273,8 +273,8 @@ pipeline {
                              -e TZ="Asia/Shanghai" \\
                              -e ALLURE_RESULTS_DIR=/results \\
                              -e ALLURE_REPORT_DIR=/report \\
-                             -e SKIP_REPORT=true \\ # 这个可以考虑移除，因为现在用SKIP_TEST_EXECUTION控制
-                             -e SKIP_TEST_EXECUTION=true \\ # <-- 添加了这一行，让脚本跳过测试执行
+                             -e SKIP_REPORT=true \\
+                             -e SKIP_TEST_EXECUTION=true \\
                              -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
                              -v ${env.HOST_ALLURE_RESULTS_PATH}:/results:ro \\
                              -v ${env.HOST_ALLURE_REPORT_PATH}:/report:ro \\
