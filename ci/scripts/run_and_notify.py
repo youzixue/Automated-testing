@@ -126,12 +126,20 @@ def main():
             print(f"[INFO] 获取到报告摘要: {summary}")
         else:
             print("[WARNING] 报告未生成或生成失败，无法获取详细摘要。")
-            # 可以创建一个默认摘要
-            summary = {"total": "N/A", "passed": "N/A", "failed": "N/A", "broken": "N/A", "skipped": "N/A", "unknown": "N/A", "duration": "N/A"}
+            # 创建一个默认摘要，使用数字 0 或其他合适默认值代替 "N/A"
+            summary = {
+                "total": 0,      # 使用数字 0
+                "passed": 0,     # 使用数字 0
+                "failed": 0,     # 使用数字 0
+                "broken": 0,     # 使用数字 0
+                "skipped": 0,    # 使用数字 0
+                "unknown": 0,    # 使用数字 0
+                "duration": "N/A" # Duration 可以保持为 N/A
+            }
             if not test_result:
                  summary["status"] = "测试执行失败" # 添加一个状态
             elif not should_run_tests:
-                 summary["status"] = "测试未执行" 
+                 summary["status"] = "测试未执行"
                  
         email_enabled = os.environ.get("EMAIL_ENABLED", "false").lower() == "true"
         if email_enabled:
