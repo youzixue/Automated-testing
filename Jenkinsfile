@@ -113,7 +113,7 @@ pipeline {
                                   -v /etc/localtime:/etc/localtime:ro \\
                                   --network host \\
                                   ${env.DOCKER_IMAGE} \\
-                                  pytest tests/web -n auto --reruns 2 -v --alluredir=/results_out # 直接调用 pytest
+                                  pytest tests/web -n auto --reruns 2 -v --alluredir=/results_out
                                 """
                             }
                         } else { echo "跳过Web测试" }
@@ -136,7 +136,7 @@ pipeline {
                                   -v /etc/localtime:/etc/localtime:ro \\
                                   --network host \\
                                   ${env.DOCKER_IMAGE} \\
-                                  pytest tests/api -n auto --reruns 2 -v --alluredir=/results_out # 直接调用 pytest
+                                  pytest tests/api -n auto --reruns 2 -v --alluredir=/results_out
                                 """
                             }
                         } else { echo "跳过API测试" }
@@ -158,7 +158,7 @@ pipeline {
                                   -v /etc/localtime:/etc/localtime:ro \\
                                   --network host \\
                                   ${env.DOCKER_IMAGE} \\
-                                  pytest tests/wechat -n auto --reruns 2 -v --alluredir=/results_out # 直接调用 pytest
+                                  pytest tests/wechat -n auto --reruns 2 -v --alluredir=/results_out
                                 """
                            }
                         } else { echo "跳过微信公众号测试" }
@@ -180,7 +180,7 @@ pipeline {
                                   -v /etc/localtime:/etc/localtime:ro \\
                                   --network host \\
                                   ${env.DOCKER_IMAGE} \\
-                                  pytest tests/app -n auto --reruns 2 -v --alluredir=/results_out # 直接调用 pytest
+                                  pytest tests/app -n auto --reruns 2 -v --alluredir=/results_out
                                 """
                             }
                         } else { echo "跳过App测试" }
@@ -304,9 +304,6 @@ pipeline {
                }
                cleanWs()
                echo "Agent 工作空间已清理。"
-               // 移除旧的清理命令
-               // sh "rm -f ${WORKSPACE}/tmp_write_metadata.py || true"
-               // echo "临时脚本文件已清理。"
            }
            success {
                echo "Pipeline 成功完成！"
