@@ -61,16 +61,27 @@ def fix_local_permissions(local_report_dir, nginx_user="nginx"):
         return False
 
 def main():
-    # 1. 环境准备
+    # Check if test execution should be skipped
+    skip_test_execution = os.environ.get('SKIP_TEST_EXECUTION', 'false').lower() == 'true'
+    
+    test_result = True # Assume success unless tests run and fail
+
+    # 1. 环境准备 (Always run)
     prepare_env()
     copy_history_to_results()
-    # 2. 写入Allure环境/分类/执行器信息
+    # 2. 写入Allure环境/分类/执行器信息 (Always run)
     write_allure_categories()
     write_allure_environment()
     write_allure_executor()
-    # 3. 执行测试
-    test_result = run_tests()
-    # 4. 生成Allure报告
+    
+    # 3. 执行测试 (Conditionally run)
+    if not skip_test_execution:
+        print("[INFO] Executing tests...")
+        test_result = run_tests()
+    else:
+        print("[INFO] Skipping test execution (SKIP_TEST_EXECUTION=true)")
+
+    # 4. 生成Allure报告 (Always run, depends on results from previous step or mount)
     report_success = generate_allure_report()
     # 5. 上传报告与修正权限（本地/CI自动切换）
     upload_success = False
