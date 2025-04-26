@@ -44,6 +44,15 @@ jsonschema = "4.21.1"          # JSON结构验证
 # 移动端测试
 Appium-Python-Client = "3.1.0" # 移动端自动化测试
 
+# 测试框架 - 移动自dev依赖到主依赖
+pytest = "8.3.5"               # 测试框架
+pytest-playwright = "0.4.4"    # Playwright集成
+allure-pytest = "2.14.0"       # Allure报告集成
+pytest-xdist = "3.6.1"         # 并行测试
+pytest-rerunfailures = "12.0"  # 失败用例重试
+pytest-html = "4.1.1"          # HTML报告
+pytest-asyncio = "0.26.0"      # 异步测试
+
 # 开发工具依赖
 [tool.poetry.group.dev.dependencies]
 # 代码质量工具
@@ -52,14 +61,7 @@ pylint = "3.3.6"               # 代码静态分析
 mypy = "1.15.0"                # 类型检查
 pre-commit = "3.8.0"           # Git提交前检查
 
-# 测试框架
-pytest = "8.3.5"               # 测试框架
-pytest-playwright = "0.4.4"    # Playwright集成
-allure-pytest = "2.14.0"       # Allure报告集成
-pytest-xdist = "3.6.1"         # 并行测试
-pytest-rerunfailures = "12.0"  # 失败用例重试
-pytest-html = "4.1.1"          # HTML报告
-pytest-asyncio = "0.26.0"      # 异步测试
+# 剩余非核心测试工具
 pytest-cov = "4.1.0"           # 覆盖率报告
 pytest-mock = "3.14.0"         # Mock支持
 
