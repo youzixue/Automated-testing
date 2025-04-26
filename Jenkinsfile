@@ -115,7 +115,14 @@ pipeline {
                                   -v /etc/localtime:/etc/localtime:ro \\
                                   --network host \\
                                   ${env.DOCKER_IMAGE} \\
-                                  python ci/scripts/run_and_notify.py
+                                  /bin/bash -c " \\
+                                    echo '--- Listing /app inside container: ---'; \\
+                                    ls -la /app; \\
+                                    echo '--- Listing /app/ci/scripts inside container: ---'; \\
+                                    ls -la /app/ci/scripts/; \\
+                                    echo '--- Attempting to execute script: ---'; \\
+                                    python /app/ci/scripts/run_and_notify.py \\
+                                  "
                                 """
                             }
                         } else { echo "跳过Web测试" }

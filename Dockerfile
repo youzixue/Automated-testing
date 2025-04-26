@@ -39,30 +39,14 @@ RUN pip install --upgrade pip \
 RUN poetry config repositories.aliyun https://mirrors.aliyun.com/pypi/simple/ \
     && poetry config repositories.tuna https://pypi.tuna.tsinghua.edu.cn/simple
 
-# 复制全部项目代码到工作目录
-COPY . /app
-
 # 全局禁用 Poetry 的虚拟环境创建
 ENV POETRY_VIRTUALENVS_CREATE=false
 
 # 增加 Poetry 的网络超时时间（单位：秒）
 ENV POETRY_REQUESTS_TIMEOUT=300
 
-# 紧急修复 - 直接编辑CI脚本避免权限问题（已拆分为多条RUN命令，防止shell语法错误）
-RUN echo "# 紧急修复权限问题" >> /app/ci/scripts/hotfix.log
-RUN sed -i 's/chown -R.*output\/reports\/allure-report/find "output\/reports\/allure-report" -type d -exec chmod 755 {} \; \&\& find "output\/reports\/allure-report" -type f -exec chmod 644 {} \;/g' /app/ci/scripts/run_and_notify.py
-RUN sed -i 's/sudo chown -R.*nginx:nginx/find/g' /app/ci/scripts/generate_report.py
-RUN sed -i 's/f"sudo find {remote_report_dir}/f"find {remote_report_dir}/g' /app/ci/scripts/generate_report.py
-RUN sed -i 's/subprocess.run(\["chown"/# subprocess.run(["chown"/g' /app/ci/scripts/run_and_notify.py
-RUN sed -i 's/"Attempting to fix local permissions"/"修正本地权限"/g' /app/ci/scripts/run_and_notify.py
-RUN echo "# 修复完成" >> /app/ci/scripts/hotfix.log
-RUN echo "# 设置UTF-8编码处理" >> /app/ci/scripts/hotfix.log
-RUN sed -i 's/json.load(f)/json.loads(f.read())/g' /app/ci/scripts/utils.py
-RUN sed -i "/def get_allure_summary/a\    print(f\"[DEBUG] 环境变量: ALLURE_REPORT_DIR={os.environ.get('ALLURE_REPORT_DIR', '未设置')}\")" /app/ci/scripts/utils.py
-RUN echo "# 编码修复完成" >> /app/ci/scripts/hotfix.log
-
 # 安装项目依赖（--no-root表示只安装依赖，不安装当前项目）
-RUN poetry install --no-root -vvv
+RUN poetry install --no-root
 
 # playwright浏览器下载加速（可选）
 ENV PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright
