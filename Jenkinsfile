@@ -232,10 +232,11 @@ pipeline {
                              -e BUILD_URL=${env.BUILD_URL} \\
                              -e JOB_NAME=${env.JOB_NAME} \\
                              -v ${allureResultsHostPath}:/results_out:rw \\
+                             -v ${WORKSPACE}:/workspace_host:ro \\
                              -v /etc/localtime:/etc/localtime:ro \\
                              --user root \\
                              ${env.DOCKER_IMAGE} \\
-                             python /app/ci/scripts/write_allure_metadata.py /results_out
+                             python /workspace_host/ci/scripts/write_allure_metadata.py /results_out
                            """
                            echo "Allure 元数据写入完成。"
 
