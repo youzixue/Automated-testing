@@ -381,9 +381,9 @@ EOF
                               echo "Ensuring UTF-8 encoding for JSON files..." && \\
                               find /tmp/history_backup -name "*.json" -type f -exec sh -c '\\''\\
                                 FILE={} && \\
-                                TEMP_FILE=\$(mktemp) && \\  # <-- 已修正：去掉 \\\$ 和 \\\$(...) 前多余的 \\
-                                cat \$FILE > \$TEMP_FILE && \\
-                                mv \$TEMP_FILE \$FILE\\
+                                TEMP_FILE=\\$(mktemp) && \\  # <-- 已修正：为 $FILE 和 $(mktemp) 添加 \ 转义 Groovy
+                                cat \\\$FILE > \\\$TEMP_FILE && \\
+                                mv \\\$TEMP_FILE \\\$FILE\\
                               '\\'' \\; || echo "No JSON files found" \\
                             else \\
                               echo "No history directory found, will create empty one" && \\
@@ -420,10 +420,10 @@ EOF
                             echo "Setting UTF-8 encoding for JSON files..." && \\
                             find /dest -name "*.json" -type f -exec sh -c '\\''\\
                               FILE={} && \\
-                              if [ -s \\\"\$FILE\\\" ]; then \\ # <-- 已修正：去掉 \\$ 前多余的 \\
-                                mv \\\"\$FILE\\\" \\\"\$FILE.bak\\\" && \\
-                                cat \\\"\$FILE.bak\\\" > \\\"\$FILE\\\" && \\
-                                rm \\\"\$FILE.bak\\\" \\
+                              if [ -s \\\"\\\$FILE\\\" ]; then \\ # <-- 已修正：为 $FILE 添加 \ 转义 Groovy
+                                mv \\\"\\\$FILE\\\" \\\"\\\$FILE.bak\\\" && \\
+                                cat \\\"\\\$FILE.bak\\\" > \\\"\\\$FILE\\\" && \\
+                                rm \\\"\\\$FILE.bak\\\" \\
                               fi\\
                             '\\'' \\; || echo "No JSON files to process" && \\
                             echo "Fixing permissions..." && \\
