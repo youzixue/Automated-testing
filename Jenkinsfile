@@ -90,29 +90,28 @@ pipeline {
                                 docker run --rm --name pytest-web-${BUILD_NUMBER} \\
                                   -e APP_ENV=${params.APP_ENV} \\
                                   -e TEST_PLATFORM="web" \\
-                                  -e "${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}"='${ACCOUNT_USERNAME}' \\
-                                  -e "${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}"='${ACCOUNT_PASSWORD}' \\
+                                  -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \\
+                                  -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
                                   -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
                                   -e WEB_BASE_URL="${env.WEB_URL}" \\
                                   -e TZ="Asia/Shanghai" \\
+                                  -e ALLUREDIR="/results_out" \\
+                                  -e PYTEST_PARALLEL="auto" \\
+                                  -e PYTEST_RERUNS="2" \\
+                                  -e SKIP_REPORT="true" \\
+                                  -e SKIP_NOTIFY="true" \\
                                   -v ${WORKSPACE}:/workspace_host:ro \\
-                                  -v ${allureResultsHostPath}:/results_out \\
+                                  -v ${allureResultsHostPath}:/results_out:rw \\
                                   --workdir /app \\
                                   -v /etc/localtime:/etc/localtime:ro \\
                                   --network host \\
                                   ${env.DOCKER_IMAGE} \\
-                                  /bin/bash -c " \
-                                    echo '--- Running pytest (web) ---'; \
-                                    echo 'Copying project files from /workspace_host to /app...'; \
-                                    cp -r /workspace_host/. /app/; \
-                                    echo 'Files copied. Listing /app/tests...'; ls -la /app/tests; \
-                                    echo '--- Listing /app/src/utils/config/ directory ---'; \
-                                    ls -la /app/src/utils/config/; \
-                                    echo '--- Contents of /app/src/utils/config/manager.py ---'; \
-                                    cat /app/src/utils/config/manager.py; \
-                                    echo '--- End of manager.py content ---'; \
-                                    echo 'Running pytest and writing results to /results_out...'; \
-                                    python -m pytest tests/web -v -n auto --reruns 2 --alluredir=/results_out \
+                                  /bin/bash -c " \\
+                                    echo '--- Running tests via run_and_notify.py ---'; \\
+                                    echo 'Copying project files from /workspace_host to /app...'; \\
+                                    cp -r /workspace_host/. /app/; \\
+                                    echo 'Files copied. Running tests...'; \\
+                                    cd /app && python ci/scripts/run_and_notify.py \\
                                   "
                                 """
                             }
@@ -125,23 +124,27 @@ pipeline {
                                 docker run --rm --name pytest-api-${BUILD_NUMBER} \\
                                   -e APP_ENV=${params.APP_ENV} \\
                                   -e TEST_PLATFORM="api" \\
-                                  -e "${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}"='${ACCOUNT_USERNAME}' \\
-                                  -e "${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}"='${ACCOUNT_PASSWORD}' \\
+                                  -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \\
+                                  -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
                                   -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
                                   -e API_BASE_URL="${env.API_URL}" \\
                                   -e TZ="Asia/Shanghai" \\
+                                  -e ALLUREDIR="/results_out" \\
+                                  -e PYTEST_PARALLEL="auto" \\
+                                  -e PYTEST_RERUNS="2" \\
+                                  -e SKIP_REPORT="true" \\
+                                  -e SKIP_NOTIFY="true" \\
                                   -v ${WORKSPACE}:/workspace_host:ro \\
-                                  -v ${allureResultsHostPath}:/results_out \\
+                                  -v ${allureResultsHostPath}:/results_out:rw \\
                                   --workdir /app \\
                                   -v /etc/localtime:/etc/localtime:ro \\
                                   --network host \\
                                   ${env.DOCKER_IMAGE} \\
                                   /bin/bash -c " \\
-                                    echo '--- Running pytest (api) ---' && \\
+                                    echo '--- Running tests via run_and_notify.py ---' && \\
                                     echo 'Copying project files from /workspace_host to /app...' && cp -r /workspace_host/. /app/ && \\
-                                    echo 'Files copied. Listing /app/tests...' && ls -la /app/tests && \\
-                                    echo 'Running pytest and writing results to /results_out...' && \\
-                                    python -m pytest tests/api -v -n auto --reruns 2 --alluredir=/results_out \\
+                                    echo 'Files copied. Running tests...' && \\
+                                    cd /app && python ci/scripts/run_and_notify.py \\
                                   "
                                 """
                             }
@@ -154,22 +157,26 @@ pipeline {
                                 docker run --rm --name pytest-wechat-${BUILD_NUMBER} \\
                                   -e APP_ENV=${params.APP_ENV} \\
                                   -e TEST_PLATFORM="wechat" \\
-                                  -e "${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}"='${ACCOUNT_USERNAME}' \\
-                                  -e "${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}"='${ACCOUNT_PASSWORD}' \\
+                                  -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \\
+                                  -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
                                   -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
                                   -e TZ="Asia/Shanghai" \\
+                                  -e ALLUREDIR="/results_out" \\
+                                  -e PYTEST_PARALLEL="auto" \\
+                                  -e PYTEST_RERUNS="2" \\
+                                  -e SKIP_REPORT="true" \\
+                                  -e SKIP_NOTIFY="true" \\
                                   -v ${WORKSPACE}:/workspace_host:ro \\
-                                  -v ${allureResultsHostPath}:/results_out \\
+                                  -v ${allureResultsHostPath}:/results_out:rw \\
                                   --workdir /app \\
                                   -v /etc/localtime:/etc/localtime:ro \\
                                   --network host \\
                                   ${env.DOCKER_IMAGE} \\
                                   /bin/bash -c " \\
-                                    echo '--- Running pytest (wechat) ---' && \\
+                                    echo '--- Running tests via run_and_notify.py ---' && \\
                                     echo 'Copying project files from /workspace_host to /app...' && cp -r /workspace_host/. /app/ && \\
-                                    echo 'Files copied. Listing /app/tests...' && ls -la /app/tests && \\
-                                    echo 'Running pytest and writing results to /results_out...' && \\
-                                    python -m pytest tests/wechat -v -n auto --reruns 2 --alluredir=/results_out \\
+                                    echo 'Files copied. Running tests...' && \\
+                                    cd /app && python ci/scripts/run_and_notify.py \\
                                   "
                                 """
                            }
@@ -182,22 +189,26 @@ pipeline {
                                 docker run --rm --name pytest-app-${BUILD_NUMBER} \\
                                   -e APP_ENV=${params.APP_ENV} \\
                                   -e TEST_PLATFORM="app" \\
-                                  -e "${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}"='${ACCOUNT_USERNAME}' \\
-                                  -e "${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}"='${ACCOUNT_PASSWORD}' \\
+                                  -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \\
+                                  -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
                                   -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
                                   -e TZ="Asia/Shanghai" \\
+                                  -e ALLUREDIR="/results_out" \\
+                                  -e PYTEST_PARALLEL="auto" \\
+                                  -e PYTEST_RERUNS="2" \\
+                                  -e SKIP_REPORT="true" \\
+                                  -e SKIP_NOTIFY="true" \\
                                   -v ${WORKSPACE}:/workspace_host:ro \\
-                                  -v ${allureResultsHostPath}:/results_out \\
+                                  -v ${allureResultsHostPath}:/results_out:rw \\
                                   --workdir /app \\
                                   -v /etc/localtime:/etc/localtime:ro \\
                                   --network host \\
                                   ${env.DOCKER_IMAGE} \\
                                   /bin/bash -c " \\
-                                    echo '--- Running pytest (app) ---' && \\
+                                    echo '--- Running tests via run_and_notify.py ---' && \\
                                     echo 'Copying project files from /workspace_host to /app...' && cp -r /workspace_host/. /app/ && \\
-                                    echo 'Files copied. Listing /app/tests...' && ls -la /app/tests && \\
-                                    echo 'Running pytest and writing results to /results_out...' && \\
-                                    python -m pytest tests/app -v -n auto --reruns 2 --alluredir=/results_out \\
+                                    echo 'Files copied. Running tests...' && \\
+                                    cd /app && python ci/scripts/run_and_notify.py \\
                                   "
                                 """
                             }
