@@ -381,7 +381,7 @@ EOF
                               echo 'Ensuring UTF-8 encoding for JSON files...' && \\
                               find /tmp/history_backup -name '*.json' -type f -exec sh -c '\\
                                 FILE={} && \\
-                                TEMP_FILE=\\$(mktemp) && \\
+                                TEMP_FILE=\\\$(mktemp) && \\  # <-- 修复点：添加了反斜杠进行 Groovy 转义
                                 cat \\$FILE > \\$TEMP_FILE && \\
                                 mv \\$TEMP_FILE \\$FILE\\
                               ' \\; || echo 'No JSON files found' \\
