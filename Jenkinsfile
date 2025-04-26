@@ -62,21 +62,6 @@ pipeline {
                 echo "确保 Nginx 目录 ${env.ALLURE_NGINX_HOST_PATH} 存在并设置权限..."
                 docker run --rm -v /usr/share/nginx/html:/nginx_html --user root alpine:latest sh -c "mkdir -p /nginx_html/${ALLURE_NGINX_DIR_NAME} && chmod -R 777 /nginx_html/${ALLURE_NGINX_DIR_NAME}"
 
-                echo "修复 utils.py 中的 f-string 语法问题..."
-                # 检查容器是否存在
-                docker run --rm --name fix-utils-${BUILD_NUMBER} \\
-                  -v ${WORKSPACE}:/workspace \\
-                  --workdir /workspace \\
-                  --user root \\
-                  python:3.11-slim \\
-                  bash -c 'if grep -q "os.environ.get(\\\\"ALLURE_REPORT_DIR\\\\"" ci/scripts/utils.py; then \\
-                    echo "检测到 f-string 语法问题，修复中..."; \\
-                    sed -i "s/os.environ.get(\\\\\\"ALLURE_REPORT_DIR\\\\\\", \\\\\\"未设置\\\\\\")/os.environ.get(\\'ALLURE_REPORT_DIR\\', \\'未设置\\')/g" ci/scripts/utils.py; \\
-                    echo "修复完成"; \\
-                  else \\
-                    echo "未检测到 f-string 语法问题"; \\
-                  fi'
-
                 echo "环境准备完成。"
                 """
             }
@@ -299,7 +284,7 @@ try:
     env_file_path = os.path.join(allure_results_dir, 'environment.properties')
     with open(env_file_path, 'w', encoding='utf-8') as f:
         for key, value in environment.items():
-            f.write(f'{key}={value}\\n') # Python heredoc 不需要额外转义 \n
+            f.write(f'{key}={value}\\n') # Python heredoc 不需要额外转义 \\n
     print(f'环境信息写入成功: {env_file_path}')
 except Exception as e:
     print(f'写入环境信息失败: {e}')
@@ -368,81 +353,81 @@ EOF
                         sh """
                         echo "--- Copying generated report from host path ${allureReportHostPath} to Nginx directory ${env.ALLURE_NGINX_HOST_PATH} and fixing permissions ---"
                         # 首先确保目标目录存在，并处理历史数据目录
-                        docker run --rm --name prep-nginx-dir-${BUILD_NUMBER} \
-                          -v ${env.ALLURE_NGINX_HOST_PATH}:/nginx_dir:rw \
-                          --user root \
-                          alpine:latest \
-                          sh -c "\
-                            echo 'Preparing Nginx directory...' && \
-                            mkdir -p /nginx_dir && \
-                            mkdir -p /nginx_dir/history && \
-                            find /nginx_dir -type d -exec chmod 755 {} \\; && \
-                            find /nginx_dir -type f -exec chmod 644 {} \\; && \
-                            echo 'Nginx directory prepared.'\
+                        docker run --rm --name prep-nginx-dir-${BUILD_NUMBER} \\
+                          -v ${env.ALLURE_NGINX_HOST_PATH}:/nginx_dir:rw \\
+                          --user root \\
+                          alpine:latest \\
+                          sh -c "\\
+                            echo 'Preparing Nginx directory...' && \\
+                            mkdir -p /nginx_dir && \\
+                            mkdir -p /nginx_dir/history && \\
+                            find /nginx_dir -type d -exec chmod 755 {} \\; && \\
+                            find /nginx_dir -type f -exec chmod 644 {} \\; && \\
+                            echo 'Nginx directory prepared.'\\
                           "
                           
                         # 确保历史目录存在并保持不变
-                        docker run --rm --name preserve-history-${BUILD_NUMBER} \
-                          -v ${env.ALLURE_NGINX_HOST_PATH}:/dest:rw \
-                          -v ${allureReportHostPath}:/src:ro \
-                          --user root \
-                          alpine:latest \
-                          sh -c "\
-                            echo 'Preserving history directory...' && \
-                            if [ -d '/dest/history' ]; then \
-                              echo 'History directory exists, backing up...' && \
-                              mkdir -p /tmp/history_backup && \
-                              cp -rp /dest/history/* /tmp/history_backup/ || echo 'No files to copy' && \
-                              echo 'Ensuring UTF-8 encoding for JSON files...' && \
-                              find /tmp/history_backup -name '*.json' -type f -exec sh -c '\
-                                FILE={} && \
-                                TEMP_FILE=\$(mktemp) && \
-                                cat \$FILE > \$TEMP_FILE && \
-                                mv \$TEMP_FILE \$FILE\
-                              ' \\; || echo 'No JSON files found' \
-                            else \
-                              echo 'No history directory found, will create empty one' && \
-                              mkdir -p /dest/history && \
-                              echo '{}' > /dest/history/history.json && \
-                              echo '[]' > /dest/history/history-trend.json && \
-                              echo '[]' > /dest/history/duration-trend.json && \
-                              echo '[]' > /dest/history/categories-trend.json && \
-                              echo '[]' > /dest/history/retry-trend.json \
-                            fi && \
-                            echo 'History directory preserved.'\
+                        docker run --rm --name preserve-history-${BUILD_NUMBER} \\
+                          -v ${env.ALLURE_NGINX_HOST_PATH}:/dest:rw \\
+                          -v ${allureReportHostPath}:/src:ro \\
+                          --user root \\
+                          alpine:latest \\
+                          sh -c "\\
+                            echo 'Preserving history directory...' && \\
+                            if [ -d '/dest/history' ]; then \\
+                              echo 'History directory exists, backing up...' && \\
+                              mkdir -p /tmp/history_backup && \\
+                              cp -rp /dest/history/* /tmp/history_backup/ || echo 'No files to copy' && \\
+                              echo 'Ensuring UTF-8 encoding for JSON files...' && \\
+                              find /tmp/history_backup -name '*.json' -type f -exec sh -c '\\
+                                FILE={} && \\
+                                TEMP_FILE=\\$(mktemp) && \\
+                                cat \\$FILE > \\$TEMP_FILE && \\
+                                mv \\$TEMP_FILE \\$FILE\\
+                              ' \\; || echo 'No JSON files found' \\
+                            else \\
+                              echo 'No history directory found, will create empty one' && \\
+                              mkdir -p /dest/history && \\
+                              echo '{}' > /dest/history/history.json && \\
+                              echo '[]' > /dest/history/history-trend.json && \\
+                              echo '[]' > /dest/history/duration-trend.json && \\
+                              echo '[]' > /dest/history/categories-trend.json && \\
+                              echo '[]' > /dest/history/retry-trend.json \\
+                            fi && \\
+                            echo 'History directory preserved.'\\
                           "
 
                         # 复制报告并保持历史数据
-                        docker run --rm --name report-copy-perm-${BUILD_NUMBER} \
-                          -v ${allureReportHostPath}:/src:ro \
-                          -v ${env.ALLURE_NGINX_HOST_PATH}:/dest:rw \
-                          --user root \
-                          alpine:latest \
-                          sh -c "\
-                            echo 'Copying files...' && \
-                            if [ -d '/dest/history' ]; then \
-                              echo 'Backing up history directory...' && \
-                              mkdir -p /tmp/history && \
-                              cp -rp /dest/history/* /tmp/history/ || echo 'No history files to backup' \
-                            fi && \
-                            echo 'Copying report files...' && \
-                            cp -rf /src/* /dest/ && \
-                            if [ -d '/tmp/history' ]; then \
-                              echo 'Restoring history directory...' && \
-                              mkdir -p /dest/history && \
-                              cp -rf /tmp/history/* /dest/history/ || echo 'No history files to restore' \
-                            fi && \
-                            echo 'Setting UTF-8 encoding for JSON files...' && \
-                            find /dest -name '*.json' -type f -exec sh -c '\
-                              FILE={} && \
-                              if [ -s \"\$FILE\" ]; then \
-                                mv \"\$FILE\" \"\$FILE.bak\" && \
-                                cat \"\$FILE.bak\" > \"\$FILE\" && \
-                                rm \"\$FILE.bak\" \
-                              fi\
-                            ' \\; || echo 'No JSON files to process' && \
-                            echo 'Fixing permissions...' && \
-                            chmod -R 755 /dest/\
+                        docker run --rm --name report-copy-perm-${BUILD_NUMBER} \\
+                          -v ${allureReportHostPath}:/src:ro \\
+                          -v ${env.ALLURE_NGINX_HOST_PATH}:/dest:rw \\
+                          --user root \\
+                          alpine:latest \\
+                          sh -c "\\
+                            echo 'Copying files...' && \\
+                            if [ -d '/dest/history' ]; then \\
+                              echo 'Backing up history directory...' && \\
+                              mkdir -p /tmp/history && \\
+                              cp -rp /dest/history/* /tmp/history/ || echo 'No history files to backup' \\
+                            fi && \\
+                            echo 'Copying report files...' && \\
+                            cp -rf /src/* /dest/ && \\
+                            if [ -d '/tmp/history' ]; then \\
+                              echo 'Restoring history directory...' && \\
+                              mkdir -p /dest/history && \\
+                              cp -rf /tmp/history/* /dest/history/ || echo 'No history files to restore' \\
+                            fi && \\
+                            echo 'Setting UTF-8 encoding for JSON files...' && \\
+                            find /dest -name '*.json' -type f -exec sh -c '\\
+                              FILE={} && \\
+                              if [ -s \\\"\\$FILE\\\" ]; then \\
+                                mv \\\"\\$FILE\\\" \\\"\\$FILE.bak\\\" && \\
+                                cat \\\"\\$FILE.bak\\\" > \\\"\\$FILE\\\" && \\
+                                rm \\\"\\$FILE.bak\\\" \\
+                              fi\\
+                            ' \\; || echo 'No JSON files to process' && \\
+                            echo 'Fixing permissions...' && \\
+                            chmod -R 755 /dest/\\
                           "
                         echo "报告已复制到 Nginx 目录并修正权限。"
                         """
@@ -451,34 +436,34 @@ EOF
                         // 直接复用 run_and_notify.py 脚本
                         sh """
                         echo "--- Sending notification email via run_and_notify.py ---"
-                        docker run --rm --name notify-${BUILD_NUMBER} \
-                          -e CI=true \
-                          -e CI_NAME="${env.CI_NAME}" \
-                          -e APP_ENV=${params.APP_ENV} \
-                          -e EMAIL_ENABLED=${params.SEND_EMAIL} \
-                          -e EMAIL_PASSWORD='${EMAIL_PASSWORD}' \
-                          -e EMAIL_SMTP_SERVER="smtp.qiye.aliyun.com" \
-                          -e EMAIL_SMTP_PORT=465 \
-                          -e EMAIL_SENDER="yzx@ylmt2b.com" \
-                          -e EMAIL_RECIPIENTS="yzx@ylmt2b.com" \
-                          -e EMAIL_USE_SSL=true \
-                          -e ALLURE_PUBLIC_URL="${env.ALLURE_PUBLIC_URL}" \
-                          -e TZ="Asia/Shanghai" \
-                          -e ALLURE_RESULTS_DIR=/results \
-                          -e ALLURE_REPORT_DIR=/report \
-                          -v ${allureResultsHostPath}:/results:ro \
-                          -v ${allureReportHostPath}:/report:ro \
-                          -v /etc/localtime:/etc/localtime:ro \
-                          -v ${WORKSPACE}:/workspace_host:ro \
-                          --network host \
-                          ${env.DOCKER_IMAGE} \
-                          /bin/bash -c "\
-                            echo '--- 复制项目文件到容器内 ---'; \
-                            cp -r /workspace_host/. /app/; \
-                            echo '检查通知脚本是否存在...'; \
-                            ls -la /app/ci/scripts/; \
-                            echo '执行邮件通知脚本...'; \
-                            cd /app && python ci/scripts/run_and_notify.py \
+                        docker run --rm --name notify-${BUILD_NUMBER} \\
+                          -e CI=true \\
+                          -e CI_NAME="${env.CI_NAME}" \\
+                          -e APP_ENV=${params.APP_ENV} \\
+                          -e EMAIL_ENABLED=${params.SEND_EMAIL} \\
+                          -e EMAIL_PASSWORD='${EMAIL_PASSWORD}' \\
+                          -e EMAIL_SMTP_SERVER="smtp.qiye.aliyun.com" \\
+                          -e EMAIL_SMTP_PORT=465 \\
+                          -e EMAIL_SENDER="yzx@ylmt2b.com" \\
+                          -e EMAIL_RECIPIENTS="yzx@ylmt2b.com" \\
+                          -e EMAIL_USE_SSL=true \\
+                          -e ALLURE_PUBLIC_URL="${env.ALLURE_PUBLIC_URL}" \\
+                          -e TZ="Asia/Shanghai" \\
+                          -e ALLURE_RESULTS_DIR=/results \\
+                          -e ALLURE_REPORT_DIR=/report \\
+                          -v ${allureResultsHostPath}:/results:ro \\
+                          -v ${allureReportHostPath}:/report:ro \\
+                          -v /etc/localtime:/etc/localtime:ro \\
+                          -v ${WORKSPACE}:/workspace_host:ro \\
+                          --network host \\
+                          ${env.DOCKER_IMAGE} \\
+                          /bin/bash -c "\\
+                            echo '--- 复制项目文件到容器内 ---'; \\
+                            cp -r /workspace_host/. /app/; \\
+                            echo '检查通知脚本是否存在...'; \\
+                            ls -la /app/ci/scripts/; \\
+                            echo '执行邮件通知脚本...'; \\
+                            cd /app && python ci/scripts/run_and_notify.py \\
                           "
                         echo "通知脚本执行完毕。"
                         """
