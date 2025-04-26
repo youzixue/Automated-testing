@@ -109,19 +109,19 @@ pipeline {
                                   -e PYTEST_RERUNS="2" \\
                                   -e SKIP_REPORT="true" \\
                                   -e SKIP_NOTIFY="true" \\
-                                  -v ${WORKSPACE}:/app:rw \\
+                                  -v ${WORKSPACE}:/workspace:rw \\
                                   -v ${allureResultsHostPath}:/results_out:rw \\
-                                  --workdir /app \\
+                                  --workdir /workspace \\
                                   -v /etc/localtime:/etc/localtime:ro \\
                                   --network host \\
                                   ${env.DOCKER_IMAGE} \\
                                   /bin/bash -c " \\
-                                    echo '--- Listing /app inside container: ---'; \\
-                                    ls -la /app; \\
-                                    echo '--- Listing /app/ci/scripts inside container: ---'; \\
-                                    ls -la /app/ci/scripts/; \\
+                                    echo '--- Listing /workspace inside container: ---'; \\
+                                    ls -la /workspace; \\
+                                    echo '--- Listing /workspace/ci/scripts inside container: ---'; \\
+                                    ls -la /workspace/ci/scripts/; \\
                                     echo '--- Attempting to execute script: ---'; \\
-                                    python /app/ci/scripts/run_and_notify.py \\
+                                    python /workspace/ci/scripts/run_and_notify.py \\
                                   "
                                 """
                             }
@@ -144,13 +144,13 @@ pipeline {
                                   -e PYTEST_RERUNS="2" \\
                                   -e SKIP_REPORT="true" \\
                                   -e SKIP_NOTIFY="true" \\
-                                  -v ${WORKSPACE}:/app:rw \\
+                                  -v ${WORKSPACE}:/workspace:rw \\
                                   -v ${allureResultsHostPath}:/results_out:rw \\
-                                  --workdir /app \\
+                                  --workdir /workspace \\
                                   -v /etc/localtime:/etc/localtime:ro \\
                                   --network host \\
                                   ${env.DOCKER_IMAGE} \\
-                                  python ci/scripts/run_and_notify.py
+                                  python /workspace/ci/scripts/run_and_notify.py
                                 """
                             }
                         } else { echo "跳过API测试" }
@@ -171,13 +171,13 @@ pipeline {
                                   -e PYTEST_RERUNS="2" \\
                                   -e SKIP_REPORT="true" \\
                                   -e SKIP_NOTIFY="true" \\
-                                  -v ${WORKSPACE}:/app:rw \\
+                                  -v ${WORKSPACE}:/workspace:rw \\
                                   -v ${allureResultsHostPath}:/results_out:rw \\
-                                  --workdir /app \\
+                                  --workdir /workspace \\
                                   -v /etc/localtime:/etc/localtime:ro \\
                                   --network host \\
                                   ${env.DOCKER_IMAGE} \\
-                                  python ci/scripts/run_and_notify.py
+                                  python /workspace/ci/scripts/run_and_notify.py
                                 """
                            }
                         } else { echo "跳过微信公众号测试" }
@@ -198,13 +198,13 @@ pipeline {
                                   -e PYTEST_RERUNS="2" \\
                                   -e SKIP_REPORT="true" \\
                                   -e SKIP_NOTIFY="true" \\
-                                  -v ${WORKSPACE}:/app:rw \\
+                                  -v ${WORKSPACE}:/workspace:rw \\
                                   -v ${allureResultsHostPath}:/results_out:rw \\
-                                  --workdir /app \\
+                                  --workdir /workspace \\
                                   -v /etc/localtime:/etc/localtime:ro \\
                                   --network host \\
                                   ${env.DOCKER_IMAGE} \\
-                                  python ci/scripts/run_and_notify.py
+                                  python /workspace/ci/scripts/run_and_notify.py
                                 """
                             }
                         } else { echo "跳过App测试" }
@@ -239,12 +239,12 @@ pipeline {
                              -e BUILD_NUMBER=${BUILD_NUMBER} \\
                              -e BUILD_URL=${env.BUILD_URL} \\
                              -e JOB_NAME=${env.JOB_NAME} \\
-                             -v ${WORKSPACE}:/app:ro \\
+                             -v ${WORKSPACE}:/workspace:ro \\
                              -v ${allureResultsHostPath}:/results_out:rw \\
                              -v /etc/localtime:/etc/localtime:ro \\
                              --user root \\
                              ${env.DOCKER_IMAGE} \\
-                             python /app/ci/scripts/write_allure_metadata.py /results_out
+                             python /workspace/ci/scripts/write_allure_metadata.py /results_out
                            """
                            echo "Allure 元数据写入完成。"
 
@@ -303,13 +303,13 @@ pipeline {
                              -e TZ="Asia/Shanghai" \\
                              -e ALLURE_RESULTS_DIR=/results \\
                              -e ALLURE_REPORT_DIR=/report \\
-                             -v ${WORKSPACE}:/app:ro \\
+                             -v ${WORKSPACE}:/workspace:ro \\
                              -v ${allureResultsHostPath}:/results:ro \\
                              -v ${allureReportHostPath}:/report:ro \\
                              -v /etc/localtime:/etc/localtime:ro \\
                              --network host \\
                              ${env.DOCKER_IMAGE} \\
-                             cd /app && python ci/scripts/run_and_notify.py
+                             cd /workspace && python ci/scripts/run_and_notify.py
                            echo "通知脚本执行完毕。"
                            """
 
