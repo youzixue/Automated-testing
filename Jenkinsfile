@@ -273,7 +273,7 @@ pipeline {
                              -e TZ="Asia/Shanghai" \\
                              -e ALLURE_RESULTS_DIR=/results \\
                              -e ALLURE_REPORT_DIR=/report \\
-                             -e SKIP_REPORT=true \\
+                             -e SKIP_REPORT_GENERATION=true \\
                              -e SKIP_TEST_EXECUTION=true \\
                              -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
                              -v ${env.HOST_ALLURE_RESULTS_PATH}:/results:ro \\
