@@ -107,18 +107,13 @@ pipeline {
                                   -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
                                   -e WEB_BASE_URL="${env.WEB_URL}" \\
                                   -e TZ="Asia/Shanghai" \\
-                                  -e ALLUREDIR="/results_out" \\
-                                  -e PYTEST_PARALLEL="auto" \\
-                                  -e PYTEST_RERUNS="2" \\
-                                  -e SKIP_REPORT="true" \\
-                                  -e SKIP_NOTIFY="true" \\
                                   -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
                                   -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
                                   --workdir /workspace \\
                                   -v /etc/localtime:/etc/localtime:ro \\
                                   --network host \\
                                   ${env.DOCKER_IMAGE} \\
-                                  python /workspace/ci/scripts/run_and_notify.py
+                                  pytest tests/web -n auto --reruns 2 -v --alluredir=/results_out # 直接调用 pytest
                                 """
                             }
                         } else { echo "跳过Web测试" }
@@ -135,18 +130,13 @@ pipeline {
                                   -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
                                   -e API_BASE_URL="${env.API_URL}" \\
                                   -e TZ="Asia/Shanghai" \\
-                                  -e ALLUREDIR="/results_out" \\
-                                  -e PYTEST_PARALLEL="auto" \\
-                                  -e PYTEST_RERUNS="2" \\
-                                  -e SKIP_REPORT="true" \\
-                                  -e SKIP_NOTIFY="true" \\
                                   -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
                                   -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
                                   --workdir /workspace \\
                                   -v /etc/localtime:/etc/localtime:ro \\
                                   --network host \\
                                   ${env.DOCKER_IMAGE} \\
-                                  python /workspace/ci/scripts/run_and_notify.py
+                                  pytest tests/api -n auto --reruns 2 -v --alluredir=/results_out # 直接调用 pytest
                                 """
                             }
                         } else { echo "跳过API测试" }
@@ -162,18 +152,13 @@ pipeline {
                                   -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
                                   -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
                                   -e TZ="Asia/Shanghai" \\
-                                  -e ALLUREDIR="/results_out" \\
-                                  -e PYTEST_PARALLEL="auto" \\
-                                  -e PYTEST_RERUNS="2" \\
-                                  -e SKIP_REPORT="true" \\
-                                  -e SKIP_NOTIFY="true" \\
                                   -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
                                   -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
                                   --workdir /workspace \\
                                   -v /etc/localtime:/etc/localtime:ro \\
                                   --network host \\
                                   ${env.DOCKER_IMAGE} \\
-                                  python /workspace/ci/scripts/run_and_notify.py
+                                  pytest tests/wechat -n auto --reruns 2 -v --alluredir=/results_out # 直接调用 pytest
                                 """
                            }
                         } else { echo "跳过微信公众号测试" }
@@ -189,18 +174,13 @@ pipeline {
                                   -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
                                   -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
                                   -e TZ="Asia/Shanghai" \\
-                                  -e ALLUREDIR="/results_out" \\
-                                  -e PYTEST_PARALLEL="auto" \\
-                                  -e PYTEST_RERUNS="2" \\
-                                  -e SKIP_REPORT="true" \\
-                                  -e SKIP_NOTIFY="true" \\
                                   -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
                                   -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
                                   --workdir /workspace \\
                                   -v /etc/localtime:/etc/localtime:ro \\
                                   --network host \\
                                   ${env.DOCKER_IMAGE} \\
-                                  python /workspace/ci/scripts/run_and_notify.py
+                                  pytest tests/app -n auto --reruns 2 -v --alluredir=/results_out # 直接调用 pytest
                                 """
                             }
                         } else { echo "跳过App测试" }
