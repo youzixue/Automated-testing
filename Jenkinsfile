@@ -343,7 +343,7 @@ pipeline {
                }
                cleanWs()
                echo "工作空间已清理。"
-               sh "rm -f ${WORKSPACE}/tmp_write_metadata.py || true" # 这行仍可能无效
+               sh "rm -f ${WORKSPACE}/tmp_write_metadata.py || true"
                echo "临时脚本文件已清理。"
            }
            success {
