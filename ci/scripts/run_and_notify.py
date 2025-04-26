@@ -44,21 +44,43 @@ def fix_local_permissions(local_report_dir, nginx_user="nginx"):
         return False
 
 def main():
+    # 检查是否跳过报告生成和通知
+    skip_report = os.environ.get('SKIP_REPORT', 'false').lower() == 'true'
+    skip_notify = os.environ.get('SKIP_NOTIFY', 'false').lower() == 'true'
+    
     # 1. 环境准备
     prepare_env()
-    copy_history_to_results()
-    # 2. 写入Allure环境/分类/执行器信息
-    write_allure_categories()
-    write_allure_environment()
-    write_allure_executor()
+    
+    if not skip_report:
+        copy_history_to_results()
+        # 2. 写入Allure环境/分类/执行器信息
+        write_allure_categories()
+        write_allure_environment()
+        write_allure_executor()
+    
     # 3. 执行测试
-    test_result = run_tests()
+    # 检查是否指定了测试平台
+    platform = os.environ.get('TEST_PLATFORM')
+    if platform:
+        print(f"[INFO] 从环境变量检测到测试平台: {platform}")
+        # 修改 run_tests 的调用，如果 run_tests 函数支持平台参数，则传入
+        test_result = run_tests_with_platform(platform)
+    else:
+        # 使用原始调用
+        test_result = run_tests()
+    
+    if skip_report:
+        print("[INFO] 已完成测试执行，跳过报告生成和通知")
+        return
+    
     # 4. 生成Allure报告
     report_success = generate_allure_report()
+    
     # 5. 上传报告与修正权限（本地/CI自动切换）
     upload_success = False
     upload_report = os.environ.get("UPLOAD_REPORT", "false").lower() == "true"
-    local_report_dir = "output/reports/allure-report"
+    local_report_dir = os.environ.get("ALLURE_REPORT_DIR", "output/reports/allure-report")
+    
     if report_success:
         if upload_report:
             # 本地开发：上传到远程Web服务
@@ -87,13 +109,65 @@ def main():
                 # 本地开发环境：跳过权限修正
                 print("[INFO] 本地开发环境，跳过权限修正")
                 upload_success = True
+    
     # 6. 邮件通知
-    summary = get_allure_summary() or {}
-    email_enabled = os.environ.get("EMAIL_ENABLED", "false").lower() == "true"
-    if email_enabled:
-        send_report_email(summary, upload_success)
+    if not skip_notify:
+        summary = get_allure_summary() or {}
+        email_enabled = os.environ.get("EMAIL_ENABLED", "false").lower() == "true"
+        if email_enabled:
+            send_report_email(summary, upload_success)
+        else:
+            print("[INFO] 邮件通知已关闭（EMAIL_ENABLED!=true）")
     else:
-        print("[INFO] 邮件通知已关闭（EMAIL_ENABLED!=true）")
+        print("[INFO] 跳过邮件通知")
+
+def run_tests_with_platform(platform):
+    """
+    根据指定的平台执行测试
+    
+    Args:
+        platform: 测试平台名称 (web, api, app, wechat)
+        
+    Returns:
+        bool: 测试是否成功
+    """
+    print(f"[INFO] 执行特定平台测试: {platform}")
+    
+    # 构建pytest命令
+    cmd = ["pytest", f"tests/{platform}"]
+    
+    # 添加并行参数
+    parallel = os.environ.get("PYTEST_PARALLEL", "auto")
+    if parallel and parallel != "0":
+        cmd.extend(["-n", parallel])
+    
+    # 添加重试参数
+    reruns = os.environ.get("PYTEST_RERUNS", "2")
+    if reruns and int(reruns) > 0:
+        cmd.extend(["--reruns", reruns])
+    
+    # 添加详细输出参数
+    cmd.append("-v")
+    
+    # 添加Allure结果目录
+    allure_dir = os.environ.get("ALLUREDIR", "output/allure-results")
+    cmd.extend(["--alluredir", allure_dir])
+    
+    # 执行命令
+    print(f"[INFO] 执行命令: {' '.join(cmd)}")
+    try:
+        result = subprocess.run(cmd)
+        success = result.returncode == 0
+        
+        if success:
+            print(f"[INFO] {platform}测试执行成功")
+        else:
+            print(f"[WARNING] {platform}测试执行完成，但存在失败用例 (返回码: {result.returncode})")
+        
+        return success
+    except Exception as e:
+        print(f"[ERROR] 执行测试时发生错误: {e}")
+        return False
 
 if __name__ == "__main__":
     main()
