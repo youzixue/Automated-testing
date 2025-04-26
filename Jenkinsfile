@@ -18,10 +18,16 @@ pipeline {
         PROD_ENV_CREDENTIALS_ID = 'prod-env-credentials'
         EMAIL_PASSWORD_CREDENTIALS_ID = 'email-password-credential'
 
-        // --- Allure 报告相关 ---
+        // --- Allure 报告相关 (Nginx 宿主机路径) ---
         ALLURE_NGINX_DIR_NAME = "${params.APP_ENV == 'prod' ? 'allure-report-prod' : 'allure-report-test'}"
         ALLURE_PUBLIC_URL = "${params.APP_ENV == 'prod' ? 'http://192.168.10.67:8000/allure-report-prod/' : 'http://192.168.10.67:8000/allure-report-test/'}"
-        ALLURE_NGINX_HOST_PATH = "/usr/share/nginx/html/${ALLURE_NGINX_DIR_NAME}"
+        ALLURE_NGINX_HOST_PATH = "/usr/share/nginx/html/${ALLURE_NGINX_DIR_NAME}" // <-- Nginx 在宿主机上的路径
+
+        // --- Docker Agent & 宿主机路径映射 ---
+        HOST_JENKINS_HOME_ON_HOST = '/var/lib/docker/volumes/jenkins_home/_data' // <-- !!! 重要：根据 docker inspect 结果设置 !!!
+        HOST_WORKSPACE_PATH = "${HOST_JENKINS_HOME_ON_HOST}/workspace/${env.JOB_NAME}" // <-- 宿主机上的 Jenkins 工作区路径
+        HOST_ALLURE_RESULTS_PATH = "${HOST_WORKSPACE_PATH}/output/allure-results" // <-- 宿主机上的 Allure 结果路径
+        HOST_ALLURE_REPORT_PATH = "${HOST_WORKSPACE_PATH}/output/reports/allure-report" // <-- 宿主机上的 Allure 报告路径
 
         // --- 测试相关 ---
         TEST_SUITE_VALUE = "${params.TEST_SUITE == '全部' ? 'all' : (params.TEST_SUITE == '冒烟测试' ? 'smoke' : 'regression')}"
@@ -44,52 +50,37 @@ pipeline {
                         credentialsId: env.GIT_CREDENTIALS_ID
                     ]]
                 ])
-                echo "代码检出完成到 ${WORKSPACE}"
-                sh "echo '>>> Jenkins Workspace Contents:' && ls -la ${WORKSPACE}"
+                // 注意：这里的 WORKSPACE 仍然是 Jenkins Agent 内部的路径，但在宿主机上对应 HOST_WORKSPACE_PATH
+                echo "代码检出完成到 Agent 路径: ${WORKSPACE}"
+                echo "对应的宿主机路径是: ${env.HOST_WORKSPACE_PATH}"
+                sh "echo '>>> Jenkins Agent Workspace Contents:' && ls -la ${WORKSPACE}"
             }
         }
 
         stage('准备环境') {
             steps {
-                echo "准备测试环境和目录..."
+                echo "准备测试环境和目录 (在 Agent 上)..."
                 sh """
                 mkdir -p ${WORKSPACE}/output/allure-results
                 mkdir -p ${WORKSPACE}/output/reports/allure-report
-                echo "清空旧的 allure-results..."
+                echo "清空旧的 allure-results (在 Agent 上)..."
                 rm -rf ${WORKSPACE}/output/allure-results/*
 
-                echo "确保 Nginx 目录 ${env.ALLURE_NGINX_HOST_PATH} 存在并设置权限..."
-                docker run --rm -v /usr/share/nginx/html:/nginx_html --user root alpine:latest sh -c "mkdir -p /nginx_html/${ALLURE_NGINX_DIR_NAME} && chmod -R 777 /nginx_html/${ALLURE_NGINX_DIR_NAME}"
+                echo "确保 Nginx 目录 ${env.ALLURE_NGINX_HOST_PATH} (在宿主机上) 存在并设置权限..."
+                docker run --rm -v ${env.ALLURE_NGINX_HOST_PATH}:/nginx_dir_on_host --user root alpine:latest sh -c "mkdir -p /nginx_dir_on_host && chmod -R 777 /nginx_dir_on_host"
 
                 echo "环境准备完成。"
                 """
             }
         }
 
-        // --- 新增的检查阶段 ---
         stage('检查脚本文件') {
             steps {
-                echo "检查脚本文件是否存在于 ${WORKSPACE}/ci/scripts/ ..."
-                // 列出 ci/scripts 目录内容
+                echo "检查脚本文件是否存在于 Agent 路径: ${WORKSPACE}/ci/scripts/ ..."
                 sh "ls -la ${WORKSPACE}/ci/scripts/ || echo '>>> ci/scripts/ 目录不存在或无法列出 <<<' "
-                // 检查具体文件是否存在
-                sh "test -f ${WORKSPACE}/ci/scripts/write_allure_metadata.py && echo '>>> write_allure_metadata.py 存在 <<< ' || echo '>>> write_allure_metadata.py 不存在! <<<' "
-                sh "test -f ${WORKSPACE}/ci/scripts/prepare_nginx_dir.sh && echo '>>> prepare_nginx_dir.sh 存在 <<< ' || echo '>>> prepare_nginx_dir.sh 不存在! <<<' "
-                sh "test -f ${WORKSPACE}/ci/scripts/deploy_allure_report.sh && echo '>>> deploy_allure_report.sh 存在 <<< ' || echo '>>> deploy_allure_report.sh 不存在! <<<' "
-            }
-        }
-        // --- 检查阶段结束 ---
-
-        stage('诊断卷挂载') {
-            steps {
-                echo "诊断：尝试挂载 ${WORKSPACE} 到容器的 /test_mount 并列出内容..."
-                sh """
-                docker run --rm --name volume-test-${BUILD_NUMBER} \\
-                  -v ${WORKSPACE}:/test_mount:ro \\
-                  alpine:latest \\
-                  ls -la /test_mount || echo '>>> 无法列出 /test_mount 或目录为空 <<<'
-                """
-                echo "卷挂载诊断结束。"
+                sh "test -f ${WORKSPACE}/ci/scripts/write_allure_metadata.py && echo '>>> write_allure_metadata.py 存在于 Agent <<< ' || echo '>>> write_allure_metadata.py 不存在于 Agent! <<<' "
+                sh "test -f ${WORKSPACE}/ci/scripts/prepare_nginx_dir.sh && echo '>>> prepare_nginx_dir.sh 存在于 Agent <<< ' || echo '>>> prepare_nginx_dir.sh 不存在于 Agent! <<<' "
+                sh "test -f ${WORKSPACE}/ci/scripts/deploy_allure_report.sh && echo '>>> deploy_allure_report.sh 存在于 Agent <<< ' || echo '>>> deploy_allure_report.sh 不存在于 Agent! <<<' "
             }
         }
 
@@ -103,7 +94,6 @@ pipeline {
                                                      usernameVariable: 'ACCOUNT_USERNAME',
                                                      passwordVariable: 'ACCOUNT_PASSWORD')]) {
                         def testsToRun = [:]
-                        def allureResultsHostPath = "${WORKSPACE}/output/allure-results"
 
                         if (params.RUN_WEB_TESTS) {
                             testsToRun['Web测试'] = {
@@ -122,20 +112,13 @@ pipeline {
                                   -e PYTEST_RERUNS="2" \\
                                   -e SKIP_REPORT="true" \\
                                   -e SKIP_NOTIFY="true" \\
-                                  -v ${WORKSPACE}:/workspace:rw \\
-                                  -v ${allureResultsHostPath}:/results_out:rw \\
+                                  -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
+                                  -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
                                   --workdir /workspace \\
                                   -v /etc/localtime:/etc/localtime:ro \\
                                   --network host \\
                                   ${env.DOCKER_IMAGE} \\
-                                  /bin/bash -c " \\
-                                    echo '--- Listing /workspace inside container: ---'; \\
-                                    ls -la /workspace; \\
-                                    echo '--- Listing /workspace/ci/scripts inside container: ---'; \\
-                                    ls -la /workspace/ci/scripts/; \\
-                                    echo '--- Attempting to execute script: ---'; \\
-                                    python /workspace/ci/scripts/run_and_notify.py \\
-                                  "
+                                  python /workspace/ci/scripts/run_and_notify.py
                                 """
                             }
                         } else { echo "跳过Web测试" }
@@ -157,8 +140,8 @@ pipeline {
                                   -e PYTEST_RERUNS="2" \\
                                   -e SKIP_REPORT="true" \\
                                   -e SKIP_NOTIFY="true" \\
-                                  -v ${WORKSPACE}:/workspace:rw \\
-                                  -v ${allureResultsHostPath}:/results_out:rw \\
+                                  -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
+                                  -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
                                   --workdir /workspace \\
                                   -v /etc/localtime:/etc/localtime:ro \\
                                   --network host \\
@@ -184,8 +167,8 @@ pipeline {
                                   -e PYTEST_RERUNS="2" \\
                                   -e SKIP_REPORT="true" \\
                                   -e SKIP_NOTIFY="true" \\
-                                  -v ${WORKSPACE}:/workspace:rw \\
-                                  -v ${allureResultsHostPath}:/results_out:rw \\
+                                  -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
+                                  -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
                                   --workdir /workspace \\
                                   -v /etc/localtime:/etc/localtime:ro \\
                                   --network host \\
@@ -211,8 +194,8 @@ pipeline {
                                   -e PYTEST_RERUNS="2" \\
                                   -e SKIP_REPORT="true" \\
                                   -e SKIP_NOTIFY="true" \\
-                                  -v ${WORKSPACE}:/workspace:rw \\
-                                  -v ${allureResultsHostPath}:/results_out:rw \\
+                                  -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
+                                  -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
                                   --workdir /workspace \\
                                   -v /etc/localtime:/etc/localtime:ro \\
                                   --network host \\
@@ -223,11 +206,12 @@ pipeline {
                         } else { echo "跳过App测试" }
 
                         if (!testsToRun.isEmpty()) {
-                             echo "开始并行执行选定的测试..."
+                             echo "开始并行执行选定的测试 (使用宿主机路径 ${env.HOST_WORKSPACE_PATH} 挂载到容器 /workspace)..."
                              parallel testsToRun
                         } else {
                              echo "没有选择任何测试平台，跳过测试执行。"
-                             sh "mkdir -p ${allureResultsHostPath}"
+                             // 确保宿主机上的结果目录存在，即使没有测试运行
+                             sh "mkdir -p ${env.HOST_ALLURE_RESULTS_PATH}"
                         }
                     } // End withCredentials
                 } // End script
@@ -238,13 +222,8 @@ pipeline {
                steps {
                     script {
                        withCredentials([string(credentialsId: env.EMAIL_PASSWORD_CREDENTIALS_ID, variable: 'EMAIL_PASSWORD')]) {
-                           // 定义宿主机路径变量
-                           def allureResultsHostPath = "${WORKSPACE}/output/allure-results"
-                           def allureReportHostPath = "${WORKSPACE}/output/reports/allure-report"
-                           def scriptsHostPath = "${WORKSPACE}/ci/scripts" // 脚本在宿主机的路径
 
-                           echo "写入 Allure 元数据文件到 ${allureResultsHostPath} (在容器内执行)..."
-                           // 执行外部 Python 脚本
+                           echo "写入 Allure 元数据文件到 ${env.HOST_ALLURE_RESULTS_PATH} (在宿主机上)..."
                            sh """
                            docker run --rm --name write-metadata-${BUILD_NUMBER} \\
                              -e APP_ENV=${params.APP_ENV} \\
@@ -252,8 +231,8 @@ pipeline {
                              -e BUILD_NUMBER=${BUILD_NUMBER} \\
                              -e BUILD_URL=${env.BUILD_URL} \\
                              -e JOB_NAME=${env.JOB_NAME} \\
-                             -v ${WORKSPACE}:/workspace:ro \\
-                             -v ${allureResultsHostPath}:/results_out:rw \\
+                             -v ${env.HOST_WORKSPACE_PATH}:/workspace:ro \\
+                             -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
                              -v /etc/localtime:/etc/localtime:ro \\
                              --user root \\
                              ${env.DOCKER_IMAGE} \\
@@ -261,36 +240,34 @@ pipeline {
                            """
                            echo "Allure 元数据写入完成。"
 
-                           echo "开始生成 Allure 报告..."
+                           echo "开始生成 Allure 报告 (从宿主机路径 ${env.HOST_ALLURE_RESULTS_PATH} 生成到 ${env.HOST_ALLURE_REPORT_PATH})..."
                            sh """
-                           echo "--- Generating Allure report from host results in ${allureResultsHostPath} ---"
                            docker run --rm --name allure-generate-${BUILD_NUMBER} \\
-                             -v ${allureResultsHostPath}:/results:ro \\
-                             -v ${allureReportHostPath}:/report:rw \\
+                             -v ${env.HOST_ALLURE_RESULTS_PATH}:/results:ro \\
+                             -v ${env.HOST_ALLURE_REPORT_PATH}:/report:rw \\
                              -v /etc/localtime:/etc/localtime:ro \\
                              --user root \\
                              ${env.DOCKER_IMAGE} \\
                              /bin/bash -c "echo 'Generating report...'; ls -la /results; allure generate /results -o /report --clean"
-
-                           echo "Allure 报告已生成到 ${allureReportHostPath}"
+                           echo "Allure 报告已生成到宿主机路径: ${env.HOST_ALLURE_REPORT_PATH}"
                            """
 
-                           echo "准备 Nginx 目录..."
+                           echo "准备 Nginx 目录 ${env.ALLURE_NGINX_HOST_PATH} (在宿主机上)..."
                            sh """
                            docker run --rm --name prep-nginx-dir-${BUILD_NUMBER} \\
-                             -v ${env.ALLURE_NGINX_HOST_PATH}:/nginx_dir:rw \\
-                             -v ${scriptsHostPath}:/scripts:ro \\
+                             -v ${env.ALLURE_NGINX_HOST_PATH}:/nginx_dir_on_host:rw \\
+                             -v ${env.HOST_WORKSPACE_PATH}/ci/scripts:/scripts:ro \\
                              --user root \\
                              alpine:latest \\
-                             sh /scripts/prepare_nginx_dir.sh /nginx_dir
+                             sh /scripts/prepare_nginx_dir.sh /nginx_dir_on_host
                            """
 
-                           echo "部署 Allure 报告 (处理历史记录、复制文件、修正权限)..."
+                           echo "部署 Allure 报告 (从宿主机 ${env.HOST_ALLURE_REPORT_PATH} 到 Nginx 宿主机 ${env.ALLURE_NGINX_HOST_PATH})..."
                            sh """
                            docker run --rm --name deploy-report-${BUILD_NUMBER} \\
-                             -v ${allureReportHostPath}:/src_report:ro \\
+                             -v ${env.HOST_ALLURE_REPORT_PATH}:/src_report:ro \\
                              -v ${env.ALLURE_NGINX_HOST_PATH}:/dest_nginx:rw \\
-                             -v ${scriptsHostPath}:/scripts:ro \\
+                             -v ${env.HOST_WORKSPACE_PATH}/ci/scripts:/scripts:ro \\
                              --user root \\
                              alpine:latest \\
                              sh /scripts/deploy_allure_report.sh /src_report /dest_nginx
@@ -300,7 +277,7 @@ pipeline {
 
                            echo "发送邮件通知..."
                            sh """
-                           echo "--- Sending notification email via run_and_notify.py ---"
+                           echo "--- Sending notification email via run_and_notify.py --- (using host path ${env.HOST_WORKSPACE_PATH})"
                            docker run --rm --name notify-${BUILD_NUMBER} \\
                              -e CI=true \\
                              -e CI_NAME="${env.CI_NAME}" \\
@@ -316,9 +293,9 @@ pipeline {
                              -e TZ="Asia/Shanghai" \\
                              -e ALLURE_RESULTS_DIR=/results \\
                              -e ALLURE_REPORT_DIR=/report \\
-                             -v ${WORKSPACE}:/workspace:ro \\
-                             -v ${allureResultsHostPath}:/results:ro \\
-                             -v ${allureReportHostPath}:/report:ro \\
+                             -v ${env.HOST_WORKSPACE_PATH}:/workspace:ro \\
+                             -v ${env.HOST_ALLURE_RESULTS_PATH}:/results:ro \\
+                             -v ${env.HOST_ALLURE_REPORT_PATH}:/report:ro \\
                              -v /etc/localtime:/etc/localtime:ro \\
                              --network host \\
                              ${env.DOCKER_IMAGE} \\
@@ -334,7 +311,7 @@ pipeline {
 
        post {
            always {
-               echo "Pipeline 完成. 清理工作空间..."
+               echo "Pipeline 完成. 清理 Agent 工作空间 ${WORKSPACE}..."
                script {
                    def testTypes = []
                    if (params.RUN_WEB_TESTS) testTypes.add("Web")
@@ -345,10 +322,10 @@ pipeline {
                    currentBuild.description = "${params.APP_ENV.toUpperCase()} 环境 [${testTypes.join(', ')}] - <a href='${env.ALLURE_PUBLIC_URL}' target='_blank'>查看报告</a>"
                }
                cleanWs()
-               echo "工作空间已清理。"
-               // 注意：下面这行清理可能无效或多余，因为脚本似乎并未在 WORKSPACE 创建此文件
-               sh "rm -f ${WORKSPACE}/tmp_write_metadata.py || true"
-               echo "临时脚本文件已清理。"
+               echo "Agent 工作空间已清理。"
+               // 移除旧的清理命令
+               // sh "rm -f ${WORKSPACE}/tmp_write_metadata.py || true"
+               // echo "临时脚本文件已清理。"
            }
            success {
                echo "Pipeline 成功完成！"
