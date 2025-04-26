@@ -299,7 +299,7 @@ pipeline {
                              -v /etc/localtime:/etc/localtime:ro \\
                              --network host \\
                              ${env.DOCKER_IMAGE} \\
-                             cd /workspace && python ci/scripts/run_and_notify.py
+                             /bin/bash -c "cd /workspace && python ci/scripts/run_and_notify.py"
                            echo "通知脚本执行完毕。"
                            """
 
