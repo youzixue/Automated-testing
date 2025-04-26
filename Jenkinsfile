@@ -254,11 +254,10 @@ pipeline {
                              -e BUILD_URL=${env.BUILD_URL} \\
                              -e JOB_NAME=${env.JOB_NAME} \\
                              -v ${allureResultsHostPath}:/results_out:rw \\
-                             -v ${scriptsHostPath}:/scripts:ro \\
                              -v /etc/localtime:/etc/localtime:ro \\
                              --user root \\
                              ${env.DOCKER_IMAGE} \\
-                             python /scripts/write_allure_metadata.py /results_out
+                             python /app/ci/scripts/write_allure_metadata.py /results_out
                            """
                            echo "Allure 元数据写入完成。"
 
@@ -320,17 +319,9 @@ pipeline {
                              -v ${allureResultsHostPath}:/results:ro \\
                              -v ${allureReportHostPath}:/report:ro \\
                              -v /etc/localtime:/etc/localtime:ro \\
-                             -v ${WORKSPACE}:/workspace_host:ro \\
                              --network host \\
                              ${env.DOCKER_IMAGE} \\
-                             /bin/bash -c "\\
-                               echo '--- 复制项目文件到容器内 ---'; \\
-                               cp -r /workspace_host/. /app/; \\
-                               echo '检查通知脚本是否存在...'; \\
-                               ls -la /app/ci/scripts/; \\
-                               echo '执行邮件通知脚本...'; \\
-                               cd /app && python ci/scripts/run_and_notify.py \\
-                              "
+                             cd /app && python ci/scripts/run_and_notify.py
                            echo "通知脚本执行完毕。"
                            """
 
