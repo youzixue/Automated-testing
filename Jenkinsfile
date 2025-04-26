@@ -34,7 +34,8 @@ pipeline {
         WEB_URL = "${params.APP_ENV == 'prod' ? 'https://cmpark.cmpo1914.com/' : 'https://test.cmpo1914.com:3006/omp/'}"
         API_URL = "${params.APP_ENV == 'prod' ? 'https://cmpark.cmpo1914.com/api/' : 'https://test.cmpo1914.com:3006/api/'}"
         DOCKER_IMAGE = "automated-testing:dev"
-        CI_NAME = "${params.APP_ENV == 'prod' ? '生产环境自动化' : '测试环境自动化'}"
+        // CI_NAME 不再由此处定义，由 write_allure_metadata.py 内部处理或用于 executor.json
+        // CI_NAME = "${params.APP_ENV == 'prod' ? '生产环境自动化' : '测试环境自动化'}"
     }
 
     stages {
@@ -207,7 +208,7 @@ pipeline {
                            sh """
                            docker run --rm --name write-metadata-${BUILD_NUMBER} \\
                              -e APP_ENV=${params.APP_ENV} \\
-                             -e CI_NAME="${env.CI_NAME}" \\
+                             # -e CI_NAME="${env.CI_NAME}" \\
                              -e BUILD_NUMBER=${BUILD_NUMBER} \\
                              -e BUILD_URL=${env.BUILD_URL} \\
                              -e JOB_NAME=${env.JOB_NAME} \\
@@ -260,7 +261,6 @@ pipeline {
                            echo "--- Sending notification email via run_and_notify.py --- (using host path ${env.HOST_WORKSPACE_PATH})"
                            docker run --rm --name notify-${BUILD_NUMBER} \\
                              -e CI=true \\
-                             -e CI_NAME="${env.CI_NAME}" \\
                              -e APP_ENV=${params.APP_ENV} \\
                              -e EMAIL_ENABLED=${params.SEND_EMAIL} \\
                              -e EMAIL_PASSWORD='${EMAIL_PASSWORD}' \\
