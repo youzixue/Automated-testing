@@ -80,6 +80,19 @@ pipeline {
         }
         // --- 检查阶段结束 ---
 
+        stage('诊断卷挂载') {
+            steps {
+                echo "诊断：尝试挂载 ${WORKSPACE} 到容器的 /test_mount 并列出内容..."
+                sh """
+                docker run --rm --name volume-test-${BUILD_NUMBER} \\
+                  -v ${WORKSPACE}:/test_mount:ro \\
+                  alpine:latest \\
+                  ls -la /test_mount || echo '>>> 无法列出 /test_mount 或目录为空 <<<'
+                """
+                echo "卷挂载诊断结束。"
+            }
+        }
+
         stage('并行执行测试') {
              steps {
                 script {
