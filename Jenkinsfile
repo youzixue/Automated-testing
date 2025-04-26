@@ -66,6 +66,20 @@ pipeline {
             }
         }
 
+        // --- 新增的检查阶段 ---
+        stage('检查脚本文件') {
+            steps {
+                echo "检查脚本文件是否存在于 ${WORKSPACE}/ci/scripts/ ..."
+                // 列出 ci/scripts 目录内容
+                sh "ls -la ${WORKSPACE}/ci/scripts/ || echo '>>> ci/scripts/ 目录不存在或无法列出 <<<' "
+                // 检查具体文件是否存在
+                sh "test -f ${WORKSPACE}/ci/scripts/write_allure_metadata.py && echo '>>> write_allure_metadata.py 存在 <<< ' || echo '>>> write_allure_metadata.py 不存在! <<<' "
+                sh "test -f ${WORKSPACE}/ci/scripts/prepare_nginx_dir.sh && echo '>>> prepare_nginx_dir.sh 存在 <<< ' || echo '>>> prepare_nginx_dir.sh 不存在! <<<' "
+                sh "test -f ${WORKSPACE}/ci/scripts/deploy_allure_report.sh && echo '>>> deploy_allure_report.sh 存在 <<< ' || echo '>>> deploy_allure_report.sh 不存在! <<<' "
+            }
+        }
+        // --- 检查阶段结束 ---
+
         stage('并行执行测试') {
              steps {
                 script {
@@ -269,7 +283,7 @@ pipeline {
                              -v ${scriptsHostPath}:/scripts:ro \\
                              --user root \\
                              alpine:latest \\
-                             sh /scripts/prepare_nginx_dir.sh /nginx_dir 
+                             sh /scripts/prepare_nginx_dir.sh /nginx_dir
                            """
 
                            echo "部署 Allure 报告 (处理历史记录、复制文件、修正权限)..."
@@ -340,6 +354,7 @@ pipeline {
                }
                cleanWs()
                echo "工作空间已清理。"
+               // 注意：下面这行清理可能无效或多余，因为脚本似乎并未在 WORKSPACE 创建此文件
                sh "rm -f ${WORKSPACE}/tmp_write_metadata.py || true"
                echo "临时脚本文件已清理。"
            }
