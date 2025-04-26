@@ -240,11 +240,11 @@ pipeline {
                              -e BUILD_URL=${env.BUILD_URL} \\
                              -e JOB_NAME=${env.JOB_NAME} \\
                              -v ${allureResultsHostPath}:/results_out:rw \\
-                             -v ${scriptsHostPath}:/scripts:ro \\        # 挂载脚本目录
+                             -v ${scriptsHostPath}:/scripts:ro \\
                              -v /etc/localtime:/etc/localtime:ro \\
                              --user root \\
                              ${env.DOCKER_IMAGE} \\
-                             python /scripts/write_allure_metadata.py /results_out # 执行脚本并传递参数
+                             python /scripts/write_allure_metadata.py /results_out
                            """
                            echo "Allure 元数据写入完成。"
 
@@ -266,24 +266,21 @@ pipeline {
                            sh """
                            docker run --rm --name prep-nginx-dir-${BUILD_NUMBER} \\
                              -v ${env.ALLURE_NGINX_HOST_PATH}:/nginx_dir:rw \\
-                             -v ${scriptsHostPath}:/scripts:ro \\ # 挂载脚本目录
+                             -v ${scriptsHostPath}:/scripts:ro \\
                              --user root \\
-                             alpine:latest \\                     # 使用 alpine 执行 sh 脚本
-                             sh /scripts/prepare_nginx_dir.sh /nginx_dir # 执行脚本
+                             alpine:latest \\
+                             sh /scripts/prepare_nginx_dir.sh /nginx_dir 
                            """
 
                            echo "部署 Allure 报告 (处理历史记录、复制文件、修正权限)..."
                            sh """
                            docker run --rm --name deploy-report-${BUILD_NUMBER} \\
-                             -v ${allureReportHostPath}:/src_report:ro \\   # 源报告路径
-                             -v ${env.ALLURE_NGINX_HOST_PATH}:/dest_nginx:rw \\ # 目标 Nginx 路径
-                             -v ${scriptsHostPath}:/scripts:ro \\      # 挂载脚本目录
+                             -v ${allureReportHostPath}:/src_report:ro \\
+                             -v ${env.ALLURE_NGINX_HOST_PATH}:/dest_nginx:rw \\
+                             -v ${scriptsHostPath}:/scripts:ro \\
                              --user root \\
-                             # 需要确保 alpine:latest 里有 cp, find, mkdir, rm, sh, iconv (可能需要安装 coreutils, musl-utils)
-                             # 或者使用包含这些工具的基础镜像，甚至项目本身的镜像（如果工具齐全）
-                             # 为了简单起见，这里假设 alpine 有足够工具，但 iconv 可能没有，脚本内部做了检查
                              alpine:latest \\
-                             sh /scripts/deploy_allure_report.sh /src_report /dest_nginx # 执行脚本
+                             sh /scripts/deploy_allure_report.sh /src_report /dest_nginx
                            """
                            echo "报告已部署到 Nginx 目录。"
 
