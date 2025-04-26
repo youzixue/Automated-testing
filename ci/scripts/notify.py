@@ -52,10 +52,18 @@ def send_report_email(summary, upload_success):
     fail_count = summary.get("failed", 0)
     broken_count = summary.get("broken", 0)
     skipped_count = summary.get("skipped", 0)
-    exec_time = f"{summary.get('duration', 0):.1f}秒" if summary.get("duration") else "N/A"
-    pass_rate = f"{(pass_count/total_count*100):.1f}%" if total_count else "0.0%"
+    
+    # 处理执行时间，确保是数字才格式化
+    duration_value = summary.get('duration')
+    if isinstance(duration_value, (int, float)):
+        exec_time = f"{duration_value:.1f}秒"
+    else:
+        exec_time = str(duration_value) if duration_value is not None else "N/A" # 如果不是数字，直接转字符串或显示N/A
+        
+    pass_rate = f"{(pass_count/total_count*100):.1f}%" if total_count and isinstance(total_count, int) and total_count > 0 and isinstance(pass_count, int) else "N/A" # 增加对total_count类型的检查
     report_generation_time = time.strftime("%Y-%m-%d %H:%M:%S")
-    pass_rate_percent = f"{summary.get('passed', 0)}/{summary.get('total', 0)}"
+    pass_rate_percent = f"{pass_count}/{total_count}" if isinstance(total_count, int) and isinstance(pass_count, int) else "N/A" # 确保是数字才拼接
+    
     subject = f"【自动化测试】测试报告 [{report_generation_time}] - 通过率: {pass_rate_percent}"
     if public_url:
         report_link = public_url
