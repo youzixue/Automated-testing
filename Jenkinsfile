@@ -109,19 +109,12 @@ pipeline {
                                   -e PYTEST_RERUNS="2" \\
                                   -e SKIP_REPORT="true" \\
                                   -e SKIP_NOTIFY="true" \\
-                                  -v ${WORKSPACE}:/workspace_host:ro \\
                                   -v ${allureResultsHostPath}:/results_out:rw \\
                                   --workdir /app \\
                                   -v /etc/localtime:/etc/localtime:ro \\
                                   --network host \\
                                   ${env.DOCKER_IMAGE} \\
-                                  /bin/bash -c " \\
-                                    echo '--- Running tests via run_and_notify.py ---'; \\
-                                    echo 'Copying project files from /workspace_host to /app...'; \\
-                                    cp -r /workspace_host/. /app/; \\
-                                    echo 'Files copied. Running tests...'; \\
-                                    cd /app && python ci/scripts/run_and_notify.py \\
-                                  "
+                                  python ci/scripts/run_and_notify.py
                                 """
                             }
                         } else { echo "跳过Web测试" }
@@ -143,18 +136,12 @@ pipeline {
                                   -e PYTEST_RERUNS="2" \\
                                   -e SKIP_REPORT="true" \\
                                   -e SKIP_NOTIFY="true" \\
-                                  -v ${WORKSPACE}:/workspace_host:ro \\
                                   -v ${allureResultsHostPath}:/results_out:rw \\
                                   --workdir /app \\
                                   -v /etc/localtime:/etc/localtime:ro \\
                                   --network host \\
                                   ${env.DOCKER_IMAGE} \\
-                                  /bin/bash -c " \\
-                                    echo '--- Running tests via run_and_notify.py ---' && \\
-                                    echo 'Copying project files from /workspace_host to /app...' && cp -r /workspace_host/. /app/ && \\
-                                    echo 'Files copied. Running tests...' && \\
-                                    cd /app && python ci/scripts/run_and_notify.py \\
-                                  "
+                                  python ci/scripts/run_and_notify.py
                                 """
                             }
                         } else { echo "跳过API测试" }
@@ -175,18 +162,12 @@ pipeline {
                                   -e PYTEST_RERUNS="2" \\
                                   -e SKIP_REPORT="true" \\
                                   -e SKIP_NOTIFY="true" \\
-                                  -v ${WORKSPACE}:/workspace_host:ro \\
                                   -v ${allureResultsHostPath}:/results_out:rw \\
                                   --workdir /app \\
                                   -v /etc/localtime:/etc/localtime:ro \\
                                   --network host \\
                                   ${env.DOCKER_IMAGE} \\
-                                  /bin/bash -c " \\
-                                    echo '--- Running tests via run_and_notify.py ---' && \\
-                                    echo 'Copying project files from /workspace_host to /app...' && cp -r /workspace_host/. /app/ && \\
-                                    echo 'Files copied. Running tests...' && \\
-                                    cd /app && python ci/scripts/run_and_notify.py \\
-                                  "
+                                  python ci/scripts/run_and_notify.py
                                 """
                            }
                         } else { echo "跳过微信公众号测试" }
@@ -207,18 +188,12 @@ pipeline {
                                   -e PYTEST_RERUNS="2" \\
                                   -e SKIP_REPORT="true" \\
                                   -e SKIP_NOTIFY="true" \\
-                                  -v ${WORKSPACE}:/workspace_host:ro \\
                                   -v ${allureResultsHostPath}:/results_out:rw \\
                                   --workdir /app \\
                                   -v /etc/localtime:/etc/localtime:ro \\
                                   --network host \\
                                   ${env.DOCKER_IMAGE} \\
-                                  /bin/bash -c " \\
-                                    echo '--- Running tests via run_and_notify.py ---' && \\
-                                    echo 'Copying project files from /workspace_host to /app...' && cp -r /workspace_host/. /app/ && \\
-                                    echo 'Files copied. Running tests...' && \\
-                                    cd /app && python ci/scripts/run_and_notify.py \\
-                                  "
+                                  python ci/scripts/run_and_notify.py
                                 """
                             }
                         } else { echo "跳过App测试" }
@@ -243,6 +218,9 @@ pipeline {
                            def allureResultsHostPath = "${WORKSPACE}/output/allure-results"
                            def allureReportHostPath = "${WORKSPACE}/output/reports/allure-report"
                            def scriptsHostPath = "${WORKSPACE}/ci/scripts" // 脚本在宿主机的路径
+
+                           echo "检查 Docker 镜像内部的 /app/ci/scripts/ 目录内容..."
+                           sh "docker run --rm --name check-scripts-${BUILD_NUMBER} ${env.DOCKER_IMAGE} ls -la /app/ci/scripts/ || echo '>>> 无法列出镜像内 /app/ci/scripts/ 目录 <<<'"
 
                            echo "写入 Allure 元数据文件到 ${allureResultsHostPath} (在容器内执行)..."
                            // 执行外部 Python 脚本
