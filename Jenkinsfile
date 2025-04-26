@@ -28,7 +28,6 @@ pipeline {
         WEB_URL = "${params.APP_ENV == 'prod' ? 'https://cmpark.cmpo1914.com/' : 'https://test.cmpo1914.com:3006/omp/'}"
         API_URL = "${params.APP_ENV == 'prod' ? 'https://cmpark.cmpo1914.com/api/' : 'https://test.cmpo1914.com:3006/api/'}"
         DOCKER_IMAGE = "automated-testing:dev"
-        // **新增:** 定义 CI_NAME 环境变量，方便后续步骤使用
         CI_NAME = "${params.APP_ENV == 'prod' ? '生产环境自动化' : '测试环境自动化'}"
     }
 
@@ -77,7 +76,7 @@ pipeline {
                                                      usernameVariable: 'ACCOUNT_USERNAME',
                                                      passwordVariable: 'ACCOUNT_PASSWORD')]) {
                         def testsToRun = [:]
-                        def allureResultsHostPath = "${WORKSPACE}/output/allure-results" // 定义宿主机结果路径
+                        def allureResultsHostPath = "${WORKSPACE}/output/allure-results"
 
                         if (params.RUN_WEB_TESTS) {
                             testsToRun['Web测试'] = {
@@ -231,7 +230,8 @@ pipeline {
                         def allureReportHostPath = "${WORKSPACE}/output/reports/allure-report"
 
                         echo "写入 Allure 元数据文件到 ${allureResultsHostPath} (在容器内执行)..."
-                        sh """
+                        // 使用三单引号防止 Groovy 替换 python heredoc 内的变量
+                        sh '''
                         docker run --rm --name write-metadata-${BUILD_NUMBER} \\
                           -e APP_ENV=${params.APP_ENV} \\
                           -e CI_NAME="${env.CI_NAME}" \\
@@ -280,7 +280,7 @@ try:
     env_file_path = os.path.join(allure_results_dir, 'environment.properties')
     with open(env_file_path, 'w', encoding='utf-8') as f:
         for key, value in environment.items():
-            f.write(f'{key}={value}\\n')
+            f.write(f'{key}={value}\\n') # Use \\n for newline in heredoc passed to bash -c "..."
     print(f'环境信息写入成功: {env_file_path}')
 except Exception as e:
     print(f'写入环境信息失败: {e}')
@@ -316,11 +316,12 @@ except Exception as e:
 print('元数据写入脚本执行完毕')
 EOF
                           " # End of bash -c command
-                        """
+                        '''
                         echo "Allure 元数据写入完成。"
 
                         echo "开始生成 Allure 报告..."
-                        sh """
+                        // 使用三单引号防止 Groovy 替换 ${...}
+                        sh '''
                         echo "--- Generating Allure report from host results in ${allureResultsHostPath} ---"
                         docker run --rm --name allure-generate-${BUILD_NUMBER} \\
                           -v ${allureResultsHostPath}:/results:ro \\
@@ -331,26 +332,27 @@ EOF
                           /bin/bash -c "echo 'Generating report...'; ls -la /results; allure generate /results -o /report --clean"
 
                         echo "Allure 报告已生成到 ${allureReportHostPath}"
-                        """
+                        '''
 
                         echo "复制报告到 Nginx 目录并修正权限..."
-                        sh """
+                        // 使用三单引号防止 Groovy 替换 ${...}
+                        sh '''
                         echo "--- Copying generated report from host path ${allureReportHostPath} to Nginx directory ${env.ALLURE_NGINX_HOST_PATH} and fixing permissions ---"
-                        # 首先确保目标目录存在，并处理历史数据目录
+                        # 首先确保目标目录存在
                         docker run --rm --name prep-nginx-dir-${BUILD_NUMBER} \\
                           -v ${env.ALLURE_NGINX_HOST_PATH}:/nginx_dir:rw \\
                           --user root \\
                           alpine:latest \\
-                          sh -c "\\
-                            echo 'Preparing Nginx directory...' && \\
+                          sh -c '\\
+                            echo "Preparing Nginx directory..." && \\
                             mkdir -p /nginx_dir && \\
                             mkdir -p /nginx_dir/history && \\
                             find /nginx_dir -type d -exec chmod 755 {} \\; && \\
                             find /nginx_dir -type f -exec chmod 644 {} \\; && \\
-                            echo 'Nginx directory prepared.'\\
-                          "
+                            echo "Nginx directory prepared."\\
+                          '
 
-                        # 确保历史目录存在并保持不变
+                        # 确保历史目录存在并保持不变 (注意内层 sh -c 使用单引号，变量无需转义)
                         docker run --rm --name preserve-history-${BUILD_NUMBER} \\
                           -v ${env.ALLURE_NGINX_HOST_PATH}:/dest:rw \\
                           -v ${allureReportHostPath}:/src:ro \\
@@ -363,12 +365,15 @@ EOF
                               mkdir -p /tmp/history_backup && \\
                               cp -rp /dest/history/* /tmp/history_backup/ || echo "No files to copy" && \\
                               echo "Ensuring UTF-8 encoding for JSON files..." && \\
-                              find /tmp/history_backup -name "*.json" -type f -exec sh -c " \\ # <-- 修改：内层 sh -c 改用双引号
-                                FILE=\\"{}\\" && \\ # <-- 修改：用 \\\" 包裹 {}, 安全处理文件名
-                                TEMP_FILE=\\$(mktemp) && \\  # <-- 修改：\\$ 转义 Groovy, $(mktemp) Shell 执行
-                                cat \\\"\\\$FILE\\\" > \\\"\\\$TEMP_FILE\\\" && \\ # <-- 修改：\\$ 转义 Groovy, \\\" 转义 Shell 双引号
-                                mv \\\"\\\$TEMP_FILE\\\" \\\"\\\$FILE\\\" \\
-                              " \\; || echo "No JSON files found" \\ # <-- 修改：调整末尾引号和分号
+                              # 使用单引号，内部变量 $FILE $(mktemp) 由 shell 处理，{} 由 find 处理
+                              find /tmp/history_backup -name "*.json" -type f -exec sh -c '\\''\\
+                                FILE="$1" && \\ # 从参数 $1 获取文件名，并用双引号包裹
+                                TEMP_FILE=$(mktemp) && \\
+                                cat "$FILE" > "$TEMP_FILE" && \\
+                                mv "$FILE" "$FILE.bak" && \\ # Create backup first
+                                iconv -f utf-8 -t utf-8 -c "$FILE.bak" > "$FILE" && \\ # Force UTF-8 conversion
+                                rm "$FILE.bak" \\
+                              '\\'' sh {} \\; || echo "No JSON files found" \\ # 传递 sh 和 {}
                             else \\
                               echo "No history directory found, will create empty one" && \\
                               mkdir -p /dest/history && \\
@@ -381,7 +386,7 @@ EOF
                             echo "History directory preserved."\\
                           ' # End outer sh -c
 
-                        # 复制报告并保持历史数据
+                        # 复制报告并保持历史数据 (注意内层 sh -c 使用单引号)
                         docker run --rm --name report-copy-perm-${BUILD_NUMBER} \\
                           -v ${allureReportHostPath}:/src:ro \\
                           -v ${env.ALLURE_NGINX_HOST_PATH}:/dest:rw \\
@@ -402,30 +407,31 @@ EOF
                               cp -rf /tmp/history/* /dest/history/ || echo "No history files to restore" \\
                             fi && \\
                             echo "Setting UTF-8 encoding for JSON files..." && \\
-                            find /dest -name "*.json" -type f -exec sh -c " \\ # <-- 修改：内层 sh -c 改用双引号
-                              FILE=\\"{}\\" && \\ # <-- 修改：用 \\\" 包裹 {}, 安全处理文件名
-                              if [ -s \\\"\\\$FILE\\\" ]; then \\ # <-- 修改：\\$ 转义 Groovy, \\\" 转义 Shell 双引号
-                                mv \\\"\\\$FILE\\\" \\\"\\\$FILE.bak\\\" && \\ # <-- 修改：同上
-                                cat \\\"\\\$FILE.bak\\\" > \\\"\\\$FILE\\\" && \\ # <-- 修改：同上
-                                rm \\\"\\\$FILE.bak\\\" \\
+                            # 使用单引号，内部变量 $FILE 由 shell 处理，{} 由 find 处理
+                            find /dest -name "*.json" -type f -exec sh -c '\\''\\
+                              FILE="$1" && \\ # 从参数 $1 获取文件名，并用双引号包裹
+                              if [ -s "$FILE" ]; then \\
+                                mv "$FILE" "$FILE.bak" && \\ # Create backup first
+                                iconv -f utf-8 -t utf-8 -c "$FILE.bak" > "$FILE" && \\ # Force UTF-8 conversion
+                                rm "$FILE.bak" \\
                               fi\\
-                            " \\; || echo "No JSON files to process" && \\ # <-- 修改：调整末尾引号和分号
+                            '\\'' sh {} \\; || echo "No JSON files to process" && \\ # 传递 sh 和 {}
                             echo "Fixing permissions..." && \\
                             chmod -R 755 /dest/\\
                           ' # End outer sh -c
                         echo "报告已复制到 Nginx 目录并修正权限。"
-                        """
+                        '''
 
                         echo "发送邮件通知..."
-                        // 直接复用 run_and_notify.py 脚本
-                        sh """
+                        // 使用三单引号防止 Groovy 替换 ${...} 和 '${...}'
+                        sh '''
                         echo "--- Sending notification email via run_and_notify.py ---"
                         docker run --rm --name notify-${BUILD_NUMBER} \\
                           -e CI=true \\
                           -e CI_NAME="${env.CI_NAME}" \\
                           -e APP_ENV=${params.APP_ENV} \\
                           -e EMAIL_ENABLED=${params.SEND_EMAIL} \\
-                          -e EMAIL_PASSWORD='${EMAIL_PASSWORD}' \\
+                          -e EMAIL_PASSWORD='${EMAIL_PASSWORD}' \\ # 注意这里用单引号包裹，防止 $ 被 Groovy 处理
                           -e EMAIL_SMTP_SERVER="smtp.qiye.aliyun.com" \\
                           -e EMAIL_SMTP_PORT=465 \\
                           -e EMAIL_SENDER="yzx@ylmt2b.com" \\
@@ -450,7 +456,7 @@ EOF
                             cd /app && python ci/scripts/run_and_notify.py \\
                           "
                         echo "通知脚本执行完毕。"
-                        """
+                        '''
 
                     } // End withCredentials
                  } // End script
@@ -472,7 +478,6 @@ EOF
             }
             cleanWs()
             echo "工作空间已清理。"
-            // 注意：这行清理可能无效或多余，因为脚本似乎并未在 WORKSPACE 创建此文件
             sh "rm -f ${WORKSPACE}/tmp_write_metadata.py || true"
             echo "临时脚本文件已清理。"
         }
