@@ -221,272 +221,136 @@ pipeline {
             } // End steps
         } // End stage '并行执行测试'
 
-        stage('生成报告与通知') {
-            steps {
-                 script {
-                    withCredentials([string(credentialsId: env.EMAIL_PASSWORD_CREDENTIALS_ID, variable: 'EMAIL_PASSWORD')]) {
-                        // 定义宿主机路径变量
-                        def allureResultsHostPath = "${WORKSPACE}/output/allure-results"
-                        def allureReportHostPath = "${WORKSPACE}/output/reports/allure-report"
+           stage('生成报告与通知') {
+               steps {
+                    script {
+                       withCredentials([string(credentialsId: env.EMAIL_PASSWORD_CREDENTIALS_ID, variable: 'EMAIL_PASSWORD')]) {
+                           // 定义宿主机路径变量
+                           def allureResultsHostPath = "${WORKSPACE}/output/allure-results"
+                           def allureReportHostPath = "${WORKSPACE}/output/reports/allure-report"
+                           def scriptsHostPath = "${WORKSPACE}/ci/scripts" // 脚本在宿主机的路径
 
-                        echo "写入 Allure 元数据文件到 ${allureResultsHostPath} (在容器内执行)..."
-                        // 使用三双引号 """...""" 让 Groovy 替换 Jenkins 变量
-                        sh """
-                        docker run --rm --name write-metadata-${BUILD_NUMBER} \\
-                          -e APP_ENV=${params.APP_ENV} \\
-                          -e CI_NAME="${env.CI_NAME}" \\
-                          -e BUILD_NUMBER=${BUILD_NUMBER} \\
-                          -e BUILD_URL=${env.BUILD_URL} \\
-                          -e JOB_NAME=${env.JOB_NAME} \\
-                          -v ${allureResultsHostPath}:/results_out:rw \\
-                          -v /etc/localtime:/etc/localtime:ro \\
-                          --user root \\
-                          ${env.DOCKER_IMAGE} \\
-                          /bin/bash -c " \\
-                            echo '--- Writing Allure metadata inside container (Target: /results_out) ---' && \\
-                            python - << EOF
-import os
-import json
-import datetime
+                           echo "写入 Allure 元数据文件到 ${allureResultsHostPath} (在容器内执行)..."
+                           // 执行外部 Python 脚本
+                           sh """
+                           docker run --rm --name write-metadata-${BUILD_NUMBER} \\
+                             -e APP_ENV=${params.APP_ENV} \\
+                             -e CI_NAME="${env.CI_NAME}" \\
+                             -e BUILD_NUMBER=${BUILD_NUMBER} \\
+                             -e BUILD_URL=${env.BUILD_URL} \\
+                             -e JOB_NAME=${env.JOB_NAME} \\
+                             -v ${allureResultsHostPath}:/results_out:rw \\
+                             -v ${scriptsHostPath}:/scripts:ro \\        # 挂载脚本目录
+                             -v /etc/localtime:/etc/localtime:ro \\
+                             --user root \\
+                             ${env.DOCKER_IMAGE} \\
+                             python /scripts/write_allure_metadata.py /results_out # 执行脚本并传递参数
+                           """
+                           echo "Allure 元数据写入完成。"
 
-allure_results_dir = '/results_out'
-app_env = os.environ.get('APP_ENV', 'unknown')
-ci_name = os.environ.get('CI_NAME', 'Jenkins')
-build_number = os.environ.get('BUILD_NUMBER', 'unknown')
-build_url = os.environ.get('BUILD_URL', 'unknown')
-job_name = os.environ.get('JOB_NAME', 'unknown')
+                           echo "开始生成 Allure 报告..."
+                           sh """
+                           echo "--- Generating Allure report from host results in ${allureResultsHostPath} ---"
+                           docker run --rm --name allure-generate-${BUILD_NUMBER} \\
+                             -v ${allureResultsHostPath}:/results:ro \\
+                             -v ${allureReportHostPath}:/report:rw \\
+                             -v /etc/localtime:/etc/localtime:ro \\
+                             --user root \\
+                             ${env.DOCKER_IMAGE} \\
+                             /bin/bash -c "echo 'Generating report...'; ls -la /results; allure generate /results -o /report --clean"
 
-print(f'为Allure报告生成元数据信息')
-print(f'环境: {app_env}')
-print(f'CI名称: {ci_name}')
-print(f'构建号: {build_number}')
-print(f'结果目录: {allure_results_dir}')
+                           echo "Allure 报告已生成到 ${allureReportHostPath}"
+                           """
 
-try:
-    os.makedirs(allure_results_dir, exist_ok=True)
-except Exception as e:
-    print(f'创建结果目录失败: {e}')
-    exit(1)
+                           echo "准备 Nginx 目录..."
+                           sh """
+                           docker run --rm --name prep-nginx-dir-${BUILD_NUMBER} \\
+                             -v ${env.ALLURE_NGINX_HOST_PATH}:/nginx_dir:rw \\
+                             -v ${scriptsHostPath}:/scripts:ro \\ # 挂载脚本目录
+                             --user root \\
+                             alpine:latest \\                     # 使用 alpine 执行 sh 脚本
+                             sh /scripts/prepare_nginx_dir.sh /nginx_dir # 执行脚本
+                           """
 
-environment = {
-    'APP_ENV': app_env,
-    'Build Number': build_number,
-    'Build URL': build_url,
-    'Job Name': job_name,
-    'CI': ci_name,
-    'Timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-}
-try:
-    env_file_path = os.path.join(allure_results_dir, 'environment.properties')
-    with open(env_file_path, 'w', encoding='utf-8') as f:
-        for key, value in environment.items():
-            # 在 bash -c "..." 内的 heredoc 中，换行符需为 \\\\n
-            f.write(f'{key}={value}\\\\n')
-    print(f'环境信息写入成功: {env_file_path}')
-except Exception as e:
-    print(f'写入环境信息失败: {e}')
+                           echo "部署 Allure 报告 (处理历史记录、复制文件、修正权限)..."
+                           sh """
+                           docker run --rm --name deploy-report-${BUILD_NUMBER} \\
+                             -v ${allureReportHostPath}:/src_report:ro \\   # 源报告路径
+                             -v ${env.ALLURE_NGINX_HOST_PATH}:/dest_nginx:rw \\ # 目标 Nginx 路径
+                             -v ${scriptsHostPath}:/scripts:ro \\      # 挂载脚本目录
+                             --user root \\
+                             # 需要确保 alpine:latest 里有 cp, find, mkdir, rm, sh, iconv (可能需要安装 coreutils, musl-utils)
+                             # 或者使用包含这些工具的基础镜像，甚至项目本身的镜像（如果工具齐全）
+                             # 为了简单起见，这里假设 alpine 有足够工具，但 iconv 可能没有，脚本内部做了检查
+                             alpine:latest \\
+                             sh /scripts/deploy_allure_report.sh /src_report /dest_nginx # 执行脚本
+                           """
+                           echo "报告已部署到 Nginx 目录。"
 
-executor = {
-    'name': ci_name,
-    'type': 'jenkins',
-    'url': build_url,
-    'buildName': f'{job_name} #{build_number}',
-    'buildUrl': build_url
-}
-try:
-    exec_file_path = os.path.join(allure_results_dir, 'executor.json')
-    with open(exec_file_path, 'w', encoding='utf-8') as f:
-        json.dump(executor, f, ensure_ascii=False, indent=2)
-    print(f'执行器信息写入成功: {exec_file_path}')
-except Exception as e:
-    print(f'写入执行器信息失败: {e}')
 
-categories = [
-    {'name': '测试失败', 'matchedStatuses': ['failed'], 'messageRegex': '.*AssertionError.*'},
-    {'name': '环境问题', 'matchedStatuses': ['broken', 'failed'], 'messageRegex': '.*(ConnectionError|TimeoutError|WebDriverException).*'},
-    {'name': '产品缺陷', 'matchedStatuses': ['failed'], 'messageRegex': '.*预期结果与实际结果不符.*'}
-]
-try:
-    cat_file_path = os.path.join(allure_results_dir, 'categories.json')
-    with open(cat_file_path, 'w', encoding='utf-8') as f:
-        json.dump(categories, f, ensure_ascii=False, indent=2)
-    print(f'分类信息写入成功: {cat_file_path}')
-except Exception as e:
-    print(f'写入分类信息失败: {e}')
+                           echo "发送邮件通知..."
+                           sh """
+                           echo "--- Sending notification email via run_and_notify.py ---"
+                           docker run --rm --name notify-${BUILD_NUMBER} \\
+                             -e CI=true \\
+                             -e CI_NAME="${env.CI_NAME}" \\
+                             -e APP_ENV=${params.APP_ENV} \\
+                             -e EMAIL_ENABLED=${params.SEND_EMAIL} \\
+                             -e EMAIL_PASSWORD='${EMAIL_PASSWORD}' \\
+                             -e EMAIL_SMTP_SERVER="smtp.qiye.aliyun.com" \\
+                             -e EMAIL_SMTP_PORT=465 \\
+                             -e EMAIL_SENDER="yzx@ylmt2b.com" \\
+                             -e EMAIL_RECIPIENTS="yzx@ylmt2b.com" \\
+                             -e EMAIL_USE_SSL=true \\
+                             -e ALLURE_PUBLIC_URL="${env.ALLURE_PUBLIC_URL}" \\
+                             -e TZ="Asia/Shanghai" \\
+                             -e ALLURE_RESULTS_DIR=/results \\
+                             -e ALLURE_REPORT_DIR=/report \\
+                             -v ${allureResultsHostPath}:/results:ro \\
+                             -v ${allureReportHostPath}:/report:ro \\
+                             -v /etc/localtime:/etc/localtime:ro \\
+                             -v ${WORKSPACE}:/workspace_host:ro \\
+                             --network host \\
+                             ${env.DOCKER_IMAGE} \\
+                             /bin/bash -c "\\
+                               echo '--- 复制项目文件到容器内 ---'; \\
+                               cp -r /workspace_host/. /app/; \\
+                               echo '检查通知脚本是否存在...'; \\
+                               ls -la /app/ci/scripts/; \\
+                               echo '执行邮件通知脚本...'; \\
+                               cd /app && python ci/scripts/run_and_notify.py \\
+                              "
+                           echo "通知脚本执行完毕。"
+                           """
 
-print('元数据写入脚本执行完毕')
-EOF
-                          " # End of bash -c command
-                        """
-                        echo "Allure 元数据写入完成。"
+                       } // End withCredentials
+                    } // End script
+               } // End steps
+           } // End stage '生成报告与通知'
+       } // End stages
 
-                        echo "开始生成 Allure 报告..."
-                        // 使用三双引号 """..."""
-                        sh """
-                        echo "--- Generating Allure report from host results in ${allureResultsHostPath} ---"
-                        docker run --rm --name allure-generate-${BUILD_NUMBER} \\
-                          -v ${allureResultsHostPath}:/results:ro \\
-                          -v ${allureReportHostPath}:/report:rw \\
-                          -v /etc/localtime:/etc/localtime:ro \\
-                          --user root \\
-                          ${env.DOCKER_IMAGE} \\
-                          /bin/bash -c "echo 'Generating report...'; ls -la /results; allure generate /results -o /report --clean"
-
-                        echo "Allure 报告已生成到 ${allureReportHostPath}"
-                        """
-
-                        echo "复制报告到 Nginx 目录并修正权限..."
-                        // 使用三双引号 """..."""
-                        sh """
-                        echo "--- Copying generated report from host path ${allureReportHostPath} to Nginx directory ${env.ALLURE_NGINX_HOST_PATH} and fixing permissions ---"
-                        # 首先确保目标目录存在
-                        docker run --rm --name prep-nginx-dir-${BUILD_NUMBER} \\
-                          -v ${env.ALLURE_NGINX_HOST_PATH}:/nginx_dir:rw \\
-                          --user root \\
-                          alpine:latest \\
-                          sh -c "\\
-                            echo 'Preparing Nginx directory...' && \\
-                            mkdir -p /nginx_dir && \\
-                            mkdir -p /nginx_dir/history && \\
-                            find /nginx_dir -type d -exec chmod 755 {} \\; && \\
-                            find /nginx_dir -type f -exec chmod 644 {} \\; && \\
-                            echo 'Nginx directory prepared.'\\
-                          "
-
-                        # 确保历史目录存在并保持不变 (内层 sh -c 使用单引号，内部 $ 需用 \ 转义)
-                        docker run --rm --name preserve-history-${BUILD_NUMBER} \\
-                          -v ${env.ALLURE_NGINX_HOST_PATH}:/dest:rw \\
-                          -v ${allureReportHostPath}:/src:ro \\
-                          --user root \\
-                          alpine:latest \\
-                          sh -c '\\
-                            echo "Preserving history directory..." && \\
-                            if [ -d "/dest/history" ]; then \\
-                              echo "History directory exists, backing up..." && \\
-                              mkdir -p /tmp/history_backup && \\
-                              cp -rp /dest/history/* /tmp/history_backup/ || echo "No files to copy" && \\
-                              echo "Ensuring UTF-8 encoding for JSON files..." && \\
-                              find /tmp/history_backup -name "*.json" -type f -exec sh -c '\\''\\
-                                # 内层 sh -c 单引号内，需转义 \$ 和 \$(...) 以免 Groovy 误解
-                                FILE="\\\$1" && \\ # 使用 \\\$1 转义 Groovy 的 $
-                                TEMP_FILE=\\$(mktemp) && \\ # 使用 \\$ 转义 Groovy 的 $
-                                cat "\\\$FILE" > "\\\$TEMP_FILE" && \\ # 使用 \\$ 转义 Groovy 的 $
-                                mv "\\\$FILE" "\\\$FILE.bak" && \\
-                                iconv -f utf-8 -t utf-8 -c "\\\$FILE.bak" > "\\\$FILE" && \\
-                                rm "\\\$FILE.bak" \\
-                              '\\'' sh {} \\; || echo "No JSON files found" \\
-                            else \\
-                              echo "No history directory found, will create empty one" && \\
-                              mkdir -p /dest/history && \\
-                              echo "{}" > /dest/history/history.json && \\
-                              echo "[]" > /dest/history/history-trend.json && \\
-                              echo "[]" > /dest/history/duration-trend.json && \\
-                              echo "[]" > /dest/history/categories-trend.json && \\
-                              echo "[]" > /dest/history/retry-trend.json \\
-                            fi && \\
-                            echo "History directory preserved."\\
-                          ' # End outer sh -c
-
-                        # 复制报告并保持历史数据 (内层 sh -c 使用单引号，内部 $ 需用 \ 转义)
-                        docker run --rm --name report-copy-perm-${BUILD_NUMBER} \\
-                          -v ${allureReportHostPath}:/src:ro \\
-                          -v ${env.ALLURE_NGINX_HOST_PATH}:/dest:rw \\
-                          --user root \\
-                          alpine:latest \\
-                          sh -c '\\
-                            echo "Copying files..." && \\
-                            if [ -d "/dest/history" ]; then \\
-                              echo "Backing up history directory..." && \\
-                              mkdir -p /tmp/history && \\
-                              cp -rp /dest/history/* /tmp/history/ || echo "No history files to backup" \\
-                            fi && \\
-                            echo "Copying report files..." && \\
-                            cp -rf /src/* /dest/ && \\
-                            if [ -d "/tmp/history" ]; then \\
-                              echo "Restoring history directory..." && \\
-                              mkdir -p /dest/history && \\
-                              cp -rf /tmp/history/* /dest/history/ || echo "No history files to restore" \\
-                            fi && \\
-                            echo "Setting UTF-8 encoding for JSON files..." && \\
-                            find /dest -name "*.json" -type f -exec sh -c '\\''\\
-                              # 内层 sh -c 单引号内，需转义 \$ 以免 Groovy 误解
-                              FILE="\\\$1" && \\ # 使用 \\\$1 转义 Groovy 的 $
-                              if [ -s "\\\$FILE" ]; then \\ # 使用 \\$ 转义 Groovy 的 $
-                                mv "\\\$FILE" "\\\$FILE.bak" && \\
-                                iconv -f utf-8 -t utf-8 -c "\\\$FILE.bak" > "\\\$FILE" && \\
-                                rm "\\\$FILE.bak" \\
-                              fi\\
-                            '\\'' sh {} \\; || echo "No JSON files to process" && \\
-                            echo "Fixing permissions..." && \\
-                            chmod -R 755 /dest/\\
-                          ' # End outer sh -c
-                        echo "报告已复制到 Nginx 目录并修正权限。"
-                        """
-
-                        echo "发送邮件通知..."
-                        // 使用三双引号 """..."""
-                        sh """
-                        echo "--- Sending notification email via run_and_notify.py ---"
-                        docker run --rm --name notify-${BUILD_NUMBER} \\
-                          -e CI=true \\
-                          -e CI_NAME="${env.CI_NAME}" \\
-                          -e APP_ENV=${params.APP_ENV} \\
-                          -e EMAIL_ENABLED=${params.SEND_EMAIL} \\
-                          -e EMAIL_PASSWORD='${EMAIL_PASSWORD}' \\ # 单引号保护密码变量
-                          -e EMAIL_SMTP_SERVER="smtp.qiye.aliyun.com" \\
-                          -e EMAIL_SMTP_PORT=465 \\
-                          -e EMAIL_SENDER="yzx@ylmt2b.com" \\
-                          -e EMAIL_RECIPIENTS="yzx@ylmt2b.com" \\
-                          -e EMAIL_USE_SSL=true \\
-                          -e ALLURE_PUBLIC_URL="${env.ALLURE_PUBLIC_URL}" \\
-                          -e TZ="Asia/Shanghai" \\
-                          -e ALLURE_RESULTS_DIR=/results \\
-                          -e ALLURE_REPORT_DIR=/report \\
-                          -v ${allureResultsHostPath}:/results:ro \\
-                          -v ${allureReportHostPath}:/report:ro \\
-                          -v /etc/localtime:/etc/localtime:ro \\
-                          -v ${WORKSPACE}:/workspace_host:ro \\
-                          --network host \\
-                          ${env.DOCKER_IMAGE} \\
-                          /bin/bash -c "\\
-                            echo '--- 复制项目文件到容器内 ---'; \\
-                            cp -r /workspace_host/. /app/; \\
-                            echo '检查通知脚本是否存在...'; \\
-                            ls -la /app/ci/scripts/; \\
-                            echo '执行邮件通知脚本...'; \\
-                            cd /app && python ci/scripts/run_and_notify.py \\
-                          "
-                        echo "通知脚本执行完毕。"
-                        """
-
-                    } // End withCredentials
-                 } // End script
-            } // End steps
-        } // End stage '生成报告与通知'
-    } // End stages
-
-    post {
-        always {
-            echo "Pipeline 完成. 清理工作空间..."
-            script {
-                def testTypes = []
-                if (params.RUN_WEB_TESTS) testTypes.add("Web")
-                if (params.RUN_API_TESTS) testTypes.add("API")
-                if (params.RUN_WECHAT_TESTS) testTypes.add("微信")
-                if (params.RUN_APP_TESTS) testTypes.add("App")
-                if (testTypes.isEmpty()) testTypes.add("未选择")
-                currentBuild.description = "${params.APP_ENV.toUpperCase()} 环境 [${testTypes.join(', ')}] - <a href='${env.ALLURE_PUBLIC_URL}' target='_blank'>查看报告</a>"
-            }
-            cleanWs()
-            echo "工作空间已清理。"
-            sh "rm -f ${WORKSPACE}/tmp_write_metadata.py || true"
-            echo "临时脚本文件已清理。"
-        }
-        success {
-            echo "Pipeline 成功完成！"
-        }
-        failure {
-            echo "Pipeline 执行失败，请检查控制台输出获取详细信息。"
-        }
-    } // End post
-} // End pipeline
+       post {
+           always {
+               echo "Pipeline 完成. 清理工作空间..."
+               script {
+                   def testTypes = []
+                   if (params.RUN_WEB_TESTS) testTypes.add("Web")
+                   if (params.RUN_API_TESTS) testTypes.add("API")
+                   if (params.RUN_WECHAT_TESTS) testTypes.add("微信")
+                   if (params.RUN_APP_TESTS) testTypes.add("App")
+                   if (testTypes.isEmpty()) testTypes.add("未选择")
+                   currentBuild.description = "${params.APP_ENV.toUpperCase()} 环境 [${testTypes.join(', ')}] - <a href='${env.ALLURE_PUBLIC_URL}' target='_blank'>查看报告</a>"
+               }
+               cleanWs()
+               echo "工作空间已清理。"
+               sh "rm -f ${WORKSPACE}/tmp_write_metadata.py || true" # 这行仍可能无效
+               echo "临时脚本文件已清理。"
+           }
+           success {
+               echo "Pipeline 成功完成！"
+           }
+           failure {
+               echo "Pipeline 执行失败，请检查控制台输出获取详细信息。"
+           }
+       } // End post
+   } // End pipeline
