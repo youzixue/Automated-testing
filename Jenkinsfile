@@ -205,20 +205,11 @@ pipeline {
                        withCredentials([string(credentialsId: env.EMAIL_PASSWORD_CREDENTIALS_ID, variable: 'EMAIL_PASSWORD')]) {
 
                            echo "写入 Allure 元数据文件到 ${env.HOST_ALLURE_RESULTS_PATH} (在宿主机上)..."
+                           // --- 修改开始 ---
                            sh """
-                           docker run --rm --name write-metadata-${BUILD_NUMBER} \\
-                             -e APP_ENV=${params.APP_ENV} \\
-                             # -e CI_NAME="${env.CI_NAME}" \\
-                             -e BUILD_NUMBER=${BUILD_NUMBER} \\
-                             -e BUILD_URL=${env.BUILD_URL} \\
-                             -e JOB_NAME=${env.JOB_NAME} \\
-                             -v ${env.HOST_WORKSPACE_PATH}:/workspace:ro \\
-                             -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
-                             -v /etc/localtime:/etc/localtime:ro \\
-                             --user root \\
-                             ${env.DOCKER_IMAGE} \\
-                             python /workspace/ci/scripts/write_allure_metadata.py /results_out
+                           docker run --rm --name write-metadata-${BUILD_NUMBER} -e APP_ENV=${params.APP_ENV} -e BUILD_NUMBER=${BUILD_NUMBER} -e BUILD_URL=${env.BUILD_URL} -e JOB_NAME=${env.JOB_NAME} -v ${env.HOST_WORKSPACE_PATH}:/workspace:ro -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw -v /etc/localtime:/etc/localtime:ro --user root ${env.DOCKER_IMAGE} python /workspace/ci/scripts/write_allure_metadata.py /results_out
                            """
+                           // --- 修改结束 ---
                            echo "Allure 元数据写入完成。"
 
                            echo "开始生成 Allure 报告 (从宿主机路径 ${env.HOST_ALLURE_RESULTS_PATH} 生成到 ${env.HOST_ALLURE_REPORT_PATH})..."
