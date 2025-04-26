@@ -60,7 +60,7 @@ RUN echo "# 紧急修复权限问题" >> /app/ci/scripts/hotfix.log && \
     # 修复JSON处理代码，确保使用UTF-8编码
     sed -i 's/json.load(f)/json.loads(f.read())/g' /app/ci/scripts/utils.py && \
     # 增加更多调试输出
-    sed -i '/def get_allure_summary/a \    print(f"[DEBUG] 环境变量: ALLURE_REPORT_DIR={os.environ.get(\\"ALLURE_REPORT_DIR\\", \\"未设置\\")}")' /app/ci/scripts/utils.py && \
+    sed -i '/def get_allure_summary/a \    print(f"[DEBUG] 环境变量: ALLURE_REPORT_DIR={os.environ.get(\'ALLURE_REPORT_DIR\', \'未设置\')}")' /app/ci/scripts/utils.py && \
     echo "# 编码修复完成" >> /app/ci/scripts/hotfix.log
 
 # 安装项目依赖（--no-root表示只安装依赖，不安装当前项目）
