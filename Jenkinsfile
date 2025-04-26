@@ -109,6 +109,7 @@ pipeline {
                                   -e PYTEST_RERUNS="2" \\
                                   -e SKIP_REPORT="true" \\
                                   -e SKIP_NOTIFY="true" \\
+                                  -v ${WORKSPACE}:/app:rw \\
                                   -v ${allureResultsHostPath}:/results_out:rw \\
                                   --workdir /app \\
                                   -v /etc/localtime:/etc/localtime:ro \\
@@ -136,6 +137,7 @@ pipeline {
                                   -e PYTEST_RERUNS="2" \\
                                   -e SKIP_REPORT="true" \\
                                   -e SKIP_NOTIFY="true" \\
+                                  -v ${WORKSPACE}:/app:rw \\
                                   -v ${allureResultsHostPath}:/results_out:rw \\
                                   --workdir /app \\
                                   -v /etc/localtime:/etc/localtime:ro \\
@@ -162,6 +164,7 @@ pipeline {
                                   -e PYTEST_RERUNS="2" \\
                                   -e SKIP_REPORT="true" \\
                                   -e SKIP_NOTIFY="true" \\
+                                  -v ${WORKSPACE}:/app:rw \\
                                   -v ${allureResultsHostPath}:/results_out:rw \\
                                   --workdir /app \\
                                   -v /etc/localtime:/etc/localtime:ro \\
@@ -188,6 +191,7 @@ pipeline {
                                   -e PYTEST_RERUNS="2" \\
                                   -e SKIP_REPORT="true" \\
                                   -e SKIP_NOTIFY="true" \\
+                                  -v ${WORKSPACE}:/app:rw \\
                                   -v ${allureResultsHostPath}:/results_out:rw \\
                                   --workdir /app \\
                                   -v /etc/localtime:/etc/localtime:ro \\
@@ -228,6 +232,7 @@ pipeline {
                              -e BUILD_NUMBER=${BUILD_NUMBER} \\
                              -e BUILD_URL=${env.BUILD_URL} \\
                              -e JOB_NAME=${env.JOB_NAME} \\
+                             -v ${WORKSPACE}:/app:ro \\
                              -v ${allureResultsHostPath}:/results_out:rw \\
                              -v /etc/localtime:/etc/localtime:ro \\
                              --user root \\
@@ -291,6 +296,7 @@ pipeline {
                              -e TZ="Asia/Shanghai" \\
                              -e ALLURE_RESULTS_DIR=/results \\
                              -e ALLURE_REPORT_DIR=/report \\
+                             -v ${WORKSPACE}:/app:ro \\
                              -v ${allureResultsHostPath}:/results:ro \\
                              -v ${allureReportHostPath}:/report:ro \\
                              -v /etc/localtime:/etc/localtime:ro \\
