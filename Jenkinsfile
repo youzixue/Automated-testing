@@ -365,37 +365,37 @@ EOF
                             find /nginx_dir -type f -exec chmod 644 {} \\; && \\
                             echo 'Nginx directory prepared.'\\
                           "
-                          
+
                         # 确保历史目录存在并保持不变
                         docker run --rm --name preserve-history-${BUILD_NUMBER} \\
                           -v ${env.ALLURE_NGINX_HOST_PATH}:/dest:rw \\
                           -v ${allureReportHostPath}:/src:ro \\
                           --user root \\
                           alpine:latest \\
-                          sh -c "\\
-                            echo 'Preserving history directory...' && \\
-                            if [ -d '/dest/history' ]; then \\
-                              echo 'History directory exists, backing up...' && \\
+                          sh -c '\\
+                            echo "Preserving history directory..." && \\
+                            if [ -d "/dest/history" ]; then \\
+                              echo "History directory exists, backing up..." && \\
                               mkdir -p /tmp/history_backup && \\
-                              cp -rp /dest/history/* /tmp/history_backup/ || echo 'No files to copy' && \\
-                              echo 'Ensuring UTF-8 encoding for JSON files...' && \\
-                              find /tmp/history_backup -name '*.json' -type f -exec sh -c '\\
+                              cp -rp /dest/history/* /tmp/history_backup/ || echo "No files to copy" && \\
+                              echo "Ensuring UTF-8 encoding for JSON files..." && \\
+                              find /tmp/history_backup -name "*.json" -type f -exec sh -c '\\''\\
                                 FILE={} && \\
-                                TEMP_FILE=\\\$(mktemp) && \\  # <-- 修复点：添加了反斜杠进行 Groovy 转义
-                                cat \\$FILE > \\$TEMP_FILE && \\
-                                mv \\$TEMP_FILE \\$FILE\\
-                              ' \\; || echo 'No JSON files found' \\
+                                TEMP_FILE=\$(mktemp) && \\  # <-- 已修正：去掉 \\\$ 和 \\\$(...) 前多余的 \\
+                                cat \$FILE > \$TEMP_FILE && \\
+                                mv \$TEMP_FILE \$FILE\\
+                              '\\'' \\; || echo "No JSON files found" \\
                             else \\
-                              echo 'No history directory found, will create empty one' && \\
+                              echo "No history directory found, will create empty one" && \\
                               mkdir -p /dest/history && \\
-                              echo '{}' > /dest/history/history.json && \\
-                              echo '[]' > /dest/history/history-trend.json && \\
-                              echo '[]' > /dest/history/duration-trend.json && \\
-                              echo '[]' > /dest/history/categories-trend.json && \\
-                              echo '[]' > /dest/history/retry-trend.json \\
+                              echo "{}" > /dest/history/history.json && \\
+                              echo "[]" > /dest/history/history-trend.json && \\
+                              echo "[]" > /dest/history/duration-trend.json && \\
+                              echo "[]" > /dest/history/categories-trend.json && \\
+                              echo "[]" > /dest/history/retry-trend.json \\
                             fi && \\
-                            echo 'History directory preserved.'\\
-                          "
+                            echo "History directory preserved."\\
+                          ' # End inner sh -c
 
                         # 复制报告并保持历史数据
                         docker run --rm --name report-copy-perm-${BUILD_NUMBER} \\
@@ -403,32 +403,32 @@ EOF
                           -v ${env.ALLURE_NGINX_HOST_PATH}:/dest:rw \\
                           --user root \\
                           alpine:latest \\
-                          sh -c "\\
-                            echo 'Copying files...' && \\
-                            if [ -d '/dest/history' ]; then \\
-                              echo 'Backing up history directory...' && \\
+                          sh -c '\\
+                            echo "Copying files..." && \\
+                            if [ -d "/dest/history" ]; then \\
+                              echo "Backing up history directory..." && \\
                               mkdir -p /tmp/history && \\
-                              cp -rp /dest/history/* /tmp/history/ || echo 'No history files to backup' \\
+                              cp -rp /dest/history/* /tmp/history/ || echo "No history files to backup" \\
                             fi && \\
-                            echo 'Copying report files...' && \\
+                            echo "Copying report files..." && \\
                             cp -rf /src/* /dest/ && \\
-                            if [ -d '/tmp/history' ]; then \\
-                              echo 'Restoring history directory...' && \\
+                            if [ -d "/tmp/history" ]; then \\
+                              echo "Restoring history directory..." && \\
                               mkdir -p /dest/history && \\
-                              cp -rf /tmp/history/* /dest/history/ || echo 'No history files to restore' \\
+                              cp -rf /tmp/history/* /dest/history/ || echo "No history files to restore" \\
                             fi && \\
-                            echo 'Setting UTF-8 encoding for JSON files...' && \\
-                            find /dest -name '*.json' -type f -exec sh -c '\\
+                            echo "Setting UTF-8 encoding for JSON files..." && \\
+                            find /dest -name "*.json" -type f -exec sh -c '\\''\\
                               FILE={} && \\
-                              if [ -s \\\"\\$FILE\\\" ]; then \\
-                                mv \\\"\\$FILE\\\" \\\"\\$FILE.bak\\\" && \\
-                                cat \\\"\\$FILE.bak\\\" > \\\"\\$FILE\\\" && \\
-                                rm \\\"\\$FILE.bak\\\" \\
+                              if [ -s \\\"\$FILE\\\" ]; then \\ # <-- 已修正：去掉 \\$ 前多余的 \\
+                                mv \\\"\$FILE\\\" \\\"\$FILE.bak\\\" && \\
+                                cat \\\"\$FILE.bak\\\" > \\\"\$FILE\\\" && \\
+                                rm \\\"\$FILE.bak\\\" \\
                               fi\\
-                            ' \\; || echo 'No JSON files to process' && \\
-                            echo 'Fixing permissions...' && \\
+                            '\\'' \\; || echo "No JSON files to process" && \\
+                            echo "Fixing permissions..." && \\
                             chmod -R 755 /dest/\\
-                          "
+                          ' # End inner sh -c
                         echo "报告已复制到 Nginx 目录并修正权限。"
                         """
 
@@ -488,6 +488,7 @@ EOF
             }
             cleanWs()
             echo "工作空间已清理。"
+            // 注意：这行清理可能无效或多余，因为脚本似乎并未在 WORKSPACE 创建此文件
             sh "rm -f ${WORKSPACE}/tmp_write_metadata.py || true"
             echo "临时脚本文件已清理。"
         }
