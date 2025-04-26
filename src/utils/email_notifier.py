@@ -68,22 +68,18 @@ class EmailNotifier:
             msg.attach(MIMEText(body, 'plain', 'utf-8'))
 
         try:
-            self.logger.info(f"准备发送邮件: {subject} -> {recipients}")
             if self.use_ssl:
-                # SSL方式（如465端口）
                 with smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, timeout=10) as server:
                     server.login(self.username, self.password)
                     server.sendmail(self.sender, recipients, msg.as_string())
             else:
-                # 非SSL方式（如25/587端口），可选TLS
                 with smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=10) as server:
                     if self.use_tls:
                         server.starttls()
                     server.login(self.username, self.password)
                     server.sendmail(self.sender, recipients, msg.as_string())
-            self.logger.info(f"邮件发送成功: {subject} -> {recipients}")
         except smtplib.SMTPException as e:
-            self.logger.error(f"邮件发送失败: {e}")
+            self.logger.error(f"邮件发送失败: {e}", exc_info=True)
             raise
 
     def send_text(

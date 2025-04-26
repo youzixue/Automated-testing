@@ -8,18 +8,24 @@ import os
 import time
 import platform
 import sys
+# import logging # 移除 logging 模块的导入
 
 # 将项目根目录添加到系统路径
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from src.utils.email_notifier import EmailNotifier
+from src.utils.log.manager import get_logger # 导入项目的 get_logger 函数
+
+# --- 使用项目标准日志工具获取 logger ---
+logger = get_logger(__name__) # 使用 get_logger 获取实例
 
 def send_report_email(summary, upload_success):
     """组装并发送HTML测试报告邮件"""
     smtp_server = os.environ.get("EMAIL_SMTP_SERVER", "smtp.qq.com")
     try:
         smtp_port = int(os.environ.get("EMAIL_SMTP_PORT", 465))
-    except:
+    except ValueError: # 更具体的异常类型
+        logger.warning(f"Invalid EMAIL_SMTP_PORT value, using default 465.")
         smtp_port = 465
     username = os.environ.get("EMAIL_SENDER", "your-email@qq.com")
     password = os.environ.get("EMAIL_PASSWORD", "your-password")
@@ -44,6 +50,7 @@ def send_report_email(summary, upload_success):
         else:
             os_info = f"{platform.system()} {platform.release()}"
     except Exception as e:
+        logger.warning(f"Could not determine OS info: {e}", exc_info=True) # 添加 exc_info
         os_info = "N/A"
     python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
     public_url = os.environ.get("ALLURE_PUBLIC_URL", "")
@@ -142,7 +149,8 @@ def send_report_email(summary, upload_success):
 </body>
 </html>
 """
-    print(f"[INFO] 准备发送HTML邮件，参数: 服务器={smtp_server}:{smtp_port}, SSL={use_ssl}, 发件人={sender}, 收件人={recipients}")
+    # --- 使用 logger 记录准备发送的信息 ---
+    logger.info(f"准备发送HTML邮件，参数: 服务器={{smtp_server}}:{{smtp_port}}, SSL={{use_ssl}}, 发件人={{sender}}, 收件人={{recipients}}")
     try:
         notifier = EmailNotifier(
             smtp_server=smtp_server,
@@ -151,17 +159,19 @@ def send_report_email(summary, upload_success):
             password=password,
             sender=sender,
             use_ssl=use_ssl,
-            use_tls=False
+            use_tls=False # 显式设置 use_tls
         )
         notifier.send_html(
             subject=subject,
             html_body=html_body,
             recipients=recipients
         )
-        print("[INFO] HTML邮件发送成功")
+        # --- 使用 logger 记录发送成功信息 ---
+        logger.info("HTML邮件发送成功")
     except Exception as e:
-        print(f"[ERROR] HTML邮件发送失败: {e}")
-        print(f"SMTP服务器: {smtp_server}:{smtp_port}")
-        print(f"发件人: {sender}")
-        print(f"收件人: {recipients}")
-        print(f"SSL: {use_ssl}")
+        # --- 使用 logger 记录错误信息，添加 exc_info=True 获取traceback ---
+        logger.error(f"HTML邮件发送失败: {{e}}", exc_info=True)
+        logger.error(f"SMTP服务器: {{smtp_server}}:{{smtp_port}}")
+        logger.error(f"发件人: {{sender}}")
+        logger.error(f"收件人: {{recipients}}")
+        logger.error(f"SSL: {{use_ssl}}")
