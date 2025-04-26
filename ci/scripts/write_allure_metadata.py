@@ -12,13 +12,13 @@ def get_os_info():
                 win_version = sys.getwindowsversion()
                 build_number = win_version.build
                 if build_number >= 22000:
-                    return f"Windows 11 ({{platform.version()}})"
+                    return f"Windows 11 ({platform.version()})"
                 else:
-                    return f"Windows 10 ({{platform.version()}})"
+                    return f"Windows 10 ({platform.version()})"
             else:
-                return f"Windows {{platform.release()}} ({{platform.version()}})"
+                return f"Windows {platform.release()} ({platform.version()})"
         elif platform.system() == "Darwin":
-            return f"macOS {{platform.release()}} ({{platform.mac_ver()[0]}})"
+            return f"macOS {platform.release()} ({platform.mac_ver()[0]})"
         else:
             # 尝试获取更友好的Linux发行版名称
             try:
@@ -28,7 +28,7 @@ def get_os_info():
                             return line.split('=')[1].strip().strip('"')
             except FileNotFoundError:
                  pass # 如果文件不存在，回退到基本信息
-            return f"{{platform.system()}} {{platform.release()}}"
+            return f"{platform.system()} {platform.release()}"
     except Exception:
         return "N/A"
 
@@ -44,17 +44,17 @@ def main():
     # 不再需要 Jenkins 构建相关的环境变量
 
     print(f'为Allure报告生成元数据信息')
-    print(f'环境: {{app_env}}')
-    print(f'结果目录: {{allure_results_dir}}')
+    print(f'环境: {app_env}')
+    print(f'结果目录: {allure_results_dir}')
 
     try:
         os.makedirs(allure_results_dir, exist_ok=True)
     except Exception as e:
-        print(f'创建结果目录失败: {{e}}')
+        print(f'创建结果目录失败: {e}')
         sys.exit(1) # 创建失败则退出
 
     # environment.properties - 构建期望的环境信息
-    python_version = f"{{sys.version_info.major}}.{{sys.version_info.minor}}.{{sys.version_info.micro}}"
+    python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
     os_info = get_os_info()
 
     environment = {
@@ -73,10 +73,10 @@ def main():
             for key, value in environment.items():
                 # 替换换行符，避免多行值破坏格式
                 value_str = str(value).replace('\\n', ' ').replace('\\r', '')
-                f.write(f'{{key}}={{value_str}}\\n') # 使用标准换行符
-        print(f'环境信息写入成功: {{env_file_path}}')
+                f.write(f'{key}={value_str}\n') # 使用标准换行符
+        print(f'环境信息写入成功: {env_file_path}')
     except Exception as e:
-        print(f'写入环境信息失败: {{e}}')
+        print(f'写入环境信息失败: {e}')
 
     # executor.json - 可以保留，但使用固定名称或 APP_ENV
     # 不再需要 Jenkins 构建相关的环境变量
@@ -85,19 +85,19 @@ def main():
     build_number = os.environ.get('BUILD_NUMBER', 'N/A')
 
     executor = {
-        'name': f'{{app_env.upper()}} Environment', # 使用环境名
+        'name': f'{app_env.upper()} Environment', # 使用环境名
         'type': 'ci', # 通用类型
         'url': build_url,
-        'buildName': f'{{job_name}} #{{build_number}}',
+        'buildName': f'{job_name} #{build_number}',
         'buildUrl': build_url
     }
     try:
         exec_file_path = os.path.join(allure_results_dir, 'executor.json')
         with open(exec_file_path, 'w', encoding='utf-8') as f:
             json.dump(executor, f, ensure_ascii=False, indent=2)
-        print(f'执行器信息写入成功: {{exec_file_path}}')
+        print(f'执行器信息写入成功: {exec_file_path}')
     except Exception as e:
-        print(f'写入执行器信息失败: {{e}}')
+        print(f'写入执行器信息失败: {e}')
 
     # categories.json (保持不变)
     categories = [
@@ -109,9 +109,9 @@ def main():
         cat_file_path = os.path.join(allure_results_dir, 'categories.json')
         with open(cat_file_path, 'w', encoding='utf-8') as f:
             json.dump(categories, f, ensure_ascii=False, indent=2)
-        print(f'分类信息写入成功: {{cat_file_path}}')
+        print(f'分类信息写入成功: {cat_file_path}')
     except Exception as e:
-        print(f'写入分类信息失败: {{e}}')
+        print(f'写入分类信息失败: {e}')
 
     print('元数据写入脚本执行完毕')
 
