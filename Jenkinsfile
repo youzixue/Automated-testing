@@ -60,11 +60,22 @@ pipeline {
                 rm -rf ${WORKSPACE}/output/allure-results/*
 
                 echo "确保 Nginx 目录 ${env.ALLURE_NGINX_HOST_PATH} 存在并设置权限..."
-                docker run --rm \\
-                  -v /usr/share/nginx/html:/nginx_html \\
+                docker run --rm -v /usr/share/nginx/html:/nginx_html --user root alpine:latest sh -c "mkdir -p /nginx_html/${ALLURE_NGINX_DIR_NAME} && chmod -R 777 /nginx_html/${ALLURE_NGINX_DIR_NAME}"
+
+                echo "修复 utils.py 中的 f-string 语法问题..."
+                # 检查容器是否存在
+                docker run --rm --name fix-utils-${BUILD_NUMBER} \\
+                  -v ${WORKSPACE}:/workspace \\
+                  --workdir /workspace \\
                   --user root \\
-                  alpine:latest \\
-                  sh -c "mkdir -p /nginx_html/${ALLURE_NGINX_DIR_NAME} && chmod -R 777 /nginx_html/${ALLURE_NGINX_DIR_NAME}"
+                  python:3.11-slim \\
+                  bash -c 'if grep -q "os.environ.get(\\\\"ALLURE_REPORT_DIR\\\\"" ci/scripts/utils.py; then \\
+                    echo "检测到 f-string 语法问题，修复中..."; \\
+                    sed -i "s/os.environ.get(\\\\\\"ALLURE_REPORT_DIR\\\\\\", \\\\\\"未设置\\\\\\")/os.environ.get(\\'ALLURE_REPORT_DIR\\', \\'未设置\\')/g" ci/scripts/utils.py; \\
+                    echo "修复完成"; \\
+                  else \\
+                    echo "未检测到 f-string 语法问题"; \\
+                  fi'
 
                 echo "环境准备完成。"
                 """
