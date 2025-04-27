@@ -16,6 +16,37 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from src.utils.email_notifier import EmailNotifier
 from src.utils.log.manager import get_logger # 导入项目的 get_logger 函数
 
+# 尝试导入 format_duration，如果 notify.py 需要它
+# 注意：如果 run_and_notify.py 再次被修改，可能需要调整这里的导入或本地实现
+try:
+    # 假设 format_duration 现在在 utils.py 中（如果移到那里）或 run_and_notify.py
+    from ci.scripts.utils import get_allure_summary # get_allure_summary 在 utils.py
+    # 如果需要格式化时长，需要一个 format_duration 函数
+    # from ci.scripts.some_module import format_duration
+    # 或者在这里定义
+    def format_duration(duration_ms: int) -> str:
+        """将毫秒持续时间转换为更易读的 'Xm Ys Zms' 格式字符串。"""
+        if duration_ms < 0:
+            return "N/A"
+        seconds = duration_ms // 1000
+        milliseconds = duration_ms % 1000
+        minutes = seconds // 60
+        seconds %= 60
+        parts = []
+        if minutes > 0:
+            parts.append(f"{minutes}m")
+        if seconds > 0:
+            parts.append(f"{seconds}s")
+        if milliseconds > 0 or not parts:
+            parts.append(f"{milliseconds}ms")
+        return " ".join(parts) if parts else "0ms"
+
+except ImportError:
+    logger.error("无法导入必要的工具函数 (get_allure_summary 或 format_duration)", exc_info=True)
+    # 定义一个兜底的 format_duration，以防万一
+    def format_duration(duration_ms: int) -> str: return f"{duration_ms} ms" if isinstance(duration_ms, int) else "N/A"
+
+
 # --- 使用项目标准日志工具获取 logger ---
 logger = get_logger(__name__) # 使用 get_logger 获取实例
 
@@ -23,8 +54,7 @@ def send_report_email(summary: Optional[Dict]):
     """组装并发送HTML测试报告邮件。
 
     Args:
-        summary: 包含测试统计信息的字典，或者在 CI 通知模式下可能只包含 {"status": "..."}。
-                 如果为 None 或缺少 'total' 键，则不显示详细统计信息。
+        summary: 包含测试统计信息的字典，或者在无法获取时为 None。
     """
     smtp_server = os.environ.get("EMAIL_SMTP_SERVER", "smtp.qq.com")
     try:
@@ -47,11 +77,19 @@ def send_report_email(summary: Optional[Dict]):
     build_number = os.environ.get('BUILD_NUMBER', 'N/A')
     build_status = os.environ.get("BUILD_STATUS", "UNKNOWN") # Jenkins 构建状态
 
-    # 确定是否显示详细统计信息
+    # 确定是否显示详细统计信息 (summary 存在且包含 total)
     show_detailed_stats = summary is not None and 'total' in summary
 
-    # 邮件标题
-    subject = f"【自动化测试】{job_name} #{build_number} - {test_env} 环境 - {build_status}"
+    # --- 邮件标题 --- 
+    # 根据是否有统计数据调整标题
+    if show_detailed_stats:
+        passed = summary.get('passed', 0)
+        total = summary.get('total', 0)
+        pass_rate_title = f"{passed}/{total}" if total > 0 else "0/0"
+        subject = f"【自动化测试】{job_name} #{build_number} - {test_env} 环境 - 通过率: {pass_rate_title} - {build_status}"
+    else:
+        subject = f"【自动化测试】{job_name} #{build_number} - {test_env} 环境 - {build_status} (无详细统计)"
+
 
     # 获取操作系统和 Python 版本信息
     try:
@@ -128,8 +166,8 @@ def send_report_email(summary: Optional[Dict]):
         broken = summary.get('broken', 0)
         skipped = summary.get('skipped', 0)
         total = summary.get('total', 0)
-        # duration_ms = summary.get('duration', 0) # 持续时间信息不再可靠获取，从邮件中移除
-        # exec_time_str = format_duration(duration_ms)
+        duration_ms = summary.get('duration', 0) # 获取毫秒时长
+        exec_time_str = format_duration(duration_ms) # 格式化时长
         pass_rate = f"{(passed / total * 100):.1f}%" if total > 0 else "N/A"
         
         pass_color = "#28a745" if passed > 0 else "#888"
@@ -163,14 +201,14 @@ def send_report_email(summary: Optional[Dict]):
     <div class="details">
         <h4>测试结果详情</h4>
         <p><strong>通过率:</strong> {pass_rate}</p>
-        <!-- <p><strong>执行时间:</strong> {exec_time_str}</p> --> <!-- 移除了执行时间 -->
+        <p><strong>执行时间:</strong> {exec_time_str}</p> <!-- 恢复执行时间 -->
     </div>
         """
     else:
         # 如果没有详细统计数据，显示提示信息
         html_body += '''
     <div class="details">
-        <p style="text-align: center; color: #888;">详细测试统计信息请查看完整报告。</p>
+        <p style="text-align: center; color: #888;">无法获取详细测试统计信息，请查看完整报告。</p>
     </div>
         '''
 
