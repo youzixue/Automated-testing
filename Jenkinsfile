@@ -249,17 +249,26 @@ pipeline {
                            """
                            echo "Allure 元数据写入完成。"
 
-                           // --- 2. 修正 allure-results 目录权限 (使用 Docker) ---
+                           // --- 2. 修正 allure-results 目录权限 (使用 Docker chown/chmod) ---
                            echo "修正宿主机目录 ${env.HOST_ALLURE_RESULTS_PATH} 的权限 (使用 Docker)..."
-                           // 启动一个临时的 root 容器来执行 chmod
+                           // 启动一个临时的 root 容器来执行 chown 和 chmod
+                           // 尝试将所有者改为 UID 1000, GID 1000 (常见的 Jenkins Docker UID/GID)
+                           // 并确保所有用户都有读取权限
                            sh """
-                           docker run --rm --name chmod-results-${BUILD_NUMBER} \\
+                           docker run --rm --name chown-chmod-results-${BUILD_NUMBER} \\
                              -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_to_fix:rw \\
                              --user root \\
                              ${env.DOCKER_IMAGE} \\
-                             chmod -R a+r /results_to_fix
+                             sh -c 'chown -R 1000:1000 /results_to_fix || echo "chown to 1000:1000 failed, continuing..."; chmod -R a+r /results_to_fix || echo "chmod failed!"'
                            """
-                           echo "权限修正完成。"
+                           echo "权限修正尝试完成。"
+
+                           // --- 2.5 验证 Agent 是否能看到正确的权限 ---
+                           echo "从 Agent 验证 ${WORKSPACE}/output/allure-results 的权限..."
+                           // 使用 ls -ln 显示数字 UID/GID，忽略错误以便继续执行
+                           sh script: "ls -ln ${WORKSPACE}/output/allure-results || echo '无法列出 allure-results 目录内容'", returnStatus: true
+                           sh script: "ls -l ${WORKSPACE}/output/allure-results/executor.json || echo '无法列出 executor.json'", returnStatus: true
+
 
                            // --- 3. 使用 Allure Jenkins 插件生成和归档报告 ---
                            echo "使用 Allure Jenkins 插件处理 ${WORKSPACE}/output/allure-results 中的结果..."
@@ -310,8 +319,16 @@ pipeline {
                        } // End withCredentials
                    } catch (err) {
                        echo "Post-build 阶段出现错误: ${err}"
+                       // 检查 allureStepSuccess 标志，如果 Allure 步骤本身失败，则标记构建为 FAILURE
                        if (!allureStepSuccess) {
                            currentBuild.result = 'FAILURE'
+                           // 如果是因为 Allure 插件失败，确保 allureReportUrl 为空或提示信息
+                           allureReportUrl = "(报告生成失败)"
+                       } else {
+                           // 如果是 Allure 之后的步骤（如邮件）失败，可能标记为 UNSTABLE
+                           if (currentBuild.result == null || currentBuild.result == 'SUCCESS') {
+                              currentBuild.result = 'UNSTABLE'
+                           }
                        }
                    } finally {
                        // --- 5. 设置构建描述 ---
@@ -321,8 +338,13 @@ pipeline {
                        if (params.RUN_WECHAT_TESTS) testTypes.add("微信")
                        if (params.RUN_APP_TESTS) testTypes.add("App")
                        if (testTypes.isEmpty()) testTypes.add("未选择")
+
+                       // 确保 finalStatus 反映了 catch 块中可能设置的失败状态
                        def finalStatus = currentBuild.result ?: 'SUCCESS'
-                       def reportLink = allureReportUrl ? "<a href='${allureReportUrl}' target='_blank'>查看报告</a>" : "(报告未生成)"
+
+                       // 确保 reportLink 能反映 allureReportUrl 可能的变化
+                       def reportLink = allureReportUrl.startsWith("http") ? "<a href='${allureReportUrl}' target='_blank'>查看报告</a>" : allureReportUrl ?: "(报告链接不可用)"
+
                        currentBuild.description = "${params.APP_ENV.toUpperCase()} 环境 [${testTypes.join(', ')}] - ${finalStatus} - ${reportLink}"
 
                        // --- 6. 清理工作空间 ---
