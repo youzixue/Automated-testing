@@ -50,7 +50,8 @@ def write_allure_environment(results_dir, app_env):
         'OS': os_info,
         'TEST_FRAMEWORK': 'pytest',
         'UI_AUTOMATION': 'Playwright',
-        'API_AUTOMATION': 'httpx'
+        'API_AUTOMATION': 'httpx',
+        'REPORT_TOOL': 'Allure 2.x'
     }
     env_file_path = os.path.join(results_dir, 'environment.properties')
     try:
@@ -84,8 +85,8 @@ def write_allure_executor(results_dir):
         "type": "jenkins", # 执行器类型
         "url": os.environ.get('JENKINS_URL', '#'), # Jenkins 主 URL
         "buildOrder": timestamp_build_order, # <-- 使用格式化的时间戳
-        "buildName": f"{job_name} #{build_number}", # 构建名称（可以包含原始构建号）
-        "buildUrl": build_url, # Jenkins 构建 URL
+        "buildName": timestamp_build_order, # <-- 修改这里，使用时间戳作为显示名称
+        "buildUrl": build_url, # Jenkins 构建 URL (链接保持不变)
         "reportName": "自动化测试报告", # Allure 报告名称
         "reportUrl": report_url # Allure 报告的公共访问 URL
     }
