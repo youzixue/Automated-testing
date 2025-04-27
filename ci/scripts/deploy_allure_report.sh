@@ -1,94 +1,41 @@
-    #!/bin/sh
-    # deploy_allure_report.sh: Handles Allure history, copies report, fixes permissions and encoding.
-    set -e
+#!/bin/sh
+# deploy_allure_report.sh: 复制 Allure 报告到目标目录并修正权限。
+# 假设源报告目录已包含由 Allure generate 生成的、合并了历史记录的正确 history 目录。
+set -e
 
-    SRC_REPORT_DIR="$1" # Path to the generated report inside the container (e.g., /report)
-    DEST_NGINX_DIR="$2" # Path to the Nginx directory inside the container (e.g., /dest)
+SRC_REPORT_DIR="$1" # 容器内生成的报告的路径 (例如, /report)
+DEST_NGINX_DIR="$2" # 容器内 Nginx 目标目录的路径 (例如, /dest_nginx)
 
-    if [ -z "$SRC_REPORT_DIR" ] || [ -z "$DEST_NGINX_DIR" ]; then
-      echo "错误：源报告目录或目标 Nginx 目录未提供！"
-      exit 1
-    fi
+if [ -z "$SRC_REPORT_DIR" ] || [ -z "$DEST_NGINX_DIR" ]; then
+  echo "错误：源报告目录或目标 Nginx 目录未提供！"
+  exit 1
+fi
 
-    HISTORY_DIR="${DEST_NGINX_DIR}/history"
-    TEMP_HISTORY_BACKUP="/tmp/history_backup_$$" # Use process ID for uniqueness
+echo "部署报告从 ${SRC_REPORT_DIR} 到 ${DEST_NGINX_DIR}"
 
-    echo "Deploying report from ${SRC_REPORT_DIR} to ${DEST_NGINX_DIR}"
+# 1. 确保目标 Nginx 目录存在
+echo "确保目标目录存在: ${DEST_NGINX_DIR}"
+mkdir -p "$DEST_NGINX_DIR"
+# 可选：如果希望每次都全新复制，可以在这里清空目标目录
+# echo "清空目标目录 ${DEST_NGINX_DIR}..."
+# rm -rf "${DEST_NGINX_DIR:?}/"*
 
-    # 1. Backup existing history if it exists
-    if [ -d "$HISTORY_DIR" ]; then
-      echo "History directory exists, backing up to ${TEMP_HISTORY_BACKUP}..."
-      mkdir -p "$TEMP_HISTORY_BACKUP"
-      # Use cp -a to preserve attributes, ignore errors if dir is empty
-      cp -a "$HISTORY_DIR"/* "$TEMP_HISTORY_BACKUP/" 2>/dev/null || echo "No existing history files to backup."
+# 2. 复制新的报告文件 (包括正确的 history 目录)
+#    推荐使用 rsync，因为它更高效且能处理删除旧文件。
+echo "复制新的报告文件 (包含 history)..."
+if command -v rsync > /dev/null; then
+    # 使用 rsync 同步目录。--delete 会删除目标目录中存在但源目录中不存在的文件。
+    rsync -a --delete "${SRC_REPORT_DIR}/" "${DEST_NGINX_DIR}/"
+else
+    echo "警告: 未找到 rsync 命令，将使用 cp 命令。这可能较慢，并且不会清理目标目录中的旧文件。"
+    # 如果没有 rsync，则使用 cp 复制。注意：这不会删除目标目录中多余的文件。
+    # 为了确保完全覆盖，可以在步骤 1 中先清空目标目录。
+    cp -rf "${SRC_REPORT_DIR}/"* "${DEST_NGINX_DIR}/"
+fi
 
-      # Attempt to fix encoding on backup JSON files (requires iconv)
-      echo "Ensuring UTF-8 encoding for backed-up JSON files..."
-      if command -v iconv > /dev/null; then
-        find "$TEMP_HISTORY_BACKUP" -name "*.json" -type f -exec sh -c '
-          file="$1"
-          temp_file=$(mktemp)
-          if iconv -f utf-8 -t utf-8 -c "$file" > "$temp_file"; then
-            mv "$temp_file" "$file"
-          else
-            echo "Warning: iconv failed for $file, keeping original."
-            rm "$temp_file"
-          fi
-        ' sh {} \; || echo "No JSON files found in backup or iconv failed."
-      else
-          echo "Warning: iconv command not found. Skipping encoding fix for backup."
-      fi
-    else
-      echo "No existing history directory found."
-      # Ensure the history dir exists for the copy later
-      mkdir -p "$HISTORY_DIR"
-    fi
+# 3. 为整个目标目录修正权限
+#    根据需要调整权限设置。755 通常适用于 Web 服务器目录。
+echo "修正目标目录 ${DEST_NGINX_DIR} 的最终权限..."
+chmod -R 755 "${DEST_NGINX_DIR}"
 
-    # 2. Copy the new report files (overwriting previous report, except history)
-    echo "Copying new report files..."
-    # Use rsync for potentially better handling of large numbers of files
-    # Exclude the history directory from the source if it exists there
-    if command -v rsync > /dev/null; then
-        rsync -a --delete --exclude='history/' "${SRC_REPORT_DIR}/" "${DEST_NGINX_DIR}/"
-    else
-        echo "Warning: rsync not found, using cp. This might be slower."
-        # Copy all, then remove the new history if source had one
-        cp -rf "${SRC_REPORT_DIR}/"* "${DEST_NGINX_DIR}/"
-        if [ -d "${DEST_NGINX_DIR}/history" ]; then
-             # If we copied a history dir from source, remove it to restore the backup
-             # Check if backup exists before removing potentially good new history
-             if [ -d "$TEMP_HISTORY_BACKUP" ]; then
-                 echo "Removing history copied from source report..."
-                 rm -rf "${DEST_NGINX_DIR}/history"
-             else
-                 echo "Source report contained history, but no backup exists. Keeping history from source."
-             fi
-        fi
-    fi
-
-
-    # 3. Restore the backed-up history if backup exists
-    if [ -d "$TEMP_HISTORY_BACKUP" ]; then
-      echo "Restoring history directory..."
-      # Ensure destination history directory exists
-      mkdir -p "$HISTORY_DIR"
-      # Copy contents back
-      cp -a "$TEMP_HISTORY_BACKUP"/* "$HISTORY_DIR/" 2>/dev/null || echo "No history files to restore."
-      # Clean up backup
-      rm -rf "$TEMP_HISTORY_BACKUP"
-    elif [ ! -d "$HISTORY_DIR" ]; then
-        # If no backup and no history dir, create default empty history files
-        echo "Creating default empty history files..."
-        mkdir -p "$HISTORY_DIR"
-        echo "{}" > "${HISTORY_DIR}/history.json"
-        echo "[]" > "${HISTORY_DIR}/history-trend.json"
-        echo "[]" > "${HISTORY_DIR}/duration-trend.json"
-        echo "[]" > "${HISTORY_DIR}/categories-trend.json"
-        echo "[]" > "${HISTORY_DIR}/retry-trend.json"
-    fi
-
-    # 4. Fix permissions for the entire destination directory
-    echo "Fixing final permissions for ${DEST_NGINX_DIR}..."
-    chmod -R 755 "${DEST_NGINX_DIR}" # Or more specific if needed: find ... -exec ...
-
-    echo "Allure report deployment complete."
+echo "Allure 报告部署完成。"
