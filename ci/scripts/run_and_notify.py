@@ -290,7 +290,8 @@ def main():
         # 如果跳过生成，部署状态取决于测试是否上传了已存在的报告
         # 这里的逻辑可能需要根据具体 CI 流程调整
         # 暂时假设跳过生成时部署状态与测试成功与否无关，依赖后续通知步骤判断
-        deployment_successful = True # 假设跳过生成时，部署步骤不由这里决定
+        report_generation_successful = True 
+        deployment_successful = True 
 
     # --- 步骤 5: 发送通知 ---
     # 通知应能反映测试是否运行、报告是否生成、部署是否成功
