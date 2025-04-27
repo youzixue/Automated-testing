@@ -75,11 +75,6 @@ def main():
     # --- 直接发送通知 ---
     _send_notification()
 
-    # 不再需要计算和记录时长
-    # end_time = time.time()
-    # total_duration = format_duration(int((end_time - start_time) * 1000))
-    # logger.info(f"run_and_notify 通知脚本在 {total_duration} 内完成。")
-
     # 在 CI 通知模式下，脚本的退出码不应影响 Jenkins 构建状态
     logger.info("通知脚本执行完毕，退出状态为 0。")
     sys.exit(0)

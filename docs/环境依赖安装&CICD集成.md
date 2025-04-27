@@ -8,7 +8,7 @@
 - [4. 安装项目依赖](#4-安装项目依赖)
 - [5. 配置环境变量与测试数据分离](#5-配置环境变量与测试数据分离)
 - [6. Playwright浏览器驱动安装](#6-playwright浏览器驱动安装)
-- [7. Allure CLI（测试报告工具）](#7-allure-cli测试报告工具) 
+- [7. Allure CLI（测试报告工具）](#7-allure-cli测试报告工具)
 - [8. 运行自动化测试与报告生成](#8-运行自动化测试与报告生成)
 - [9. 测试数据分离与管理](#9-测试数据分离与管理)
 - [10. CI/CD集成与敏感信息管理](#10-cicd集成与敏感信息管理)
@@ -130,7 +130,7 @@
 - **测试数据与测试逻辑分离，所有测试数据建议放在data/目录，结构和命名规范详见data/README.md，推荐YAML/JSON格式。**
 - CI环境（Jenkins/GitHub Actions等）：
   - 不要直接用.env，推荐在流水线或"构建参数"中设置环境变量。
-  - 敏感信息（如账号、密码、API密钥）用CI平台凭据管理。
+  - **强烈建议所有敏感信息和环境特定配置（如Git凭据、测试账号、API密钥、Web/API URL、邮件服务器配置等）都通过CI平台的凭据管理功能注入，避免写入代码、.env文件或镜像。**
 
 ---
 
@@ -154,56 +154,54 @@
 ---
 
 ## 7. Allure CLI（测试报告工具）
-- 下载并解压（支持两种格式：.tgz或.zip）：
-  ```bash
-  # 方法1：使用.tgz格式
-  cd /opt
-  wget https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.tgz
-  tar -zxvf allure-2.27.0.tgz
-  sudo mv allure-2.27.0 /opt/allure
-  sudo ln -s /opt/allure/bin/allure /usr/bin/allure
-  
-  # 方法2：使用.zip格式（与Dockerfile一致）
-  cd /opt
-  wget https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.zip
-  unzip allure-2.27.0.zip
-  sudo mv allure-2.27.0 /opt/allure
-  sudo ln -s /opt/allure/bin/allure /usr/bin/allure
-  
-  # 验证安装
-  allure --version
-  ```
-- Allure依赖Java 8+，如未安装请执行：
-  ```bash
-  # CentOS/RHEL
-  yum install java-1.8.0-openjdk -y
-  
-  # Ubuntu/Debian
-  apt-get update && apt-get install -y openjdk-8-jre
-  
-  # 设置JAVA_HOME（所有系统）
-  export JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java))))
-  export PATH=$JAVA_HOME/bin:$PATH
-  ```
-- `output/allure-results` 和 `output/reports/allure-report` 目录分别用于存放测试结果和最终生成的 HTML 报告。`output/` 目录已在 `.gitignore` 中全局忽略，避免提交临时文件和生成报告。
+- **重要性**: Allure CLI (Command Line Interface) 是生成最终 HTML 报告和本地预览报告的**必备工具**。虽然 Jenkins 流水线主要使用 Allure Jenkins 插件来展示报告，但为了支持邮件通知中的测试统计信息，CI 流程仍然需要在 Docker 容器内部**手动执行 `allure generate`** 来生成一个临时报告以提取 `summary.json`。因此，Allure CLI **必须被安装**：
+    1.  **对于本地开发/调试**: 你需要在本地机器上安装 Allure CLI。
+    2.  **对于 CI/CD 环境**: Allure CLI **必须包含在项目使用的 Docker 镜像 (`Dockerfile`) 中**。
+- 下载与安装 (以 Linux 为例):
+    ```bash
+    # 方法1：使用.tgz格式
+    cd /opt
+    wget https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.tgz
+    tar -zxvf allure-2.27.0.tgz
+    sudo mv allure-2.27.0 /opt/allure
+    sudo ln -s /opt/allure/bin/allure /usr/bin/allure
+
+    # 方法2：使用.zip格式（与项目 Dockerfile 一致）
+    cd /opt
+    wget https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.zip
+    unzip allure-2.27.0.zip
+    sudo mv allure-2.27.0 /opt/allure
+    sudo ln -s /opt/allure/bin/allure /usr/bin/allure
+
+    # 验证安装
+    allure --version
+    ```
+- Allure 依赖 Java 8+，请确保已正确安装并配置 `JAVA_HOME`。
+- `output/allure-results` 目录用于存放原始测试结果 JSON 文件，`output/reports/allure-report` (本地) 或 `output/reports/temp-allure-report-for-summary` (CI 临时) 目录用于存放生成的 HTML 报告。`output/` 目录已在 `.gitignore` 中全局忽略。
 
 ---
 
 ## 8. 运行自动化测试与报告生成
-- 运行测试：
+- **本地运行测试** (确保已配置好 .env 或环境变量)：
   ```bash
+  # 运行测试并将原始结果输出到 allure-results
   poetry run pytest --alluredir=output/allure-results
+
+  # (可选) 运行指定平台的测试
+  # poetry run pytest tests/web --alluredir=output/allure-results
   ```
-- 推荐用`poetry run pytest`保证依赖环境一致，避免直接用`pytest`导致依赖找不到。
-- 生成HTML报告：
+- 推荐用 `poetry run pytest` 保证依赖环境一致。
+- **本地生成 HTML 报告**：
   ```bash
+  # 从 allure-results 生成报告到 allure-report 目录
   allure generate output/allure-results -o output/reports/allure-report --clean
   ```
-- 本地预览报告：
+- **本地预览报告**：
   ```bash
+  # 在浏览器中打开本地报告
   allure open output/reports/allure-report
   ```
-- output目录下的allure-results、allure-report、logs、screenshots、coverage-data等均为临时/生成文件，已在.gitignore中全局忽略。
+- output 目录下的 allure-results、allure-report、logs、screenshots、coverage-data 等均为临时/生成文件，已在 `.gitignore` 中全局忽略。
 
 ---
 
@@ -217,10 +215,15 @@
 
 ## 10. CI/CD集成与敏感信息管理
 - 所有代码变更必须通过CI/CD流程验证，确保代码质量和自动化测试执行。
-- 推荐使用Jenkins、GitHub Actions等平台，参考@.github/workflows/test.yml。
-- CI环境必须用poetry安装依赖，使用缓存加速。
-- 测试环境与开发环境保持一致，Python版本3.11+。
-- **强烈建议所有敏感信息和环境特定配置（如Git凭据、测试账号、API密钥、Web/API URL、Allure报告基础URL、邮件服务器配置等）都通过CI平台的凭据管理功能注入，避免写入代码、.env文件或镜像。**
+- 推荐使用 Jenkins，参考项目根目录的 `Jenkinsfile`。
+- CI 环境必须用 poetry 安装依赖，使用缓存加速。
+- 测试环境与开发环境保持一致，Python 版本 3.11+。
+- **强烈建议所有敏感信息和环境特定配置（如 Git 凭据、测试账号、API 密钥、Web/API URL、邮件服务器配置等）都通过 CI 平台的凭据管理功能注入，避免写入代码、.env 文件或镜像。**
+- 当前 CI 流程主要依赖 `ci/scripts/` 目录下的以下脚本：
+    - `write_allure_metadata.py`: 写入报告元数据。
+    - `run_and_notify.py`: 邮件通知入口，调用 `utils.py` 获取摘要，调用 `notify.py` 发送邮件。
+    - `notify.py`: 邮件发送具体实现。
+    - `utils.py`: 提供辅助函数，如 `get_allure_summary`。
 - 参考 Jenkinsfile 示例，了解如何通过 `withCredentials` 块安全地使用这些凭据。
 
 ---
@@ -240,31 +243,31 @@
   COPY pyproject.toml poetry.lock /app/
 
   # 配置国内APT源加速系统依赖安装 (以清华为例)
-  RUN rm -rf /etc/apt/sources.list.d/* && \\
-      echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian bookworm main contrib non-free non-free-firmware" > /etc/apt/sources.list && \\
-      echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian bookworm-updates main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \\
-      echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian-security bookworm-security main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \\
-      apt-get clean && \\
-      apt-get update && apt-get install -y --no-install-recommends apt-transport-https ca-certificates && \\
+  RUN rm -rf /etc/apt/sources.list.d/* && \
+      echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian bookworm main contrib non-free non-free-firmware" > /etc/apt/sources.list && \
+      echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian bookworm-updates main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
+      echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian-security bookworm-security main contrib non-free non-free-firmware" >> /etc/apt/sources.list && \
+      apt-get clean && \
+      apt-get update && apt-get install -y --no-install-recommends apt-transport-https ca-certificates && \
       apt-get update
 
   # 安装 Playwright 浏览器依赖和常用工具 (openjdk用于Allure, unzip解压Allure)
-  RUN apt-get install -y --no-install-recommends \\
-      wget openjdk-17-jre-headless unzip \\
-      libglib2.0-0 libnss3 libnspr4 \\
-      libdbus-1-3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libexpat1 \\
-      libx11-6 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxrandr2 libgbm1 \\
-      libxcb1 libxkbcommon0 libpango-1.0-0 libcairo2 libasound2 libatspi2.0-0 \\
-      fonts-liberation libappindicator3-1 lsb-release \\
+  RUN apt-get install -y --no-install-recommends \
+      wget openjdk-17-jre-headless unzip \
+      libglib2.0-0 libnss3 libnspr4 \
+      libdbus-1-3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libexpat1 \
+      libx11-6 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxrandr2 libgbm1 \
+      libxcb1 libxkbcommon0 libpango-1.0-0 libcairo2 libasound2 libatspi2.0-0 \
+      fonts-liberation libappindicator3-1 lsb-release \
       && apt-get clean && rm -rf /var/lib/apt/lists/*
 
   # 配置pip和Poetry国内源 (以阿里云和清华为例，提供兜底)
-  RUN mkdir -p /root/.pip && \\
-      echo "[global]" > /root/.pip/pip.conf && \\
+  RUN mkdir -p /root/.pip && \
+      echo "[global]" > /root/.pip/pip.conf && \
       echo "index-url = https://mirrors.aliyun.com/pypi/simple/" >> /root/.pip/pip.conf
-  RUN pip install --upgrade pip \\
+  RUN pip install --upgrade pip \
       && pip install "poetry>=1.5.0"
-  RUN poetry config repositories.aliyun https://mirrors.aliyun.com/pypi/simple/ \\
+  RUN poetry config repositories.aliyun https://mirrors.aliyun.com/pypi/simple/ \
       && poetry config repositories.tuna https://pypi.tuna.tsinghua.edu.cn/simple
 
   # 全局禁用 Poetry 的虚拟环境创建，直接安装到系统Python环境
@@ -279,14 +282,14 @@
   ENV PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright
 
   # 安装playwright及其浏览器（使用国内源兜底）
-  RUN pip install playwright -i https://mirrors.aliyun.com/pypi/simple/ \\
-      || pip install playwright -i https://pypi.tuna.tsinghua.edu.cn/simple \\
+  RUN pip install playwright -i https://mirrors.aliyun.com/pypi/simple/ \
+      || pip install playwright -i https://pypi.tuna.tsinghua.edu.cn/simple \
       && playwright install
 
-  # 安装Allure CLI (从本地复制zip包)
+  # 安装Allure CLI (从本地复制zip包) - CI流程需要用它生成临时报告以获取邮件摘要
   COPY allure-2.27.0.zip /tmp/
-  RUN unzip /tmp/allure-2.27.0.zip -d /opt/ \\
-      && ln -s /opt/allure-2.27.0/bin/allure /usr/bin/allure \\
+  RUN unzip /tmp/allure-2.27.0.zip -d /opt/ \
+      && ln -s /opt/allure-2.27.0/bin/allure /usr/bin/allure \
       && rm /tmp/allure-2.27.0.zip
 
   # 注意：这个Dockerfile不包含项目代码(没有COPY . /app)，代码将在运行时挂载
@@ -300,68 +303,201 @@
 
   # 2. 构建环境镜像 (如果镜像不存在或Dockerfile/依赖更新)
   # 确保 allure-2.27.0.zip 文件在构建上下文中（项目根目录）
-  docker build -t automated-testing:dev . # 使用优化后的Dockerfile
+  docker build -t automated-testing:dev . 
 
-  # 3. 运行测试 (挂载代码和输出目录)
-  # 确保本地 output 目录存在: mkdir -p output/allure-results output/reports/allure-report
+  # 3. 运行测试 (挂载代码和Allure结果目录)
+  # 确保本地 output/allure-results 目录存在: mkdir -p output/allure-results
   # 注意：$(pwd) 获取的是当前宿主机路径
-  docker run --rm \\
-    -v $(pwd):/workspace:rw \\
-    -v $(pwd)/output/allure-results:/results_out:rw \\
-    -v $(pwd)/output/reports/allure-report:/report_out:rw \\
-    --workdir /workspace \\
-    automated-testing:dev \\
-    bash -c "poetry run pytest --alluredir=/results_out && allure generate /results_out -o /report_out --clean"
+  docker run --rm \
+    -v $(pwd):/workspace:rw \
+    -v $(pwd)/output/allure-results:/results_out:rw \
+    --workdir /workspace \
+    automated-testing:dev \
+    poetry run pytest --alluredir=/results_out
 
-  # 4. 本地预览报告 (如果需要)
+  # 4. 本地生成和预览报告 (如果需要)
+  allure generate output/allure-results -o output/reports/allure-report --clean
   allure open output/reports/allure-report
   ```
-- **CI脚本思路（以Jenkins Pipeline为例，演示卷挂载）：**
+- **CI脚本思路（以Jenkins Pipeline为例，演示卷挂载和当前流程）：**
   ```groovy
-  // Jenkinsfile (部分示例)
+  // Jenkinsfile (部分示例 - 重点展示测试和报告处理流程)
   environment {
-      // ... 其他环境变量 ...
+      // ... 其他环境变量和凭据ID ...
       HOST_JENKINS_HOME_ON_HOST = '/var/lib/docker/volumes/jenkins_home/_data' // !!宿主机Jenkins Home路径!!
       HOST_WORKSPACE_PATH = "${HOST_JENKINS_HOME_ON_HOST}/workspace/${env.JOB_NAME}" // 宿主机工作区路径
       HOST_ALLURE_RESULTS_PATH = "${HOST_WORKSPACE_PATH}/output/allure-results" // 宿主机结果路径
-      HOST_ALLURE_REPORT_PATH = "${HOST_WORKSPACE_PATH}/output/reports/allure-report" // 宿主机报告路径
+      // HOST_ALLURE_REPORT_PATH 用于临时报告，用于获取 summary.json
+      HOST_ALLURE_REPORT_PATH = "${HOST_WORKSPACE_PATH}/output/reports/temp-allure-report-for-summary" // <-- 宿主机临时报告路径
       DOCKER_IMAGE = "automated-testing:dev" // 定义使用的镜像
   }
   stages {
       // ... checkout ...
-      stage('Run Tests in Docker') {
+      stage('准备环境 (Agent)') {
           steps {
-              script {
-                  // 确保宿主机上的目录存在
-                  sh "mkdir -p ${env.HOST_ALLURE_RESULTS_PATH} ${env.HOST_ALLURE_REPORT_PATH}"
-
-                  // 运行测试容器，注意使用宿主机路径进行卷挂载
-                  sh """
-                  docker run --rm \\
-                    -e APP_ENV=\${params.APP_ENV} \\
-                    -e TEST_DEFAULT_USERNAME=\${ACCOUNT_USERNAME} \\
-                    -e TEST_DEFAULT_PASSWORD=\${ACCOUNT_PASSWORD} \\
-                    -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
-                    -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
-                    --workdir /workspace \\
-                    ${env.DOCKER_IMAGE} \\
-                    poetry run pytest --alluredir=/results_out
-                  """
-
-                  // 生成报告容器，同样使用宿主机路径
-                  sh """
-                  docker run --rm \\
-                    -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:ro \\
-                    -v ${env.HOST_ALLURE_REPORT_PATH}:/report_out:rw \\
-                    ${env.DOCKER_IMAGE} \\
-                    allure generate /results_out -o /report_out --clean
-                  """
-              }
+              echo "准备测试环境和目录 (在 Agent ${WORKSPACE} 上)..."
+              // 确保结果和临时报告目录在 Agent 上存在对应的目录结构
+              sh """
+              mkdir -p ${WORKSPACE}/output/allure-results
+              mkdir -p ${WORKSPACE}/output/reports/temp-allure-report-for-summary/widgets
+              echo "清空旧的 allure-results 和 temp report (在 Agent ${WORKSPACE} 上)..."
+              rm -rf ${WORKSPACE}/output/allure-results/*
+              rm -rf ${WORKSPACE}/output/reports/temp-allure-report-for-summary/*
+              """
+              echo "环境准备完成。"
           }
       }
-      // ... report deployment and notification ...
-  }
-  ```
+      // ... 检查脚本文件 ...
+      stage('并行执行测试') {
+          steps {
+              script {
+                  // ... (选择和注入凭据) ...
+                  try {
+                      // ... (运行 docker run pytest，挂载 HOST_WORKSPACE_PATH 和 HOST_ALLURE_RESULTS_PATH) ...
+                  } catch (err) {
+                      echo "测试阶段出现错误: ${err}."
+                      currentBuild.result = 'UNSTABLE'
+                  }
+              } // End script
+          } // End steps
+      } // End stage '并行执行测试'
+
+   } // End stages
+
+   post { // 流水线完成后执行
+       always {
+           echo "Pipeline 完成. 开始执行报告生成和通知步骤..."
+           script {
+               def allureReportUrl = "" // 用于存储 Jenkins 插件生成的报告 URL
+               def allureStepSuccess = false
+               def tempReportGenSuccess = false
+
+               try {
+                   // --- 注入邮件等凭据 ---
+                   withCredentials([
+                       string(credentialsId: env.EMAIL_PASSWORD_CREDENTIALS_ID, variable: 'INJECTED_EMAIL_PASSWORD'),
+                       string(credentialsId: env.EMAIL_SMTP_SERVER_CREDENTIAL_ID, variable: 'INJECTED_EMAIL_SMTP_SERVER'),
+                       // ... 其他邮件凭据 ...
+                   ]) {
+
+                       // --- 1. 写入 Allure 元数据 ---
+                       echo "写入 Allure 元数据文件到 ${env.HOST_ALLURE_RESULTS_PATH} (在宿主机上)..."
+                       sh """
+                       docker run --rm --name write-metadata-${BUILD_NUMBER} \\
+                         /* ... env vars ... */ \\
+                         -v ${env.HOST_WORKSPACE_PATH}:/workspace:ro \\
+                         -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
+                         ${env.DOCKER_IMAGE} \\
+                         python /workspace/ci/scripts/write_allure_metadata.py /results_out
+                       """
+                       echo "Allure 元数据写入完成。"
+
+                       // --- 2. 修正 allure-results 目录权限 ---
+                       echo "修正宿主机目录 ${env.HOST_ALLURE_RESULTS_PATH} 的权限..."
+                       sh """
+                       docker run --rm --name chown-chmod-results-${BUILD_NUMBER} \\
+                         -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_to_fix:rw \\
+                         ${env.DOCKER_IMAGE} \\
+                         sh -c 'chown -R 1000:1000 /results_to_fix || echo "chown failed"; chmod -R a+r /results_to_fix || echo "chmod failed!"'
+                       """
+                       echo "权限修正尝试完成。"
+
+                       // --- 3. 使用 Allure Jenkins 插件生成和归档报告 ---
+                       echo "使用 Allure Jenkins 插件处理 ${WORKSPACE}/output/allure-results 中的结果..."
+                       try {
+                           allure([
+                               properties: [],
+                               reportBuildPolicy: 'ALWAYS',
+                               results: [
+                                   [path: 'output/allure-results'] // 相对于 WORKSPACE
+                               ]
+                           ])
+                           allureStepSuccess = true
+                           allureReportUrl = "${env.BUILD_URL}allure/" // Jenkins 插件报告 URL
+                           echo "Allure 插件报告处理完成。报告 URL: ${allureReportUrl}"
+                       } catch (allurePluginError) {
+                           echo "Allure 插件步骤失败: ${allurePluginError}"
+                           allureStepSuccess = false
+                           allureReportUrl = "(Allure 插件报告生成失败)"
+                       }
+
+                       // --- 4. 手动生成报告到临时目录 (获取 summary.json) ---
+                       echo "生成临时报告到 ${env.HOST_ALLURE_REPORT_PATH} 以获取 summary.json..."
+                       // 确保宿主机目录存在
+                       sh """
+                       docker run --rm --name mkdir-temp-report-${BUILD_NUMBER} \\
+                         -v ${env.HOST_WORKSPACE_PATH}:/host_workspace:rw \\
+                         ${env.DOCKER_IMAGE} \\
+                         sh -c 'mkdir -p /host_workspace/output/reports/temp-allure-report-for-summary/widgets'
+                       """
+                       // 运行 allure generate
+                       sh """
+                       docker run --rm --name allure-gen-temp-${BUILD_NUMBER} \\
+                         -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_in:ro \\
+                         -v ${env.HOST_ALLURE_REPORT_PATH}:/report_out:rw \\
+                         ${env.DOCKER_IMAGE} \\
+                         sh -c 'allure generate /results_in --clean -o /report_out'
+                       """
+                       // 检查 summary.json 是否成功生成
+                       def summaryCheckExitCode = sh script: "docker run --rm -v ${env.HOST_ALLURE_REPORT_PATH}:/report_check:ro ${env.DOCKER_IMAGE} test -f /report_check/widgets/summary.json", returnStatus: true
+                       if (summaryCheckExitCode == 0) {
+                           tempReportGenSuccess = true
+                           echo "summary.json 已成功生成到宿主机路径: ${env.HOST_ALLURE_REPORT_PATH}/widgets/summary.json"
+                       } else {
+                           tempReportGenSuccess = false
+                           echo "[警告] 未能在 ${env.HOST_ALLURE_REPORT_PATH}/widgets/ 中找到 summary.json。"
+                       }
+
+                       // --- 5. 发送邮件通知 ---
+                       if (params.SEND_EMAIL) {
+                           echo "发送邮件通知 (尝试读取 ${env.HOST_ALLURE_REPORT_PATH}/widgets/summary.json)..."
+                           sh """
+                           docker run --rm --name notify-${BUILD_NUMBER} \\
+                             -e CI=true \\
+                             -e APP_ENV=${params.APP_ENV} \\
+                             -e EMAIL_ENABLED=${params.SEND_EMAIL} \\
+                             -e EMAIL_PASSWORD='${INJECTED_EMAIL_PASSWORD}' \\
+                             // ... 其他邮件环境变量 ...
+                             -e ALLURE_PUBLIC_URL="${allureReportUrl}" \\ // 使用插件生成的 URL
+                             -e BUILD_STATUS="${currentBuild.result ?: 'SUCCESS'}" \\
+                             // ... 其他构建信息环境变量 ...
+                             -v ${env.HOST_WORKSPACE_PATH}:/workspace:ro \\
+                             -v ${env.HOST_ALLURE_REPORT_PATH}:/report:ro \\ // 只读挂载临时报告
+                             ${env.DOCKER_IMAGE} \\
+                             python /workspace/ci/scripts/run_and_notify.py
+                           """
+                       } else {
+                           echo "邮件通知已禁用。"
+                       }
+
+                   } // End withCredentials
+               } catch (err) {
+                   echo "Post-build 阶段出现严重错误: ${err}"
+                   // ... 处理错误 ...
+               } finally {
+                   // --- 6. 设置构建描述 ---
+                   // ... (使用 allureReportUrl 设置描述) ...
+                   def finalStatus = currentBuild.result ?: 'SUCCESS'
+                   def reportLink = allureStepSuccess && allureReportUrl.startsWith("http") ? "<a href='${allureReportUrl}' target='_blank'>查看报告</a>" : allureReportUrl ?: "(报告链接不可用)"
+                   currentBuild.description = "${params.APP_ENV.toUpperCase()} 环境 [...] - ${finalStatus} - ${reportLink}"
+
+                   // --- 7. 清理临时报告目录和 Agent 工作区 ---
+                   echo "清理临时报告目录 ${env.HOST_ALLURE_REPORT_PATH} (在宿主机上)..."
+                   sh """
+                   docker run --rm --name cleanup-temp-report-${BUILD_NUMBER} \\
+                     -v ${env.HOST_WORKSPACE_PATH}:/host_workspace:rw \\
+                     ${env.DOCKER_IMAGE} \\
+                     sh -c 'rm -rf /host_workspace/output/reports/temp-allure-report-for-summary'
+                   """
+                   cleanWs()
+                   echo "Agent 工作空间和临时报告目录已清理。"
+               } // End finally
+           } // End script
+       } // End always
+       // ... success, failure, unstable blocks ...
+   } // End post
+} // End pipeline
+```
 - output目录建议定期清理，节省磁盘空间。
 
 ---
@@ -382,58 +518,56 @@
   - `python:3.11.9-slim`适合对小版本有极端严格要求的场景。
 
 ### 12.3 output目录挂载与Allure报告目录对接
-- **推荐策略**：在 CI/CD 流水线中，将宿主机的工作区目录、Allure 原始结果目录、最终报告目录分别挂载到容器内不同的路径。
+- **推荐策略**：在 CI/CD 流水线中，将宿主机的工作区目录和 Allure 原始结果目录挂载到测试容器。报告生成现在分为两部分：
+    1.  **主要报告 (Jenkins UI)**: Allure Jenkins 插件直接处理挂载的 `allure-results` 目录 (通过 Agent 上的 `${WORKSPACE}/output/allure-results` 路径访问，该路径映射自宿主机的 `HOST_ALLURE_RESULTS_PATH`)。
+    2.  **临时报告 (用于邮件摘要)**: 手动在 Docker 容器内运行 `allure generate`，将结果输出到挂载的宿主机临时目录 (`HOST_ALLURE_REPORT_PATH`)，供邮件脚本读取 `summary.json`，之后该临时目录会被清理。
 - **示例命令 (Jenkinsfile 风格，使用宿主机路径变量)**：
-  ```bash
-  # 假设 env.HOST_WORKSPACE_PATH, env.HOST_ALLURE_RESULTS_PATH, env.HOST_ALLURE_REPORT_PATH 已定义
-  # 假设 env.ALLURE_NGINX_HOST_PATH 指向 Nginx 的宿主机报告目录
-  
-  # 1. 运行测试，将结果输出到挂载的 /results_out
+  ```groovy
+  # 1. 运行测试，将结果输出到挂载的 /results_out (映射到 HOST_ALLURE_RESULTS_PATH)
   docker run --rm \
     -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \
     -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \
-    --workdir /workspace \
-    automated-testing-env:latest \
+    # ... 其他参数 ...
+    ${env.DOCKER_IMAGE} \
     poetry run pytest --alluredir=/results_out
-    
-  # 2. 生成报告，从 /results_out 读取，输出到挂载的 /report_out
+
+  # 2. (在 post 阶段) 生成临时报告，从 /results_in 读取，输出到挂载的 /report_out (映射到 HOST_ALLURE_REPORT_PATH)
   docker run --rm \
-    -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:ro \
+    -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_in:ro \
     -v ${env.HOST_ALLURE_REPORT_PATH}:/report_out:rw \
-    automated-testing-env:latest \
-    allure generate /results_out -o /report_out --clean
-    
-  # 3. (可选) 将生成的报告部署到 Nginx 目录
-  #    注意：此步骤通常使用辅助脚本，直接操作宿主机上的报告和 Nginx 目录
-  #    docker run ... alpine:latest sh deploy_script.sh ${env.HOST_ALLURE_REPORT_PATH} ${env.ALLURE_NGINX_HOST_PATH}
+    # ... 其他参数 ...
+    ${env.DOCKER_IMAGE} \
+    allure generate /results_in -o /report_out --clean
+
+  # 3. (在 post 阶段) 运行通知脚本，挂载临时报告目录以读取摘要
+  docker run --rm \
+    # ... 其他参数和挂载 ...
+    -v ${env.HOST_ALLURE_REPORT_PATH}:/report:ro \ # 只读挂载临时报告
+    ${env.DOCKER_IMAGE} \
+    python /workspace/ci/scripts/run_and_notify.py
+
+  # 4. (在 post 阶段) 清理临时报告目录
+  docker run --rm \
+    -v ${env.HOST_WORKSPACE_PATH}:/host_workspace:rw \
+    # ... 其他参数 ...
+    ${env.DOCKER_IMAGE} \
+    sh -c 'rm -rf /host_workspace/output/reports/temp-allure-report-for-summary'
   ```
 - **为什么这样做？**
-  - 清晰分离代码、原始结果和最终报告的路径，避免冲突。
-  - 报告直接生成在宿主机指定路径，方便后续部署或归档。
+  - 清晰分离代码和原始结果的路径。
+  - 利用 Allure Jenkins 插件进行主要的报告展示和历史追踪。
+  - 按需生成临时报告以支持邮件通知中的摘要信息，避免不必要的持久化存储。
   - CI/CD 流程更清晰，每一步职责单一。
 
 ### 12.4 环境变量传递最佳实践
-- 推荐用`-e`参数在docker run时传递敏感信息和环境配置（如账号、密码、URL等），如：
-  ```bash
-  docker run --rm \
-    -e APP_ENV=prod \
-    -e WEB_BASE_URL=https://xxx.com \
-    -e TEST_DEFAULT_USERNAME=xxx \
-    -e TEST_DEFAULT_PASSWORD=xxx \
-    ...
-  ```
-- 也可用`--env-file`参数批量传递.env文件内容：
-  ```bash
-  docker run --rm --env-file .env ...
-  ```
-- **优先级说明**：`-e`参数 > `--env-file` > 容器内的.env文件。
+- 推荐用`-e`参数在docker run时传递非敏感配置（如`APP_ENV`）和通过`withCredentials`注入的敏感信息（如账号、密码、URL等）。
+- **避免**使用`--env-file`传递包含敏感信息的文件。
 - **为什么这样做？**
-  - 保证敏感信息不写进镜像或代码，安全性高，灵活适配多环境。
+  - 保证敏感信息不写进镜像或代码，安全性高，灵活适配多环境。CI 平台凭据管理是最佳实践。
 
-### 12.5 典型docker run命令模板及参数解释 (结合卷挂载)
-- **场景：在 CI/CD 中运行测试并生成报告**
+### 12.5 典型docker run命令模板及参数解释 (结合卷挂载 - CI 流程)
+- **场景：在 CI/CD 中运行测试**
   ```bash
-  # --- 运行测试 ---
   docker run --rm \
     -e APP_ENV=<环境> \
     -e WEB_BASE_URL=<URL> \
@@ -444,77 +578,74 @@
     --workdir /workspace \
     <环境镜像名:标签> \
     poetry run pytest --alluredir=/results_out # <命令>
-
-  # --- 生成报告 ---
+  ```
+- **场景：在 CI/CD Post 阶段生成临时报告 (用于邮件摘要)**
+  ```bash
   docker run --rm \
-    -v <宿主机Allure结果路径>:/results_out:ro \
-    -v <宿主机Allure报告路径>:/report_out:rw \
+    -v <宿主机Allure结果路径>:/results_in:ro \
+    -v <宿主机临时报告路径>:/report_out:rw \
     <环境镜像名:标签> \
-    allure generate /results_out -o /report_out --clean # <命令>
+    allure generate /results_in -o /report_out --clean # <命令>
+  ```
+- **场景：在 CI/CD Post 阶段运行通知脚本**
+  ```bash
+  docker run --rm \
+    -e <邮件相关环境变量由Jenkins注入> \
+    -e ALLURE_PUBLIC_URL=<Jenkins插件报告URL> \
+    -v <宿主机工作区路径>:/workspace:ro \
+    -v <宿主机临时报告路径>:/report:ro \
+    <环境镜像名:标签> \
+    python /workspace/ci/scripts/run_and_notify.py # <命令>
   ```
 - **参数说明：**
   - `--rm`：容器运行结束后自动删除。
-  - `-e`：传递环境变量。
+  - `-e`：传递环境变量 (大量使用 Jenkins 注入的凭据)。
   - `-v <宿主机路径>:<容器路径>:<模式>`：挂载卷。
-    - `<宿主机工作区路径>:/workspace:rw`：将最新的代码挂载到容器 `/workspace`。
-    - `<宿主机Allure结果路径>:/results_out:rw`：挂载用于存放原始测试结果的目录。
-    - `<宿主机Allure报告路径>:/report_out:rw`：挂载用于存放生成的HTML报告的目录。
-  - `--workdir /workspace`：设置容器的工作目录为挂载的代码目录。
+    - `<宿主机工作区路径>:/workspace:rw`：挂载最新的代码。
+    - `<宿主机Allure结果路径>:/results_out:rw` (测试时) 或 `/results_in:ro` (生成报告时)：挂载原始测试结果目录。
+    - `<宿主机临时报告路径>:/report_out:rw` (生成报告时) 或 `/report:ro` (通知时)：挂载用于临时存放报告以提取摘要的目录。
+  - `--workdir /workspace`：设置容器的工作目录。
   - `<环境镜像名:标签>`：指定包含所有依赖的环境镜像。
-  - `<命令>`：在容器内执行的命令，如 `poetry run pytest ...` 或 `allure generate ...`。
+  - `<命令>`：在容器内执行的命令。
 
 ### 12.6 团队协作和CI/CD流水线下的推荐用法
-- 推荐所有团队成员和CI/CD流水线都用同一个Dockerfile和docker run命令，保证环境和产物一致。
-- CI平台（如Jenkins、GitHub Actions）可用secrets机制安全注入敏感变量。
-- output目录建议统一挂载到Web服务或CI产物归档目录，便于报告自动发布和追溯。
+- 推荐所有团队成员和CI/CD流水线都用同一个Dockerfile和镜像标签，保证环境一致。
+- CI平台（如 Jenkins）必须使用凭据机制安全注入敏感变量。
+- 主要的报告查看通过 Allure Jenkins 插件进行。
 
 ### 12.7 常见问题与解答
 - **Q: 没有Dockerfile怎么办？**
-  - A: 请在项目根目录新建Dockerfile，内容见本手册Docker章节。
+  - A: 请在项目根目录新建Dockerfile，内容见本手册第11节。
 - **Q: 如何保证本地和CI环境一致？**
   - A: 所有成员和CI都用同一个Dockerfile和镜像，避免本地依赖污染。
 - **Q: 环境变量优先级如何？**
-  - A: `docker run -e` > `--env-file` > 容器内.env文件。
-- **Q: 报告生成后Web服务无法访问？**
-  - A: 检查-v挂载路径是否与Web服务配置一致，权限是否正确。
-- **Q: Jenkins/GitLab CI环境变量如何安全注入？**
-  - A: 推荐用凭据/变量机制，不要明文写在脚本里，详见各平台示例。
+  - A: `docker run -e` > 容器内.env文件。CI 中优先使用 `-e` 注入 Jenkins 凭据。
+- **Q: Jenkins Allure 报告无法访问或内容不正确？**
+  - A: 检查：
+    1.  `HOST_ALLURE_RESULTS_PATH` 变量是否正确指向宿主机上的 Allure 结果目录。
+    2.  该目录的权限是否允许 Jenkins Agent (或运行 Docker 的用户) 读取。
+    3.  Allure Jenkins 插件配置是否正确指向了 Agent 上的结果路径 (`output/allure-results`)。
+    4.  `write_allure_metadata.py` 是否成功执行并写入了元数据。
+- **Q: Jenkins邮件通知缺少统计信息？**
+  - A: 检查：
+    1.  `post` 阶段手动运行 `allure generate` 的步骤是否成功执行 (检查 Jenkins 日志)。
+    2.  `HOST_ALLURE_REPORT_PATH` 挂载是否正确。
+    3.  `summary.json` 是否确实生成在了 `HOST_ALLURE_REPORT_PATH/widgets/` 目录下。
+    4.  `run_and_notify.py` 脚本是否正确读取和解析了 `summary.json`。
+- **Q: Jenkins环境变量/凭据如何安全注入？**
+  - A: 强烈推荐使用 Jenkins 的 "Credentials" 功能，并在 Jenkinsfile 中通过 `withCredentials` 块注入。
 - **Q: Playwright/Allure安装慢或报错？**
-  - A: 优先切换国内镜像源，或参考官方FAQ。
+  - A: 检查 Dockerfile 中是否已配置国内镜像源。网络不稳定时可尝试增加 `POETRY_REQUESTS_TIMEOUT`。
 - **Q: Playwright依赖库缺失如何解决？**
-  - A: 确保Dockerfile中安装了所有必要的依赖，libglib2.0-0、libnss3等。
+  - A: 仔细核对 Dockerfile 中 `apt-get install` 命令是否包含了所有 Playwright 官方文档要求的系统依赖。
 - **Q: output目录产物如何归档？**
-  - A: 推荐用CI平台的产物归档功能，便于追溯和发布。
-- **Q: 产物目录与Web服务目录不一致怎么办？**
-  - A: 建议统一挂载，或在测试后用脚本同步到Web服务目录。
-- **Q: 为什么要使用poetry run pytest而不是直接pytest？**
-  - A: 确保在正确的虚拟环境中运行，避免依赖问题。
-- **Q: Docker 拉取镜像（如 `docker pull` 或 `docker build` 时）失败，报错 `Connection timed out`、`Network is unreachable` 或 `context deadline exceeded`，如何解决？**
-  - A: 这通常是由于本地网络环境无法稳定连接到 Docker Hub (registry-1.docker.io) 或其他 Docker 仓库（包括配置的加速器）的网络问题。排查步骤如下：
-    1.  **基础网络检查**：确认本机能 `ping` 通外部地址（如 `baidu.com`, `8.8.8.8`）和网关。
-    2.  **DNS 检查**：使用 `nslookup <仓库域名>` 确认域名能正确解析。
-    3.  **端口连通性检查**：使用 `telnet <仓库域名> 443` 或 `nc -zv <仓库域名> 443` 检查 HTTPS 端口是否可达。即使 `ping` 通，端口也可能被防火墙阻止。
-    4.  **强烈推荐配置镜像加速器**：这是解决国内访问 Docker Hub 不稳定问题的最有效方法。编辑 `/etc/docker/daemon.json` 文件（如不存在则创建，需要 sudo 权限），添加 `registry-mirrors` 列表，例如：
-        ```json
-        {
-          "registry-mirrors": [
-            "https://docker.m.daocloud.io", // 示例，选择可用加速器
-            "https://hub-mirror.c.163.com"
-            // ... 其他可用加速器
-          ]
-        }
-        ```
-    5.  **验证并筛选加速器**：配置后，务必 `ping <加速器域名>` 并用 `nslookup <加速器域名>` 确认**所有**配置的加速器都能被解析和访问。如果某个加速器域名无法解析（报错"名称或服务未知"），**必须将其从 `daemon.json` 中移除**，否则 Docker 尝试失败后会回退到直连官方仓库，导致问题依旧。
-    6.  **重启 Docker 服务**：修改 `/etc/docker/daemon.json` 后，必须执行 `sudo systemctl daemon-reload && sudo systemctl restart docker` 使配置生效。
-    7.  **防火墙检查**：检查本地防火墙 (`ufw`, `firewalld`) 和路由器防火墙规则。
-
-- **Q: Jenkins流水线在Docker容器(DooD模式)中运行测试时，通过 `-v ${WORKSPACE}:/some/path` 挂载工作区，但容器内找不到文件或目录内容不正确，怎么办？**
-  - A: 这是典型的Docker-outside-of-Docker (DooD) 问题。Jenkins容器内部的`${WORKSPACE}`路径（如`/var/jenkins_home/workspace/...`）对于宿主机的Docker服务是无效的。宿主机Docker会尝试在自己的文件系统上查找这个路径，导致挂载错误。
-    **解决方案：**
-    1.  **确定宿主机映射路径：** 通过 `docker inspect <jenkins容器ID或名称>` 命令查看Jenkins容器的`Mounts`部分，找到`Destination`为`/var/jenkins_home`（或Jenkins数据目录）对应的`Source`路径（宿主机上的真实路径，例如`/var/lib/docker/volumes/jenkins_home/_data`）。
-    2.  **修改Jenkinsfile：** 
-        - 在`environment`块定义新的环境变量，存储这个宿主机路径以及基于它计算出的宿主机工作区路径、结果路径等 (例如：`HOST_JENKINS_HOME_ON_HOST`, `HOST_WORKSPACE_PATH`, `HOST_ALLURE_RESULTS_PATH`)。
-        - 在所有需要挂载工作区或其子目录的`docker run`命令中，修改`-v`参数，**使用这些基于宿主机的路径变量**，而不是`${WORKSPACE}`。例如：`-v ${env.HOST_WORKSPACE_PATH}:/workspace:rw`。
+  - A: 可以归档 `HOST_ALLURE_RESULTS_PATH` 作为原始数据备份。最终报告由 Jenkins 插件管理。
+- **Q: 为什么要使用 poetry run pytest 而不是直接 pytest？**
+  - A: 确保在 Poetry 管理的环境中运行，避免依赖问题。
+- **Q: Docker 拉取镜像或构建时网络超时/无法连接？**
+  - A: 核心是解决 Docker daemon 访问仓库的网络问题。首选方案是配置并验证有效的国内镜像加速器。
+- **Q: Jenkins流水线在Docker容器(DooD模式)中挂载卷找不到文件/内容不正确？**
+  - A: 关键在于区分 Jenkins Agent 容器内的路径 (`${WORKSPACE}`) 和宿主机上的真实路径。必须在 Jenkinsfile 的 `docker run` 命令中使用 `-v` 挂载宿主机上的路径。
 
 ---
 
@@ -528,387 +659,233 @@
 
 ## 14. 主流CI平台Docker集成示例
 
-本节详细说明如何在Jenkins中集成Docker自动化测试，**关键步骤均有解释**，适合团队成员参考。由于本项目当前主要使用Jenkins作为CI/CD工具，这里仅提供Jenkins的集成示例。
+本节详细说明如何在 Jenkins 中集成 Docker 自动化测试，**关键步骤均有解释**，适合团队成员参考。由于本项目当前主要使用 Jenkins 作为 CI/CD 工具，这里仅提供 Jenkins 的集成示例。
 
 ### 14.1 Jenkins流水线（Pipeline）集成
 
-**核心思路：** 利用Jenkins Pipeline和Docker插件（或直接调用宿主机Docker命令），实现拉取代码、构建/拉取环境镜像、在Docker容器中运行测试、生成报告并部署的全自动化流程。特别注意在Docker-outside-of-Docker (DooD) 模式下宿主机路径的正确映射。**所有敏感配置（账户、URL、邮件设置等）均通过 Jenkins 凭据管理，并动态注入到流水线中。报告生成和通知步骤被移至 `post { always { ... } }` 块，以确保无论测试成功与否都会执行。**
+**核心思路：** 利用 Jenkins Pipeline 和 Docker 命令，实现拉取代码、构建/拉取环境镜像、在 Docker 容器中运行测试、通过 Allure Jenkins 插件展示报告、手动生成临时报告获取摘要、发送邮件通知的全自动化流程。特别注意在 Docker-outside-of-Docker (DooD) 模式下宿主机路径的正确映射。**所有敏感配置均通过 Jenkins 凭据管理，并动态注入。报告生成和通知步骤移至 `post { always { ... } }` 块。**
 
-**Jenkinsfile关键部分示例 (参考项目根目录的 `Jenkinsfile`)**
+**Jenkinsfile关键部分示例 (参考项目根目录的 `Jenkinsfile`，已根据最新流程调整)**
 
 ```groovy
 pipeline {
     agent any // 或指定特定的agent标签
 
-    parameters { // 定义构建参数，增加灵活性
+    parameters { // 定义构建参数
         choice(name: 'APP_ENV', choices: ['test', 'prod'], description: '选择测试环境')
         booleanParam(name: 'RUN_WEB_TESTS', defaultValue: true, description: '运行Web测试')
-        booleanParam(name: 'RUN_API_TESTS', defaultValue: true, description: '运行API测试')
-        booleanParam(name: 'RUN_WECHAT_TESTS', defaultValue: false, description: '运行微信公众号测试')
-        booleanParam(name: 'RUN_APP_TESTS', defaultValue: false, description: '运行App测试')
-        choice(name: 'TEST_SUITE', choices: ['全部', '冒烟测试', '回归测试'], description: '选择测试套件')
+        // ... 其他测试平台参数 ...
         booleanParam(name: 'SEND_EMAIL', defaultValue: true, description: '是否发送邮件通知')
     }
 
     environment {
         // --- 凭据 ID (在Jenkins中预先创建) ---
-        GIT_CREDENTIALS_ID = 'git-credentials'          // Git 认证凭据 (Username/Password 或 SSH Key)
-        GIT_REPO_URL_CREDENTIAL_ID = 'git-repo-url'     // Git 仓库 URL (Secret text)
-        TEST_ENV_CREDENTIALS_ID = 'test-env-credentials'// 测试环境账户 (Username with password)
-        PROD_ENV_CREDENTIALS_ID = 'prod-env-credentials'// 生产环境账户 (Username with password)
-        TEST_WEB_URL_CREDENTIAL_ID = 'test-web-url'     // 测试环境 Web URL (Secret text)
-        TEST_API_URL_CREDENTIAL_ID = 'test-api-url'     // 测试环境 API URL (Secret text)
-        PROD_WEB_URL_CREDENTIAL_ID = 'prod-web-url'     // 生产环境 Web URL (Secret text)
-        PROD_API_URL_CREDENTIAL_ID = 'prod-api-url'     // 生产环境 API URL (Secret text)
-        ALLURE_BASE_URL_CREDENTIAL_ID = 'allure-base-url' // Allure 报告基础 URL (Secret text)
-        EMAIL_PASSWORD_CREDENTIALS_ID = 'email-password-credential' // 邮件发件人密码/授权码 (Secret text)
-        EMAIL_SMTP_SERVER_CREDENTIAL_ID = 'email-smtp-server'       // SMTP 服务器地址 (Secret text)
-        EMAIL_SMTP_PORT_CREDENTIAL_ID = 'email-smtp-port'           // SMTP 端口 (Secret text)
-        EMAIL_SENDER_CREDENTIAL_ID = 'email-sender'                 // 发件人邮箱地址 (Secret text)
-        EMAIL_RECIPIENTS_CREDENTIAL_ID = 'email-recipients'         // 收件人列表 (Secret text, 逗号分隔)
-        EMAIL_USE_SSL_CREDENTIAL_ID = 'email-use-ssl'               // 是否使用 SSL (Secret text, 'true' or 'false')
-
-        // --- Allure 报告相关 (Nginx 宿主机路径) ---
-        ALLURE_NGINX_DIR_NAME = "${params.APP_ENV == 'prod' ? 'allure-report-prod' : 'allure-report-test'}"
-        // ALLURE_PUBLIC_URL 将在 post 块中动态构建
-        ALLURE_NGINX_HOST_PATH = "/usr/share/nginx/html/${ALLURE_NGINX_DIR_NAME}" // Nginx 在宿主机上的路径
+        GIT_CREDENTIALS_ID = 'git-credentials'
+        GIT_REPO_URL_CREDENTIAL_ID = 'git-repo-url'
+        TEST_ENV_CREDENTIALS_ID = 'test-env-credentials'
+        PROD_ENV_CREDENTIALS_ID = 'prod-env-credentials'
+        TEST_WEB_URL_CREDENTIAL_ID = 'test-web-url'
+        TEST_API_URL_CREDENTIAL_ID = 'test-api-url'
+        PROD_WEB_URL_CREDENTIAL_ID = 'prod-web-url'
+        PROD_API_URL_CREDENTIAL_ID = 'prod-api-url'
+        EMAIL_PASSWORD_CREDENTIALS_ID = 'email-password-credential'
+        EMAIL_SMTP_SERVER_CREDENTIAL_ID = 'email-smtp-server'
+        EMAIL_SMTP_PORT_CREDENTIAL_ID = 'email-smtp-port'
+        EMAIL_SENDER_CREDENTIAL_ID = 'email-sender'
+        EMAIL_RECIPIENTS_CREDENTIAL_ID = 'email-recipients'
+        EMAIL_USE_SSL_CREDENTIAL_ID = 'email-use-ssl'
 
         // --- Docker Agent & 宿主机路径映射 (DooD模式关键) ---
-        // !! 重要：此路径需要根据实际Jenkins Docker容器挂载情况确定 !!
-        HOST_JENKINS_HOME_ON_HOST = '/var/lib/docker/volumes/jenkins_home/_data'
-        // 基于宿主机Jenkins Home计算出宿主机上的工作区、结果、报告路径
+        HOST_JENKINS_HOME_ON_HOST = '/var/lib/docker/volumes/jenkins_home/_data' // !!根据实际情况修改!!
         HOST_WORKSPACE_PATH = "${HOST_JENKINS_HOME_ON_HOST}/workspace/${env.JOB_NAME}"
         HOST_ALLURE_RESULTS_PATH = "${HOST_WORKSPACE_PATH}/output/allure-results"
-        HOST_ALLURE_REPORT_PATH = "${HOST_WORKSPACE_PATH}/output/reports/allure-report"
+        HOST_ALLURE_REPORT_PATH = "${HOST_WORKSPACE_PATH}/output/reports/temp-allure-report-for-summary" // 临时报告路径
 
         // --- 测试相关 ---
         TEST_SUITE_VALUE = "${params.TEST_SUITE == '全部' ? 'all' : (params.TEST_SUITE == '冒烟测试' ? 'smoke' : 'regression')}"
         DOCKER_IMAGE = "automated-testing:dev" // 使用的测试环境镜像
     }
 
-    // --- Jenkins 凭据创建指南 (更新版) ---
-    #### Jenkins 凭据创建指南
+    // --- Jenkins 凭据创建指南 ---
+    #### Jenkins 凭据创建指南 (已移除 allure-base-url)
 
-    为了让 Jenkinsfile 能够安全地访问 Git 仓库、测试环境账号、URL配置和邮箱服务，你需要在 Jenkins 系统中预先创建以下凭据。请确保凭据 ID 与 Jenkinsfile 中 `environment` 块定义的完全一致。
+    请在 Jenkins 系统中预先创建以下凭据，确保凭据 ID 与 Jenkinsfile 中 `environment` 块定义的完全一致。
 
-    **创建步骤（在 Jenkins UI 中操作）：**
+    **创建步骤（在 Jenkins UI 中操作）：** (与之前一致，省略重复表格)
 
-    1.  登录 Jenkins。
-    2.  导航到 "Manage Jenkins" -> "Credentials"。
-    3.  在 "Stores scoped to Jenkins" 下，点击 "System" 域（或你选择的其他域）下的 "Global credentials (unrestricted)"。
-    4.  点击左侧菜单的 "Add Credentials"。
-    5.  根据下表创建凭据：
-
-        | Jenkinsfile中的凭据ID             | 类型 (Kind)            | ID (必须与左侧一致)                | Scope  | Username (用户名)       | Password / Secret (密码/令牌/文本) | Description (描述)                   |
-        | :-------------------------------- | :--------------------- | :------------------------------- | :----- | :---------------------- | :------------------------------- | :----------------------------------- |
-        | `git-credentials`                 | Username with password | `git-credentials`                | Global | 你的 Git 用户名           | 你的 Git 密码/令牌             | Git 仓库访问凭据                     |
-        | `git-repo-url`                    | Secret text            | `git-repo-url`                   | Global |                         | 你的 Git 仓库 URL (e.g., https://...) | Git 仓库 URL                       |
-        | `test-env-credentials`            | Username with password | `test-env-credentials`           | Global | 测试环境用户名         | 测试环境密码                 | 测试环境账号密码                   |
-        | `prod-env-credentials`            | Username with password | `prod-env-credentials`           | Global | 生产环境用户名         | 生产环境密码                 | 生产环境账号密码                   |
-        | `test-web-url`                    | Secret text            | `test-web-url`                   | Global |                         | 测试环境 Web URL (完整路径)      | 测试环境 Web URL                    |
-        | `test-api-url`                    | Secret text            | `test-api-url`                   | Global |                         | 测试环境 API URL (完整路径)      | 测试环境 API URL                    |
-        | `prod-web-url`                    | Secret text            | `prod-web-url`                   | Global |                         | 生产环境 Web URL (完整路径)      | 生产环境 Web URL                    |
-        | `prod-api-url`                    | Secret text            | `prod-api-url`                   | Global |                         | 生产环境 API URL (完整路径)      | 生产环境 API URL                    |
-        | `allure-base-url`                 | Secret text            | `allure-base-url`                | Global |                         | Allure 报告基础 URL (e.g., http://ip:port) | Allure 报告基础 URL                  |
-        | `email-password-credential`       | Secret text            | `email-password-credential`      | Global |                         | 你的发件邮箱密码或授权码          | 邮件通知发件人密码/授权码            |
-        | `email-smtp-server`               | Secret text            | `email-smtp-server`              | Global |                         | 你的 SMTP 服务器地址              | 邮件 SMTP 服务器地址                 |
-        | `email-smtp-port`                 | Secret text            | `email-smtp-port`                | Global |                         | 你的 SMTP 端口 (e.g., 465)       | 邮件 SMTP 端口                      |
-        | `email-sender`                    | Secret text            | `email-sender`                   | Global |                         | 你的发件人邮箱地址             | 邮件发件人邮箱地址                  |
-        | `email-recipients`                | Secret text            | `email-recipients`               | Global |                         | 收件人邮箱列表 (逗号分隔)        | 邮件收件人列表 (逗号分隔)          |
-        | `email-use-ssl`                   | Secret text            | `email-use-ssl`                  | Global |                         | 'true' 或 'false'               | 邮件是否使用 SSL                    |
-
-    **注意事项：**
-
-    *   **ID 必须精确匹配** Jenkinsfile 中的定义。
-    *   对于 `git-credentials`，如果使用 SSH 密钥，需创建 "SSH Username with private key" 类型。
-    *   对于 `Secret text` 类型的凭据，将对应的值粘贴到 "Secret" 字段中。
-    *   `email-recipients` 的值可以是单个邮箱，也可以是多个邮箱地址，用英文逗号 `,` 分隔。
-    *   确保凭据的 Scope 设置为 Global 或 Jenkinsfile 可以访问的域。
+    *   移除 `allure-base-url` 凭据，因为报告 URL 现在由 Allure Jenkins 插件生成。
 
     stages {
         stage('检出代码') {
             steps {
-                // --- 使用 withCredentials 注入 Git URL 和认证凭据 ---
-                withCredentials([
-                    string(credentialsId: env.GIT_REPO_URL_CREDENTIAL_ID, variable: 'INJECTED_GIT_REPO_URL'),
-                    usernamePassword(credentialsId: env.GIT_CREDENTIALS_ID, usernameVariable: 'GIT_USERNAME', passwordVariable: 'GIT_PASSWORD') // 或者使用 SSH Key 凭据类型
-                ]) {
-                    echo "从代码仓库拉取最新代码: ${INJECTED_GIT_REPO_URL}"
-                    cleanWs()
-                    checkout([
-                        $class: 'GitSCM',
-                        branches: [[name: '*/main']],
-                        userRemoteConfigs: [[
-                            url: INJECTED_GIT_REPO_URL, // <-- 使用注入的变量
-                            credentialsId: env.GIT_CREDENTIALS_ID // <-- 认证凭据保持不变
-                        ]]
-                    ])
-                }
-                echo "代码检出完成到 Agent 路径: ${WORKSPACE}"
-                echo "对应的宿主机路径是: ${env.HOST_WORKSPACE_PATH}"
-                sh "echo '>>> Jenkins Agent Workspace Contents:' && ls -la ${WORKSPACE}"
+                // ... (使用 withCredentials 检出代码) ...
             }
         }
 
-        stage('准备环境') { // 创建必要的宿主机目录
+        stage('准备环境 (Agent)') {
             steps {
-                echo "准备测试环境和目录 (在 Agent 上)..."
-                sh """
-                mkdir -p ${WORKSPACE}/output/allure-results
-                mkdir -p ${WORKSPACE}/output/reports/allure-report
-                echo "清空旧的 allure-results (在 Agent 上)..."
-                rm -rf ${WORKSPACE}/output/allure-results/*
-
-                echo "确保 Nginx 目录 ${env.ALLURE_NGINX_HOST_PATH} (在宿主机上) 存在并设置权限..."
-                docker run --rm -v ${env.ALLURE_NGINX_HOST_PATH}:/nginx_dir_on_host --user root alpine:latest sh -c "mkdir -p /nginx_dir_on_host && chmod -R 777 /nginx_dir_on_host"
-
-                echo "环境准备完成。"
-                """
+                // ... (在 Agent 上创建和清理 allure-results 和 temp-allure-report-for-summary 目录) ...
             }
         }
 
-        stage('检查脚本文件') { // 验证CI脚本是否存在
+        stage('检查脚本文件') {
             steps {
-                echo "检查脚本文件是否存在于 Agent 路径: ${WORKSPACE}/ci/scripts/ ..."
-                sh "ls -la ${WORKSPACE}/ci/scripts/ || echo '>>> ci/scripts/ 目录不存在或无法列出 <<<' "
-                sh "test -f ${WORKSPACE}/ci/scripts/write_allure_metadata.py && echo '>>> write_allure_metadata.py 存在于 Agent <<< ' || echo '>>> write_allure_metadata.py 不存在于 Agent! <<<' "
-                sh "test -f ${WORKSPACE}/ci/scripts/prepare_nginx_dir.sh && echo '>>> prepare_nginx_dir.sh 存在于 Agent <<< ' || echo '>>> prepare_nginx_dir.sh 不存在于 Agent! <<<' "
-                sh "test -f ${WORKSPACE}/ci/scripts/deploy_allure_report.sh && echo '>>> deploy_allure_report.sh 存在于 Agent <<< ' || echo '>>> deploy_allure_report.sh 不存在于 Agent! <<<' "
+                // ... (检查 write_allure_metadata.py, run_and_notify.py 等是否存在) ...
+                // !!移除对 prepare_nginx_dir.sh 和 deploy_allure_report.sh 的检查!!
             }
         }
 
-        stage('并行执行测试') { // 根据参数并行运行不同平台的测试
+        stage('并行执行测试') {
              steps {
                 script {
-                    // --- 动态选择凭据 ID ---
-                    def accountCredentialsId = (params.APP_ENV == 'prod') ? env.PROD_ENV_CREDENTIALS_ID : env.TEST_ENV_CREDENTIALS_ID
-                    def webUrlCredentialId = (params.APP_ENV == 'prod') ? env.PROD_WEB_URL_CREDENTIAL_ID : env.TEST_WEB_URL_CREDENTIAL_ID
-                    def apiUrlCredentialId = (params.APP_ENV == 'prod') ? env.PROD_API_URL_CREDENTIAL_ID : env.TEST_API_URL_CREDENTIAL_ID
-                    echo "选择凭据 ID: 账户=${accountCredentialsId}, WebURL=${webUrlCredentialId}, APIURL=${apiUrlCredentialId}"
-
-                    // --- 捕获测试阶段的错误，但不让它停止 Pipeline ---
+                    // ... (选择和注入凭据) ...
                     try {
-                        // --- 注入账户和 URL 凭据 ---
-                        withCredentials([
-                            usernamePassword(credentialsId: accountCredentialsId, usernameVariable: 'ACCOUNT_USERNAME', passwordVariable: 'ACCOUNT_PASSWORD'),
-                            string(credentialsId: webUrlCredentialId, variable: 'INJECTED_WEB_URL'),
-                            string(credentialsId: apiUrlCredentialId, variable: 'INJECTED_API_URL')
-                        ]) {
-                            def testsToRun = [:] // 定义并行任务
-
-                            if (params.RUN_WEB_TESTS) {
-                                testsToRun['Web测试'] = {
-                                    echo "执行Web测试 (并发: auto, 重试: 2)"
-                                    // --- 使用注入的 WEB_BASE_URL ---
-                                    sh """
-                                    docker run --rm --name pytest-web-${BUILD_NUMBER} \\
-                                      -e APP_ENV=${params.APP_ENV} \\
-                                      -e TEST_PLATFORM="web" \\
-                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \\
-                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
-                                      -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
-                                      -e WEB_BASE_URL="${INJECTED_WEB_URL}" \\
-                                      -e TZ="Asia/Shanghai" \\
-                                      -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
-                                      -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
-                                      --workdir /workspace \\
-                                      -v /etc/localtime:/etc/localtime:ro \\
-                                      --network host \\
-                                      ${env.DOCKER_IMAGE} \\
-                                      pytest tests/web -n auto --reruns 2 -v --alluredir=/results_out
-                                    """
-                                }
-                            } else { echo "跳过Web测试" }
-
-                            if (params.RUN_API_TESTS) {
-                                testsToRun['API测试'] = {
-                                    echo "执行API测试 (并发: auto, 重试: 2)"
-                                    // --- 使用注入的 API_BASE_URL ---
-                                    sh """
-                                    docker run --rm --name pytest-api-${BUILD_NUMBER} \\
-                                      -e APP_ENV=${params.APP_ENV} \\
-                                      -e TEST_PLATFORM="api" \\
-                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \\
-                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
-                                      -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
-                                      -e API_BASE_URL="${INJECTED_API_URL}" \\
-                                      -e TZ="Asia/Shanghai" \\
-                                      -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
-                                      -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
-                                      --workdir /workspace \\
-                                      -v /etc/localtime:/etc/localtime:ro \\
-                                      --network host \\
-                                      ${env.DOCKER_IMAGE} \\
-                                      pytest tests/api -n auto --reruns 2 -v --alluredir=/results_out
-                                    """
-                                }
-                            } else { echo "跳过API测试" }
-
-                            // ... 其他平台的测试任务 (Wechat, App) 类似地使用注入的凭据 ...
-
-                            if (!testsToRun.isEmpty()) {
-                                 echo "开始并行执行选定的测试 (使用宿主机路径 ${env.HOST_WORKSPACE_PATH} 挂载到容器 /workspace)..."
-                                 parallel testsToRun // 执行并行任务
-                            } else {
-                                 echo "没有选择任何测试平台，跳过测试执行。"
-                                 // 确保宿主机上的结果目录存在，即使没有测试运行
-                                 sh "mkdir -p ${env.HOST_ALLURE_RESULTS_PATH}"
-                            }
-                        } // End inner withCredentials
+                        // ... (运行 docker run pytest，挂载 HOST_WORKSPACE_PATH 和 HOST_ALLURE_RESULTS_PATH) ...
                     } catch (err) {
-                        echo "测试阶段出现错误: ${err}. 将继续执行报告生成和通知。"
-                        // 可以选择将构建标记为不稳定
-                        // currentBuild.result = 'UNSTABLE'
+                        echo "测试阶段出现错误: ${err}."
+                        currentBuild.result = 'UNSTABLE'
                     }
                 } // End script
             } // End steps
         } // End stage '并行执行测试'
 
-       // --- '生成报告与通知' Stage 已被移动到 post 块 ---
-
    } // End stages
 
    post { // 流水线完成后执行
        always {
-           // --- 将报告生成和通知逻辑移动到这里 ---
-           echo "Pipeline 完成. 开始执行报告生成和通知步骤 (无论测试是否成功)..."
+           echo "Pipeline 完成. 开始执行报告生成和通知步骤..."
            script {
-               // 定义将在内部使用的完整 Allure URL 变量
-               def final_allure_public_url = ""
-               // 使用 try/catch 块来捕获可能的错误，确保后续清理能执行
+               def allureReportUrl = "" // 用于存储 Jenkins 插件生成的报告 URL
+               def allureStepSuccess = false
+               def tempReportGenSuccess = false
+
                try {
-                   // --- 注入所有需要的凭据，包括邮件配置 ---
+                   // --- 注入邮件等凭据 ---
                    withCredentials([
                        string(credentialsId: env.EMAIL_PASSWORD_CREDENTIALS_ID, variable: 'INJECTED_EMAIL_PASSWORD'),
-                       string(credentialsId: env.ALLURE_BASE_URL_CREDENTIAL_ID, variable: 'INJECTED_ALLURE_BASE_URL'),
                        string(credentialsId: env.EMAIL_SMTP_SERVER_CREDENTIAL_ID, variable: 'INJECTED_EMAIL_SMTP_SERVER'),
-                       string(credentialsId: env.EMAIL_SMTP_PORT_CREDENTIAL_ID, variable: 'INJECTED_EMAIL_SMTP_PORT'),
-                       string(credentialsId: env.EMAIL_SENDER_CREDENTIAL_ID, variable: 'INJECTED_EMAIL_SENDER'),
-                       string(credentialsId: env.EMAIL_RECIPIENTS_CREDENTIAL_ID, variable: 'INJECTED_EMAIL_RECIPIENTS'),
-                       string(credentialsId: env.EMAIL_USE_SSL_CREDENTIAL_ID, variable: 'INJECTED_EMAIL_USE_SSL')
+                       // ... 其他邮件凭据 ...
                    ]) {
-                       // --- 动态构建完整的 Allure URL ---
-                       // 确保基础 URL 后有斜杠
-                       def baseUrl = INJECTED_ALLURE_BASE_URL.endsWith('/') ? INJECTED_ALLURE_BASE_URL : INJECTED_ALLURE_BASE_URL + '/'
-                       final_allure_public_url = "${baseUrl}${env.ALLURE_NGINX_DIR_NAME}/"
-                       echo "构建的 Allure 公共 URL: ${final_allure_public_url}"
 
+                       // --- 1. 写入 Allure 元数据 ---
                        echo "写入 Allure 元数据文件到 ${env.HOST_ALLURE_RESULTS_PATH} (在宿主机上)..."
                        sh """
-                       docker run --rm --name write-metadata-${BUILD_NUMBER} -e APP_ENV=${params.APP_ENV} -e BUILD_NUMBER=${BUILD_NUMBER} -e BUILD_URL=${env.BUILD_URL} -e JOB_NAME=${env.JOB_NAME} -v ${env.HOST_WORKSPACE_PATH}:/workspace:ro -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw -v /etc/localtime:/etc/localtime:ro --user root ${env.DOCKER_IMAGE} python /workspace/ci/scripts/write_allure_metadata.py /results_out
+                       docker run --rm --name write-metadata-${BUILD_NUMBER} \\
+                         /* ... env vars ... */ \\
+                         -v ${env.HOST_WORKSPACE_PATH}:/workspace:ro \\
+                         -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
+                         ${env.DOCKER_IMAGE} \\
+                         python /workspace/ci/scripts/write_allure_metadata.py /results_out
                        """
                        echo "Allure 元数据写入完成。"
 
-                       echo "开始生成 Allure 报告 (从宿主机路径 ${env.HOST_ALLURE_RESULTS_PATH} 生成到 ${env.HOST_ALLURE_REPORT_PATH})..."
+                       // --- 2. 修正 allure-results 目录权限 ---
+                       echo "修正宿主机目录 ${env.HOST_ALLURE_RESULTS_PATH} 的权限..."
                        sh """
-                       docker run --rm --name allure-generate-${BUILD_NUMBER} \\
-                         -v ${env.HOST_ALLURE_RESULTS_PATH}:/results:ro \\
-                         -v ${env.HOST_ALLURE_REPORT_PATH}:/report:rw \\
-                         -v /etc/localtime:/etc/localtime:ro \\
-                         --user root \\
+                       docker run --rm --name chown-chmod-results-${BUILD_NUMBER} \\
+                         -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_to_fix:rw \\
                          ${env.DOCKER_IMAGE} \\
-                         /bin/bash -c "echo 'Generating report...'; ls -la /results || echo 'Results dir not found'; allure generate /results -o /report --clean || echo 'Allure generate command failed'"
-                       echo "Allure 报告已生成到宿主机路径: ${env.HOST_ALLURE_REPORT_PATH}"
+                         sh -c 'chown -R 1000:1000 /results_to_fix || echo "chown failed"; chmod -R a+r /results_to_fix || echo "chmod failed!"'
                        """
+                       echo "权限修正尝试完成。"
 
-                       echo "准备 Nginx 目录 ${env.ALLURE_NGINX_HOST_PATH} (在宿主机上)..."
-                       sh """
-                       docker run --rm --name prep-nginx-dir-${BUILD_NUMBER} \\
-                         -v ${env.ALLURE_NGINX_HOST_PATH}:/nginx_dir_on_host:rw \\
-                         -v ${env.HOST_WORKSPACE_PATH}/ci/scripts:/scripts:ro \\
-                         --user root \\
-                         alpine:latest \\
-                         sh /scripts/prepare_nginx_dir.sh /nginx_dir_on_host
-                       """
+                       // --- 3. 使用 Allure Jenkins 插件生成和归档报告 ---
+                       echo "使用 Allure Jenkins 插件处理 ${WORKSPACE}/output/allure-results 中的结果..."
+                       try {
+                           allure([
+                               properties: [],
+                               reportBuildPolicy: 'ALWAYS',
+                               results: [
+                                   [path: 'output/allure-results'] // 相对于 WORKSPACE
+                               ]
+                           ])
+                           allureStepSuccess = true
+                           allureReportUrl = "${env.BUILD_URL}allure/" // Jenkins 插件报告 URL
+                           echo "Allure 插件报告处理完成。报告 URL: ${allureReportUrl}"
+                       } catch (allurePluginError) {
+                           echo "Allure 插件步骤失败: ${allurePluginError}"
+                           allureStepSuccess = false
+                           allureReportUrl = "(Allure 插件报告生成失败)"
+                       }
 
-                       echo "部署 Allure 报告 (从宿主机 ${env.HOST_ALLURE_REPORT_PATH} 到 Nginx 宿主机 ${env.ALLURE_NGINX_HOST_PATH})..."
+                       // --- 4. 手动生成报告到临时目录 (获取 summary.json) ---
+                       echo "生成临时报告到 ${env.HOST_ALLURE_REPORT_PATH} 以获取 summary.json..."
+                       // 确保宿主机目录存在
                        sh """
-                       docker run --rm --name deploy-report-${BUILD_NUMBER} \\
-                         -v ${env.HOST_ALLURE_REPORT_PATH}:/src_report:ro \\
-                         -v ${env.ALLURE_NGINX_HOST_PATH}:/dest_nginx:rw \\
-                         -v ${env.HOST_WORKSPACE_PATH}/ci/scripts:/scripts:ro \\
-                         --user root \\
-                         alpine:latest \\
-                         sh /scripts/deploy_allure_report.sh /src_report /dest_nginx
-                       """
-                       echo "报告已部署到 Nginx 目录。"
-
-                       echo "发送邮件通知..."
-                       // --- 使用注入的邮件配置变量 ---
-                       sh """
-                       echo "--- Sending notification email via run_and_notify.py --- (using host path ${env.HOST_WORKSPACE_PATH})"
-                       docker run --rm --name notify-${BUILD_NUMBER} \\
-                         -e CI=true \\
-                         -e APP_ENV=${params.APP_ENV} \\
-                         -e EMAIL_ENABLED=${params.SEND_EMAIL} \\
-                         -e EMAIL_PASSWORD='${INJECTED_EMAIL_PASSWORD}' \\
-                         -e EMAIL_SMTP_SERVER="${INJECTED_EMAIL_SMTP_SERVER}" \\
-                         -e EMAIL_SMTP_PORT=${INJECTED_EMAIL_SMTP_PORT} \\
-                         -e EMAIL_SENDER="${INJECTED_EMAIL_SENDER}" \\
-                         -e EMAIL_RECIPIENTS="${INJECTED_EMAIL_RECIPIENTS}" \\
-                         -e EMAIL_USE_SSL=${INJECTED_EMAIL_USE_SSL} \\
-                         -e ALLURE_PUBLIC_URL="${final_allure_public_url}" \\
-                         -e TZ="Asia/Shanghai" \\
-                         -e ALLURE_RESULTS_DIR=/results \\
-                         -e ALLURE_REPORT_DIR=/report \\
-                         -e SKIP_REPORT_GENERATION=true \\
-                         -e SKIP_TEST_EXECUTION=true \\
-                         -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
-                         -v ${env.HOST_ALLURE_RESULTS_PATH}:/results:ro \\
-                         -v ${env.HOST_ALLURE_REPORT_PATH}:/report:ro \\
-                         -v /etc/localtime:/etc/localtime:ro \\
-                         --network host \\
+                       docker run --rm --name mkdir-temp-report-${BUILD_NUMBER} \\
+                         -v ${env.HOST_WORKSPACE_PATH}:/host_workspace:rw \\
                          ${env.DOCKER_IMAGE} \\
-                         /bin/bash -c "cd /workspace && python ci/scripts/run_and_notify.py"
-                       echo "通知脚本执行完毕。"
+                         sh -c 'mkdir -p /host_workspace/output/reports/temp-allure-report-for-summary/widgets'
                        """
+                       // 运行 allure generate
+                       sh """
+                       docker run --rm --name allure-gen-temp-${BUILD_NUMBER} \\
+                         -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_in:ro \\
+                         -v ${env.HOST_ALLURE_REPORT_PATH}:/report_out:rw \\
+                         ${env.DOCKER_IMAGE} \\
+                         sh -c 'allure generate /results_in --clean -o /report_out'
+                       """
+                       // 检查 summary.json 是否成功生成
+                       def summaryCheckExitCode = sh script: "docker run --rm -v ${env.HOST_ALLURE_REPORT_PATH}:/report_check:ro ${env.DOCKER_IMAGE} test -f /report_check/widgets/summary.json", returnStatus: true
+                       if (summaryCheckExitCode == 0) {
+                           tempReportGenSuccess = true
+                           echo "summary.json 已成功生成到宿主机路径: ${env.HOST_ALLURE_REPORT_PATH}/widgets/summary.json"
+                       } else {
+                           tempReportGenSuccess = false
+                           echo "[警告] 未能在 ${env.HOST_ALLURE_REPORT_PATH}/widgets/ 中找到 summary.json。"
+                       }
+
+                       // --- 5. 发送邮件通知 ---
+                       if (params.SEND_EMAIL) {
+                           echo "发送邮件通知 (尝试读取 ${env.HOST_ALLURE_REPORT_PATH}/widgets/summary.json)..."
+                           sh """
+                           docker run --rm --name notify-${BUILD_NUMBER} \\
+                             -e CI=true \\
+                             -e APP_ENV=${params.APP_ENV} \\
+                             -e EMAIL_ENABLED=${params.SEND_EMAIL} \\
+                             -e EMAIL_PASSWORD='${INJECTED_EMAIL_PASSWORD}' \\
+                             // ... 其他邮件环境变量 ...
+                             -e ALLURE_PUBLIC_URL="${allureReportUrl}" \\ // 使用插件生成的 URL
+                             -e BUILD_STATUS="${currentBuild.result ?: 'SUCCESS'}" \\
+                             // ... 其他构建信息环境变量 ...
+                             -v ${env.HOST_WORKSPACE_PATH}:/workspace:ro \\
+                             -v ${env.HOST_ALLURE_REPORT_PATH}:/report:ro \\ // 只读挂载临时报告
+                             ${env.DOCKER_IMAGE} \\
+                             python /workspace/ci/scripts/run_and_notify.py
+                           """
+                       } else {
+                           echo "邮件通知已禁用。"
+                       }
+
                    } // End withCredentials
                } catch (err) {
-                   echo "报告生成或通知阶段出现错误: ${err}"
-                   // 即使这里出错，我们仍然希望执行清理
-               }
+                   echo "Post-build 阶段出现严重错误: ${err}"
+                   // ... 处理错误 ...
+               } finally {
+                   // --- 6. 设置构建描述 ---
+                   // ... (使用 allureReportUrl 设置描述) ...
+                   def finalStatus = currentBuild.result ?: 'SUCCESS'
+                   def reportLink = allureStepSuccess && allureReportUrl.startsWith("http") ? "<a href='${allureReportUrl}' target='_blank'>查看报告</a>" : allureReportUrl ?: "(报告链接不可用)"
+                   currentBuild.description = "${params.APP_ENV.toUpperCase()} 环境 [...] - ${finalStatus} - ${reportLink}"
 
-               // --- 设置构建描述 (使用动态构建的 URL) ---
-               def testTypes = []
-               if (params.RUN_WEB_TESTS) testTypes.add("Web")
-               if (params.RUN_API_TESTS) testTypes.add("API")
-               if (params.RUN_WECHAT_TESTS) testTypes.add("微信")
-               if (params.RUN_APP_TESTS) testTypes.add("App")
-               if (testTypes.isEmpty()) testTypes.add("未选择")
-               // 根据 currentBuild.currentResult 判断最终状态
-               def finalStatus = currentBuild.currentResult ?: 'SUCCESS' // 如果没有被明确设置失败/不稳定，则假定为成功
-               // 使用 final_allure_public_url，如果为空则提供提示
-               def reportLink = final_allure_public_url ? "<a href='${final_allure_public_url}' target='_blank'>查看报告</a>" : "(报告URL未生成)"
-               currentBuild.description = "${params.APP_ENV.toUpperCase()} 环境 [${testTypes.join(', ')}] - ${finalStatus} - ${reportLink}"
+                   // --- 7. 清理临时报告目录和 Agent 工作区 ---
+                   echo "清理临时报告目录 ${env.HOST_ALLURE_REPORT_PATH} (在宿主机上)..."
+                   sh """
+                   docker run --rm --name cleanup-temp-report-${BUILD_NUMBER} \\
+                     -v ${env.HOST_WORKSPACE_PATH}:/host_workspace:rw \\
+                     ${env.DOCKER_IMAGE} \\
+                     sh -c 'rm -rf /host_workspace/output/reports/temp-allure-report-for-summary'
+                   """
+                   cleanWs()
+                   echo "Agent 工作空间和临时报告目录已清理。"
+               } // End finally
            } // End script
-
-           // --- 清理工作空间 ---
-           echo "清理 Agent 工作空间 ${WORKSPACE}..."
-           cleanWs()
-           echo "Agent 工作空间已清理。"
        } // End always
-       success {
-           echo "Pipeline 最终状态: 成功 (即使测试阶段可能失败)"
-       }
-       failure {
-           // 注意：如果测试失败，但报告生成成功，最终状态可能是FAILURE，
-           // 这取决于测试阶段是否显式设置了 currentBuild.result
-           echo "Pipeline 最终状态: 失败 (可能在测试阶段或报告/通知阶段失败)"
-       }
-       unstable {
-           echo "Pipeline 最终状态: 不稳定 (可能在测试阶段标记为不稳定)"
-       }
+       // ... success, failure, unstable blocks ...
    } // End post
 } // End pipeline
 ```
-
-**关键说明与最佳实践：**
-
-*   **DooD 宿主机路径映射**：`HOST_JENKINS_HOME_ON_HOST` 的正确设置至关重要，确保 Jenkinsfile 中 `-v` 挂载的是宿主机上的真实路径。
-*   **凭据管理**：所有敏感信息和环境特定配置（Git、账户、URL、邮件设置）都通过 Jenkins 凭据管理注入，提高安全性和灵活性。
-*   **动态配置**：Web/API URL 根据 `APP_ENV` 参数动态选择；Allure 公共 URL 根据注入的基础 URL 动态构建。
-*   **强制执行报告/通知**：通过将逻辑移至 `post { always { ... } }` 并捕获测试阶段的错误，确保报告和通知总会尝试执行。
-*   **辅助脚本**：利用 `ci/scripts/` 下的脚本封装复杂逻辑，保持 Jenkinsfile 清晰。
+- output目录建议定期清理，节省磁盘空间。
 
 ---
 
@@ -917,115 +894,115 @@ pipeline {
 *   **Q: 没有Dockerfile怎么办？**
     *   A: 请在项目根目录新建Dockerfile，内容见本手册第11节。确保 `allure-2.27.0.zip` 文件存在。
 *   **Q: 如何保证本地和CI环境一致？**
-    *   A: 所有成员和CI都用同一个Dockerfile构建或拉取同一个镜像标签，避免本地依赖污染。
+    *   A: 所有成员和CI都用同一个Dockerfile构建或拉取同一个镜像标签。
 *   **Q: 环境变量优先级如何？**
-    *   A: `docker run -e` > `--env-file` > 容器内.env文件。CI中通常用 `-e` 注入，但现在推荐通过 `withCredentials` 注入敏感信息。
-*   **Q: 报告生成后Web服务无法访问？**
+    *   A: `docker run -e` > 容器内.env文件。CI 中优先使用 `-e` 注入 Jenkins 凭据。
+*   **Q: Jenkins Allure 报告无法访问或内容不正确？**
     *   A: 检查：
-        1.  `ALLURE_NGINX_HOST_PATH` 是否正确指向 Nginx 宿主机上的 Web 根目录或其子目录。
-        2.  `deploy_allure_report.sh` 脚本是否成功将报告文件从 `HOST_ALLURE_REPORT_PATH` 复制到 `ALLURE_NGINX_HOST_PATH`。
-        3.  Nginx 服务器配置是否正确，以及相关目录权限是否允许 Nginx 进程读取。
-        4.  防火墙是否阻止了对 Nginx 端口的访问。
+        1.  `HOST_ALLURE_RESULTS_PATH` 变量是否正确指向宿主机上的 Allure 结果目录。
+        2.  该目录的权限是否允许 Jenkins Agent (或运行 Docker 的用户) 读取。
+        3.  Allure Jenkins 插件配置是否正确指向了 Agent 上的结果路径 (`output/allure-results`)。
+        4.  `write_allure_metadata.py` 是否成功执行并写入了元数据。
+*   **Q: Jenkins邮件通知缺少统计信息？**
+    *   A: 检查：
+        1.  `post` 阶段手动运行 `allure generate` 的步骤是否成功执行 (检查 Jenkins 日志)。
+        2.  `HOST_ALLURE_REPORT_PATH` 挂载是否正确。
+        3.  `summary.json` 是否确实生成在了 `HOST_ALLURE_REPORT_PATH/widgets/` 目录下。
+        4.  `run_and_notify.py` 脚本是否正确读取和解析了 `summary.json`。
 *   **Q: Jenkins环境变量/凭据如何安全注入？**
-    *   A: **强烈推荐**使用 Jenkins 的 "Credentials" 功能管理所有密码、密钥、URL、邮件服务器等配置信息，并在 Jenkinsfile 中通过 `withCredentials` 块按需注入。避免在 `environment` 块中硬编码任何敏感或易变信息。
+    *   A: 强烈推荐使用 Jenkins 的 "Credentials" 功能，并在 Jenkinsfile 中通过 `withCredentials` 块注入。
 *   **Q: Playwright/Allure安装慢或报错？**
-    *   A: 检查 Dockerfile 中是否已配置国内镜像源 (APT, pip, Poetry, Playwright download host)。网络不稳定时可尝试增加 `POETRY_REQUESTS_TIMEOUT`。
+    *   A: 检查 Dockerfile 中是否已配置国内镜像源。网络不稳定时可尝试增加 `POETRY_REQUESTS_TIMEOUT`。
 *   **Q: Playwright依赖库缺失如何解决？**
     *   A: 仔细核对 Dockerfile 中 `apt-get install` 命令是否包含了所有 Playwright 官方文档要求的系统依赖。
 *   **Q: output目录产物如何归档？**
-    *   A: Jenkinsfile 中可以使用 `archiveArtifacts` 步骤归档 `HOST_ALLURE_REPORT_PATH` 目录。部署到 Nginx 后通常无需再归档。
-*   **Q: 为什么要使用pytest而不是直接pytest？** (原文如此，应为 `poetry run pytest`)
-    *   A: 确保使用的是 Poetry 管理的依赖环境，尤其是在 Dockerfile 中 `POETRY_VIRTUALENVS_CREATE=false` 时，`poetry run` 能正确找到安装的包。
+    *   A: 可以归档 `HOST_ALLURE_RESULTS_PATH` 作为原始数据备份。最终报告由 Jenkins 插件管理。
+*   **Q: 为什么要使用 poetry run pytest 而不是直接 pytest？**
+    *   A: 确保在 Poetry 管理的环境中运行，避免依赖问题。
 *   **Q: Docker 拉取镜像或构建时网络超时/无法连接？**
-    *   A: 核心是解决 Docker daemon 访问仓库的网络问题。**首选方案是配置并验证有效的国内镜像加速器**（详见本手册FAQ中的详细步骤，包括 `daemon.json` 配置、验证和重启 Docker 服务）。
+    *   A: 核心是解决 Docker daemon 访问仓库的网络问题。首选方案是配置并验证有效的国内镜像加速器。
 *   **Q: Jenkins流水线在Docker容器(DooD模式)中挂载卷找不到文件/内容不正确？**
-    *   A: 关键在于区分 Jenkins Agent 容器内的路径 (`${WORKSPACE}`) 和宿主机上的真实路径。**必须**在 Jenkinsfile 的 `docker run` 命令中使用 `-v` 挂载**宿主机**上的路径。通过 `docker inspect <jenkins容器>` 找到宿主机路径，并在 `environment` 块中定义变量（如 `HOST_WORKSPACE_PATH`）来引用它。
+    *   A: 关键在于区分 Jenkins Agent 容器内的路径 (`${WORKSPACE}`) 和宿主机上的真实路径。必须在 Jenkinsfile 的 `docker run` 命令中使用 `-v` 挂载宿主机上的路径。
 
 ---
 
 ## 16. 邮件通知集成
 
-测试完成后自动发送邮件通知是CI/CD自动化的重要环节。本项目当前主要通过在 Jenkins 流水线中调用 Python 脚本来实现邮件发送。
+测试完成后自动发送邮件通知是CI/CD自动化的重要环节。本项目当前通过在 Jenkins 流水线中调用 Python 脚本来实现邮件发送。
 
 ### 16.1 Python脚本发送邮件 (当前项目使用方式)
 
-项目中 `ci/scripts/run_and_notify.py` 负责在测试执行后收集结果，并根据环境变量配置调用邮件发送逻辑。**强烈推荐**将所有邮件配置（SMTP服务器、端口、发件人、密码/授权码、收件人、SSL设置）通过 Jenkins 凭据管理，并在 Jenkinsfile 中使用 `withCredentials` 将这些凭据注入到运行该脚本的容器的环境变量中。
+项目中 `ci/scripts/run_and_notify.py` 负责在测试执行后收集结果，并根据环境变量配置调用邮件发送逻辑。**关键在于**: 该脚本会尝试读取**手动生成的临时 Allure 报告**中的 `summary.json` 文件来获取详细的测试统计数据。
+
+**强烈推荐**将所有邮件配置（SMTP服务器、端口、发件人、密码/授权码、收件人、SSL设置）通过 Jenkins 凭据管理，并在 Jenkinsfile 中使用 `withCredentials` 将这些凭据注入到运行该脚本的容器的环境变量中。
 
 ```python
-# ci/scripts/run_and_notify.py (或相关邮件发送模块) 逻辑示意
+# ci/scripts/run_and_notify.py 逻辑示意
 import os
-# 假设使用 yagmail 或类似库，或者项目内封装的 src.utils.email_notifier
 # from src.utils.email_notifier import EmailNotifier
+from ci.scripts.utils import get_allure_summary # 导入获取摘要的函数
 
-def send_notification(allure_url, summary): # 假设 summary 也被传入
+def send_notification(allure_plugin_url): # URL 来自 Jenkins 插件
     # --- 从环境变量获取邮件配置 (由 Jenkinsfile 通过凭据注入) ---
     enabled = os.environ.get("EMAIL_ENABLED", "false").lower() == "true"
-    sender = os.environ.get("EMAIL_SENDER")          # 从凭据注入
-    password = os.environ.get("EMAIL_PASSWORD")        # 从凭据注入
-    recipients_str = os.environ.get("EMAIL_RECIPIENTS", "") # 从凭据注入
-    smtp_server = os.environ.get("EMAIL_SMTP_SERVER")  # 从凭据注入
-    smtp_port_str = os.environ.get("EMAIL_SMTP_PORT")    # 从凭据注入
-    use_ssl_str = os.environ.get("EMAIL_USE_SSL")      # 从凭据注入
+    # ... 获取其他邮件配置 sender, password, recipients_str, smtp_server, etc. ...
 
-    # 检查必要配置是否存在
-    if not all([enabled, sender, password, recipients_str, smtp_server, smtp_port_str, use_ssl_str]):
-        print("邮件通知未启用或必要配置缺失 (来自凭据)，跳过发送。")
+    if not enabled: # or other checks fail
+        print("邮件通知未启用或配置缺失，跳过。")
         return
 
-    # 解析配置
-    recipients = [email.strip() for email in recipients_str.split(",") if email.strip()]
+    # --- 尝试从临时报告目录获取摘要 ---
+    # Jenkinsfile 中将 HOST_ALLURE_REPORT_PATH 挂载到了 /report
+    summary = get_allure_summary(report_dir_base="/report")
+
+    if not summary:
+        print("警告: 未能获取 Allure 摘要信息，邮件将不包含详细统计。")
+        # 可以选择发送一个不含统计的简化邮件，或直接返回
+        # return
+
+    # 解析收件人等配置
+    # ...
+
+    # 准备邮件内容
+    subject = f"【自动化测试】..."
+    # 构建 HTML 正文，如果 summary 存在则包含统计信息，否则提示
+    html_body = f"<html><body>"
+    if summary and 'total' in summary:
+         # ... 使用 summary 构建包含统计的 HTML ...
+         pass
+    else:
+         html_body += "<p>未能获取详细统计信息。</p>"
+    html_body += f"<br/> 报告链接: <a href='{allure_plugin_url}'>点击查看 (Jenkins)</a></body></html>"
+
+    # 发送邮件
     try:
-        smtp_port = int(smtp_port_str)
-    except ValueError:
-        print(f"无效的 SMTP 端口号: {smtp_port_str}，跳过邮件发送。")
-        return
-    use_ssl = use_ssl_str.lower() == 'true'
-
-    if not recipients:
-        print("收件人列表为空，跳过邮件发送。")
-        return
-
-    # 准备邮件内容 (使用传入的 summary 和 allure_url)
-    subject = f"【自动化测试】{os.environ.get('APP_ENV', '未知').upper()} 环境报告 [{time.strftime('%Y-%m-%d %H:%M:%S')}]"
-    # ... 构建 HTML 正文 (如之前示例) ...
-    html_body = f"<html><body>测试摘要: {summary} <br/> 报告链接: <a href='{allure_url}'>点击查看</a></body></html>" # 简化示例
-
-    # 发送邮件 (使用项目工具或库)
-    try:
-        # 假设使用项目中的 EmailNotifier
-        # notifier = EmailNotifier(smtp_server, smtp_port, sender, password, use_ssl=use_ssl)
-        # notifier.send_html(subject, html_body, recipients)
-
-        # 或者使用 yagmail
-        # import yagmail
-        # yag = yagmail.SMTP(user=sender, password=password, host=smtp_server, port=smtp_port, smtp_ssl=use_ssl)
-        # yag.send(to=recipients, subject=subject, contents=html_body)
-
-        print(f"邮件通知已尝试发送给: {', '.join(recipients)}")
+        # ... 调用邮件发送逻辑 ...
+        print(f"邮件通知已尝试发送给: ...")
     except Exception as e:
         print(f"发送邮件失败: {e}")
 
 # 在 run_and_notify.py 的主逻辑中调用
 # if __name__ == "__main__":
-#     # ... 获取测试摘要 summary ...
-#     allure_public_url = os.environ.get("ALLURE_PUBLIC_URL", "#")
-#     # 确保 SKIP_TEST_EXECUTION=true 时也能获取到 summary
-#     send_notification(allure_public_url, summary)
-
+#     allure_public_url = os.environ.get("ALLURE_PUBLIC_URL", "#") # 获取插件生成的 URL
+#     send_notification(allure_public_url)
 ```
 
-**确保 Jenkinsfile 中在 `post { always { ... } }` 块的 `withCredentials` 中注入了所有必要的邮件环境变量给运行 `run_and_notify.py` 的容器：**
-`EMAIL_ENABLED`, `EMAIL_PASSWORD`, `EMAIL_SMTP_SERVER`, `EMAIL_SMTP_PORT`, `EMAIL_SENDER`, `EMAIL_RECIPIENTS`, `EMAIL_USE_SSL`, `ALLURE_PUBLIC_URL`。
+**确保 Jenkinsfile 中在 `post { always { ... } }` 块的 `withCredentials` 中注入了所有必要的邮件环境变量，并且在调用 `run_and_notify.py` 的 `docker run` 命令中正确挂载了临时报告目录 (`-v ${env.HOST_ALLURE_REPORT_PATH}:/report:ro`)。**
 
 ### 16.2 Jenkins Email Extension Plugin (备选方案)
-// ... 这部分保持不变 ...
+如果可以接受邮件中不包含详细的 Allure 测试统计信息（只有构建状态和报告链接），可以考虑使用 Jenkins 的 Email Extension Plugin (`emailext`)。这样可以移除自定义的邮件脚本 (`run_and_notify.py`, `notify.py`, `utils.py`)，移除手动生成临时报告的步骤，并移除 Dockerfile 中的 Allure CLI 依赖，从而简化流程。但会牺牲邮件内容的丰富度。
 
 ### 16.3 邮件通知最佳实践
-// ... 这部分保持不变 ...
+- **使用凭据管理**：绝不硬编码密码或 API 密钥。
+- **清晰的标题**：包含项目、环境、构建号、状态等关键信息。
+- **简洁的正文**：突出显示关键结果（状态、通过率等）和报告链接。
+- **区分收件人**：根据构建状态或失败类型发送给不同的人员/群组。
+- **错误处理**：邮件发送失败不应导致整个 CI 流程失败。
 
 ---
 
 ## 变更记录
+- YYYY-MM-DD: **重大更新**: 根据最新的 Jenkinsfile 和 CI 脚本重构，更新了文档。主要变更包括：明确 Allure CLI 仍然需要；更新了 CI 脚本说明；修正了 Jenkinsfile 示例，移除了 Nginx 部署逻辑，准确反映了 Allure 插件 + 手动临时报告生成（用于邮件摘要）+ 清理的流程；澄清了报告访问方式；调整了 FAQ 和邮件通知章节。
 - YYYY-MM-DD: **重大更新**: 将 Web/API URL、Allure 基础 URL、Git 仓库 URL 及所有邮件配置参数化到 Jenkins 凭据。更新了 Jenkins 凭据创建指南和 Jenkinsfile 示例以反映这些变化。将报告生成和通知逻辑移至 `post { always }` 块以强制执行。
 - YYYY-MM-DD: 新增 Jenkins 凭据创建指南，调整邮件通知说明以匹配项目实践，移除 emailext 示例强调 Python 脚本方式。
 - YYYY-MM-DD: 更新 Dockerfile 和 Jenkinsfile 相关描述，移除 GitLab CI 示例，强化 Jenkins 集成说明和 DooD 模式下的路径映射解释。
