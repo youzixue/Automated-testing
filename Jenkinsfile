@@ -17,17 +17,21 @@ pipeline {
         GIT_REPO_URL_CREDENTIAL_ID = 'git-repo-url'
         TEST_ENV_CREDENTIALS_ID = 'test-env-credentials'
         PROD_ENV_CREDENTIALS_ID = 'prod-env-credentials'
-        EMAIL_PASSWORD_CREDENTIALS_ID = 'email-password-credential'
         TEST_WEB_URL_CREDENTIAL_ID = 'test-web-url'
         TEST_API_URL_CREDENTIAL_ID = 'test-api-url'
         PROD_WEB_URL_CREDENTIAL_ID = 'prod-web-url'
         PROD_API_URL_CREDENTIAL_ID = 'prod-api-url'
         ALLURE_BASE_URL_CREDENTIAL_ID = 'allure-base-url'
+        // --- 新增邮件相关凭据 ID ---
+        EMAIL_PASSWORD_CREDENTIALS_ID = 'email-password-credential'
+        EMAIL_SMTP_SERVER_CREDENTIAL_ID = 'email-smtp-server'
+        EMAIL_SMTP_PORT_CREDENTIAL_ID = 'email-smtp-port'
+        EMAIL_SENDER_CREDENTIAL_ID = 'email-sender'
+        EMAIL_RECIPIENTS_CREDENTIAL_ID = 'email-recipients'
+        EMAIL_USE_SSL_CREDENTIAL_ID = 'email-use-ssl'
 
         // --- Allure 报告相关 (Nginx 宿主机路径) ---
         ALLURE_NGINX_DIR_NAME = "${params.APP_ENV == 'prod' ? 'allure-report-prod' : 'allure-report-test'}"
-        // ALLURE_PUBLIC_URL 将在 post 块中动态构建
-        // ALLURE_PUBLIC_URL = "${params.APP_ENV == 'prod' ? 'http://192.168.10.67:8000/allure-report-prod/' : 'http://192.168.10.67:8000/allure-report-test/'}"
         ALLURE_NGINX_HOST_PATH = "/usr/share/nginx/html/${ALLURE_NGINX_DIR_NAME}" // <-- Nginx 在宿主机上的路径
 
         // --- Docker Agent & 宿主机路径映射 ---
@@ -44,10 +48,9 @@ pipeline {
     stages {
         stage('检出代码') {
             steps {
-                // --- 使用 withCredentials 注入 Git URL 和认证凭据 ---
                 withCredentials([
                     string(credentialsId: env.GIT_REPO_URL_CREDENTIAL_ID, variable: 'INJECTED_GIT_REPO_URL'),
-                    usernamePassword(credentialsId: env.GIT_CREDENTIALS_ID, usernameVariable: 'GIT_USERNAME', passwordVariable: 'GIT_PASSWORD') // 或者使用 SSH Key 凭据类型
+                    usernamePassword(credentialsId: env.GIT_CREDENTIALS_ID, usernameVariable: 'GIT_USERNAME', passwordVariable: 'GIT_PASSWORD')
                 ]) {
                     echo "从代码仓库拉取最新代码: ${INJECTED_GIT_REPO_URL}"
                     cleanWs()
@@ -55,8 +58,8 @@ pipeline {
                         $class: 'GitSCM',
                         branches: [[name: '*/main']],
                         userRemoteConfigs: [[
-                            url: INJECTED_GIT_REPO_URL, // <-- 使用注入的变量
-                            credentialsId: env.GIT_CREDENTIALS_ID // <-- 认证凭据保持不变
+                            url: INJECTED_GIT_REPO_URL,
+                            credentialsId: env.GIT_CREDENTIALS_ID
                         ]]
                     ])
                 }
@@ -207,36 +210,34 @@ pipeline {
                                  parallel testsToRun
                             } else {
                                  echo "没有选择任何测试平台，跳过测试执行。"
-                                 // 确保宿主机上的结果目录存在，即使没有测试运行
                                  sh "mkdir -p ${env.HOST_ALLURE_RESULTS_PATH}"
                             }
                         } // End withCredentials
                     } catch (err) {
                         echo "测试阶段出现错误: ${err}. 将继续执行报告生成和通知。"
-                        // 将构建状态标记为 UNSTABLE 而不是 FAILURE，如果需要区分
                         // currentBuild.result = 'UNSTABLE'
                     }
                 } // End script
             } // End steps
         } // End stage '并行执行测试'
 
-       // --- 原'生成报告与通知' Stage 已被移除 ---
-
        } // End stages
 
        post {
            always {
-               // --- 将报告生成和通知逻辑移动到这里 ---
                echo "Pipeline 完成. 开始执行报告生成和通知步骤..."
                script {
-                   // --- 定义将在内部使用的完整 Allure URL 变量 ---
                    def final_allure_public_url = ""
-                   // 使用 try/catch 块来捕获可能的错误，确保后续清理能执行
                    try {
-                       // --- 注入邮件密码和 Allure 基础 URL ---
+                       // --- 注入所有需要的凭据，包括邮件配置 ---
                        withCredentials([
-                           string(credentialsId: env.EMAIL_PASSWORD_CREDENTIALS_ID, variable: 'EMAIL_PASSWORD'),
-                           string(credentialsId: env.ALLURE_BASE_URL_CREDENTIAL_ID, variable: 'INJECTED_ALLURE_BASE_URL')
+                           string(credentialsId: env.EMAIL_PASSWORD_CREDENTIALS_ID, variable: 'INJECTED_EMAIL_PASSWORD'),
+                           string(credentialsId: env.ALLURE_BASE_URL_CREDENTIAL_ID, variable: 'INJECTED_ALLURE_BASE_URL'),
+                           string(credentialsId: env.EMAIL_SMTP_SERVER_CREDENTIAL_ID, variable: 'INJECTED_EMAIL_SMTP_SERVER'),
+                           string(credentialsId: env.EMAIL_SMTP_PORT_CREDENTIAL_ID, variable: 'INJECTED_EMAIL_SMTP_PORT'),
+                           string(credentialsId: env.EMAIL_SENDER_CREDENTIAL_ID, variable: 'INJECTED_EMAIL_SENDER'),
+                           string(credentialsId: env.EMAIL_RECIPIENTS_CREDENTIAL_ID, variable: 'INJECTED_EMAIL_RECIPIENTS'),
+                           string(credentialsId: env.EMAIL_USE_SSL_CREDENTIAL_ID, variable: 'INJECTED_EMAIL_USE_SSL')
                        ]) {
                            // --- 动态构建完整的 Allure URL ---
                            final_allure_public_url = "${INJECTED_ALLURE_BASE_URL.endsWith('/') ? INJECTED_ALLURE_BASE_URL : INJECTED_ALLURE_BASE_URL + '/'}${env.ALLURE_NGINX_DIR_NAME}/"
@@ -283,19 +284,19 @@ pipeline {
                            echo "报告已部署到 Nginx 目录。"
 
                            echo "发送邮件通知..."
-                           // --- 在 docker run 命令中传递动态构建的 URL ---
+                           // --- 使用注入的邮件配置变量 ---
                            sh """
                            echo "--- Sending notification email via run_and_notify.py --- (using host path ${env.HOST_WORKSPACE_PATH})"
                            docker run --rm --name notify-${BUILD_NUMBER} \\
                              -e CI=true \\
                              -e APP_ENV=${params.APP_ENV} \\
                              -e EMAIL_ENABLED=${params.SEND_EMAIL} \\
-                             -e EMAIL_PASSWORD='${EMAIL_PASSWORD}' \\
-                             -e EMAIL_SMTP_SERVER="smtp.qiye.aliyun.com" \\
-                             -e EMAIL_SMTP_PORT=465 \\
-                             -e EMAIL_SENDER="yzx@ylmt2b.com" \\
-                             -e EMAIL_RECIPIENTS="yzx@ylmt2b.com" \\
-                             -e EMAIL_USE_SSL=true \\
+                             -e EMAIL_PASSWORD='${INJECTED_EMAIL_PASSWORD}' \\
+                             -e EMAIL_SMTP_SERVER="${INJECTED_EMAIL_SMTP_SERVER}" \\
+                             -e EMAIL_SMTP_PORT=${INJECTED_EMAIL_SMTP_PORT} \\
+                             -e EMAIL_SENDER="${INJECTED_EMAIL_SENDER}" \\
+                             -e EMAIL_RECIPIENTS="${INJECTED_EMAIL_RECIPIENTS}" \\
+                             -e EMAIL_USE_SSL=${INJECTED_EMAIL_USE_SSL} \\
                              -e ALLURE_PUBLIC_URL="${final_allure_public_url}" \\
                              -e TZ="Asia/Shanghai" \\
                              -e ALLURE_RESULTS_DIR=/results \\
@@ -314,7 +315,6 @@ pipeline {
                        } // End withCredentials
                    } catch (err) {
                        echo "报告生成或通知阶段出现错误: ${err}"
-                       // 即使这里出错，我们仍然希望执行清理
                    }
 
                    // --- 设置构建描述 (使用动态构建的 URL) ---
@@ -325,7 +325,6 @@ pipeline {
                    if (params.RUN_APP_TESTS) testTypes.add("App")
                    if (testTypes.isEmpty()) testTypes.add("未选择")
                    def finalStatus = currentBuild.currentResult ?: 'UNKNOWN'
-                   // 使用 final_allure_public_url，如果为空则提供提示
                    def reportLink = final_allure_public_url ? "<a href='${final_allure_public_url}' target='_blank'>查看报告</a>" : "(报告URL未生成)"
                    currentBuild.description = "${params.APP_ENV.toUpperCase()} 环境 [${testTypes.join(', ')}] - ${finalStatus} - ${reportLink}"
                } // End script
