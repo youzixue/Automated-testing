@@ -21,7 +21,6 @@ pipeline {
         TEST_API_URL_CREDENTIAL_ID = 'test-api-url'
         PROD_WEB_URL_CREDENTIAL_ID = 'prod-web-url'
         PROD_API_URL_CREDENTIAL_ID = 'prod-api-url'
-        // ALLURE_BASE_URL_CREDENTIAL_ID = 'allure-base-url' // 可能不再需要
         // --- 邮件相关凭据 ID ---
         EMAIL_PASSWORD_CREDENTIALS_ID = 'email-password-credential'
         EMAIL_SMTP_SERVER_CREDENTIAL_ID = 'email-smtp-server'
@@ -35,7 +34,8 @@ pipeline {
         HOST_JENKINS_HOME_ON_HOST = '/var/lib/docker/volumes/jenkins_home/_data' // <-- !!! 示例路径，请务必检查 !!!
         HOST_WORKSPACE_PATH = "${HOST_JENKINS_HOME_ON_HOST}/workspace/${env.JOB_NAME}" // <-- 宿主机上的 Jenkins 工作区路径
         HOST_ALLURE_RESULTS_PATH = "${HOST_WORKSPACE_PATH}/output/allure-results" // <-- 宿主机上的 Allure 结果路径 (用于写入元数据和权限修改)
-        HOST_ALLURE_REPORT_PATH = "${HOST_WORKSPACE_PATH}/output/reports/allure-report" // <-- 宿主机上的临时报告路径 (用于邮件通知脚本读取摘要)
+        // HOST_ALLURE_REPORT_PATH 用于临时存放报告，以便 notify 脚本读取 summary.json
+        HOST_ALLURE_REPORT_PATH = "${HOST_WORKSPACE_PATH}/output/reports/temp-allure-report-for-summary" // <-- 宿主机上的临时报告路径
 
         // --- 测试相关 ---
         TEST_SUITE_VALUE = "${params.TEST_SUITE == '全部' ? 'all' : (params.TEST_SUITE == '冒烟测试' ? 'smoke' : 'regression')}"
@@ -69,22 +69,24 @@ pipeline {
         stage('准备环境 (Agent)') {
             steps {
                 echo "准备测试环境和目录 (在 Agent ${WORKSPACE} 上)..."
+                // 确保结果和临时报告目录存在于 Agent 上
                 sh """
                 mkdir -p ${WORKSPACE}/output/allure-results
-                mkdir -p ${WORKSPACE}/output/reports/allure-report
-                echo "清空旧的 allure-results (在 Agent ${WORKSPACE} 上)..."
+                mkdir -p ${WORKSPACE}/output/reports/temp-allure-report-for-summary
+                echo "清空旧的 allure-results 和 temp report (在 Agent ${WORKSPACE} 上)..."
                 rm -rf ${WORKSPACE}/output/allure-results/*
+                rm -rf ${WORKSPACE}/output/reports/temp-allure-report-for-summary/*
                 """
                 echo "环境准备完成。"
             }
         }
 
         stage('检查脚本文件') {
-             // (可选) 保留此阶段用于调试
             steps {
                 echo "检查脚本文件是否存在于 Agent 路径: ${WORKSPACE}/ci/scripts/ ..."
                 sh "ls -la ${WORKSPACE}/ci/scripts/ || echo '>>> ci/scripts/ 目录不存在或无法列出 <<<' "
                 sh "test -f ${WORKSPACE}/ci/scripts/write_allure_metadata.py && echo '>>> write_allure_metadata.py 存在于 Agent <<< ' || echo '>>> write_allure_metadata.py 不存在于 Agent! <<<' "
+                sh "test -f ${WORKSPACE}/ci/scripts/run_and_notify.py && echo '>>> run_and_notify.py 存在于 Agent <<< ' || echo '>>> run_and_notify.py 不存在于 Agent! <<<' "
             }
         }
 
@@ -199,12 +201,14 @@ pipeline {
                                  parallel testsToRun
                             } else {
                                  echo "没有选择任何测试平台，跳过测试执行。"
+                                 // 确保 allure-results 目录存在，即使没有测试执行
                                  sh "mkdir -p ${WORKSPACE}/output/allure-results"
                             }
                         } // End withCredentials
                     } catch (err) {
                         echo "测试阶段出现错误: ${err}. 将继续执行报告生成和通知。"
-                        // currentBuild.result = 'UNSTABLE'
+                        // 可以标记为 UNSTABLE，以便 post 阶段可以识别并处理
+                        currentBuild.result = 'UNSTABLE'
                     }
                 } // End script
             } // End steps
@@ -219,6 +223,7 @@ pipeline {
                script {
                    def allureReportUrl = ""
                    def allureStepSuccess = false
+                   def tempReportGenSuccess = false
 
                    try {
                        withCredentials([
@@ -230,9 +235,11 @@ pipeline {
                            string(credentialsId: env.EMAIL_USE_SSL_CREDENTIAL_ID, variable: 'INJECTED_EMAIL_USE_SSL')
                        ]) {
 
-                           // --- 1. 写入 Allure 元数据 (插件会使用) ---
+                           // --- 1. 写入 Allure 元数据 (插件和手动生成都需要) ---
                            echo "写入 Allure 元数据文件到 ${env.HOST_ALLURE_RESULTS_PATH} (在宿主机上)..."
                            def jenkinsAllureReportUrl = "${env.BUILD_URL}allure/"
+                           // 确保执行元数据写入的容器有权限写入挂载的宿主机目录
+                           // 使用 --user root 确保有权限
                            sh """
                            docker run --rm --name write-metadata-${BUILD_NUMBER} \\
                              -e APP_ENV=${params.APP_ENV} \\
@@ -249,11 +256,9 @@ pipeline {
                            """
                            echo "Allure 元数据写入完成。"
 
-                           // --- 2. 修正 allure-results 目录权限 (使用 Docker chown/chmod) ---
+                           // --- 2. 修正 allure-results 目录权限 (供 Allure 插件和手动生成读取) ---
                            echo "修正宿主机目录 ${env.HOST_ALLURE_RESULTS_PATH} 的权限 (使用 Docker)..."
-                           // 启动一个临时的 root 容器来执行 chown 和 chmod
-                           // 尝试将所有者改为 UID 1000, GID 1000 (常见的 Jenkins Docker UID/GID)
-                           // 并确保所有用户都有读取权限
+                           // 确保 Docker 容器内的 allure 命令可以读取结果文件
                            sh """
                            docker run --rm --name chown-chmod-results-${BUILD_NUMBER} \\
                              -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_to_fix:rw \\
@@ -263,31 +268,55 @@ pipeline {
                            """
                            echo "权限修正尝试完成。"
 
-                           // --- 2.5 验证 Agent 是否能看到正确的权限 ---
-                           echo "从 Agent 验证 ${WORKSPACE}/output/allure-results 的权限..."
-                           // 使用 ls -ln 显示数字 UID/GID，忽略错误以便继续执行
-                           sh script: "ls -ln ${WORKSPACE}/output/allure-results || echo '无法列出 allure-results 目录内容'", returnStatus: true
-                           sh script: "ls -l ${WORKSPACE}/output/allure-results/executor.json || echo '无法列出 executor.json'", returnStatus: true
-
-
-                           // --- 3. 使用 Allure Jenkins 插件生成和归档报告 ---
+                           // --- 3. 使用 Allure Jenkins 插件生成和归档报告 (用于 Jenkins UI 显示和历史记录) ---
                            echo "使用 Allure Jenkins 插件处理 ${WORKSPACE}/output/allure-results 中的结果..."
-                           allure([
-                               properties: [],
-                               reportBuildPolicy: 'ALWAYS',
-                               results: [
-                                   [path: 'output/allure-results'] // 相对于 WORKSPACE 的路径
-                               ]
-                           ])
-                           allureStepSuccess = true
-                           allureReportUrl = jenkinsAllureReportUrl
-                           echo "Allure 插件报告处理完成。报告 URL: ${allureReportUrl}"
+                           try {
+                               allure([
+                                   properties: [],
+                                   reportBuildPolicy: 'ALWAYS',
+                                   results: [
+                                       [path: 'output/allure-results'] // 相对于 WORKSPACE 的路径
+                                   ]
+                               ])
+                               allureStepSuccess = true
+                               allureReportUrl = jenkinsAllureReportUrl // 使用插件生成的 URL
+                               echo "Allure 插件报告处理完成。报告 URL: ${allureReportUrl}"
+                           } catch (allurePluginError) {
+                               echo "Allure 插件步骤失败: ${allurePluginError}"
+                               allureStepSuccess = false
+                               allureReportUrl = "(Allure 插件报告生成失败)"
+                               // 即使插件失败，仍然尝试手动生成报告以获取摘要
+                           }
 
-                           // --- 4. 发送邮件通知 (更新链接) ---
+                           // --- 4. 手动生成报告到临时目录 (获取 summary.json) ---
+                           echo "生成临时报告到 ${env.HOST_ALLURE_REPORT_PATH} 以获取 summary.json..."
+                           // 确保目标目录存在 (在宿主机上)
+                           sh "mkdir -p ${env.HOST_ALLURE_REPORT_PATH}/widgets"
+                           // 使用 Docker 运行 allure generate，确保 allure 命令可用
+                           sh """
+                           docker run --rm --name allure-gen-temp-${BUILD_NUMBER} \\
+                             -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_in:ro \\
+                             -v ${env.HOST_ALLURE_REPORT_PATH}:/report_out:rw \\
+                             --user root \\
+                             ${env.DOCKER_IMAGE} \\
+                             sh -c 'allure generate /results_in --clean -o /report_out && echo "Temporary report generated to /report_out" || echo "Failed to generate temporary report!"'
+                           """
+                           // 检查 summary.json 是否成功生成
+                           def summaryCheckExitCode = sh script: "docker run --rm -v ${env.HOST_ALLURE_REPORT_PATH}:/report_check:ro ${env.DOCKER_IMAGE} test -f /report_check/widgets/summary.json", returnStatus: true
+                           if (summaryCheckExitCode == 0) {
+                               tempReportGenSuccess = true
+                               echo "summary.json 已成功生成到宿主机路径: ${env.HOST_ALLURE_REPORT_PATH}/widgets/summary.json"
+                           } else {
+                               tempReportGenSuccess = false
+                               echo "[警告] 未能在 ${env.HOST_ALLURE_REPORT_PATH}/widgets/ 中找到 summary.json。邮件可能缺少统计信息。"
+                           }
+
+                           // --- 5. 发送邮件通知 ---
                            if (params.SEND_EMAIL) {
-                               echo "发送邮件通知..."
+                               echo "发送邮件通知 (尝试读取 ${env.HOST_ALLURE_REPORT_PATH}/widgets/summary.json)..."
+                               // 运行通知容器，挂载临时报告目录以读取 summary.json
                                sh """
-                               echo "--- Sending notification email via run_and_notify.py --- (using host path ${env.HOST_WORKSPACE_PATH})"
+                               echo "--- Sending notification email via run_and_notify.py ---"
                                docker run --rm --name notify-${BUILD_NUMBER} \\
                                  -e CI=true \\
                                  -e APP_ENV=${params.APP_ENV} \\
@@ -299,17 +328,17 @@ pipeline {
                                  -e EMAIL_RECIPIENTS="${INJECTED_EMAIL_RECIPIENTS}" \\
                                  -e EMAIL_USE_SSL=${INJECTED_EMAIL_USE_SSL} \\
                                  -e ALLURE_PUBLIC_URL="${allureReportUrl}" \\
+                                 -e BUILD_STATUS="${currentBuild.result ?: 'SUCCESS'}" \\
+                                 -e BUILD_URL="${env.BUILD_URL}" \\
+                                 -e JOB_NAME="${env.JOB_NAME}" \\
+                                 -e BUILD_NUMBER="${BUILD_NUMBER}" \\
                                  -e TZ="Asia/Shanghai" \\
-                                 -e ALLURE_RESULTS_DIR=/results \\
-                                 -e SKIP_REPORT_GENERATION=true \\
-                                 -e SKIP_TEST_EXECUTION=true \\
-                                 -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
-                                 -v ${env.HOST_ALLURE_RESULTS_PATH}:/results:ro \\
+                                 -v ${env.HOST_WORKSPACE_PATH}:/workspace:ro \\
                                  -v ${env.HOST_ALLURE_REPORT_PATH}:/report:ro \\
                                  -v /etc/localtime:/etc/localtime:ro \\
                                  --network host \\
                                  ${env.DOCKER_IMAGE} \\
-                                 /bin/bash -c "cd /workspace && python ci/scripts/run_and_notify.py"
+                                 python /workspace/ci/scripts/run_and_notify.py
                                echo "通知脚本执行完毕。"
                                """
                            } else {
@@ -318,20 +347,18 @@ pipeline {
 
                        } // End withCredentials
                    } catch (err) {
-                       echo "Post-build 阶段出现错误: ${err}"
-                       // 检查 allureStepSuccess 标志，如果 Allure 步骤本身失败，则标记构建为 FAILURE
-                       if (!allureStepSuccess) {
+                       echo "Post-build 阶段出现严重错误: ${err}"
+                       // 如果在关键步骤（如权限修正、报告生成）失败，标记为 FAILURE
+                       if (!allureStepSuccess && !tempReportGenSuccess) {
                            currentBuild.result = 'FAILURE'
-                           // 如果是因为 Allure 插件失败，确保 allureReportUrl 为空或提示信息
-                           allureReportUrl = "(报告生成失败)"
                        } else {
-                           // 如果是 Allure 之后的步骤（如邮件）失败，可能标记为 UNSTABLE
+                           // 如果是邮件发送失败，可能标记为 UNSTABLE
                            if (currentBuild.result == null || currentBuild.result == 'SUCCESS') {
                               currentBuild.result = 'UNSTABLE'
                            }
                        }
                    } finally {
-                       // --- 5. 设置构建描述 ---
+                       // --- 6. 设置构建描述 ---
                        def testTypes = []
                        if (params.RUN_WEB_TESTS) testTypes.add("Web")
                        if (params.RUN_API_TESTS) testTypes.add("API")
@@ -339,18 +366,21 @@ pipeline {
                        if (params.RUN_APP_TESTS) testTypes.add("App")
                        if (testTypes.isEmpty()) testTypes.add("未选择")
 
-                       // 确保 finalStatus 反映了 catch 块中可能设置的失败状态
+                       // 获取最终构建状态
                        def finalStatus = currentBuild.result ?: 'SUCCESS'
 
-                       // 确保 reportLink 能反映 allureReportUrl 可能的变化
-                       def reportLink = allureReportUrl.startsWith("http") ? "<a href='${allureReportUrl}' target='_blank'>查看报告</a>" : allureReportUrl ?: "(报告链接不可用)"
+                       // 确保报告链接基于 Allure 插件的状态
+                       def reportLink = allureStepSuccess && allureReportUrl.startsWith("http") ? "<a href='${allureReportUrl}' target='_blank'>查看报告</a>" : allureReportUrl ?: "(报告链接不可用)"
 
                        currentBuild.description = "${params.APP_ENV.toUpperCase()} 环境 [${testTypes.join(', ')}] - ${finalStatus} - ${reportLink}"
 
-                       // --- 6. 清理工作空间 ---
-                       echo "清理 Agent 工作空间 ${WORKSPACE}..."
+                       // --- 7. 清理工作空间和临时报告目录 ---
+                       echo "清理 Agent 工作空间 ${WORKSPACE} 和临时报告目录 ${env.HOST_ALLURE_REPORT_PATH} (在宿主机上)..."
+                       // 在宿主机上删除临时报告目录
+                       sh "rm -rf ${env.HOST_ALLURE_REPORT_PATH}"
+                       // 清理 Agent 工作区
                        cleanWs()
-                       echo "Agent 工作空间已清理。"
+                       echo "Agent 工作空间和临时报告目录已清理。"
                    } // End finally
                } // End script
            } // End always
