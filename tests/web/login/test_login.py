@@ -56,8 +56,8 @@ async def wait_and_get_popup_message(
 
 @pytest.mark.web
 @pytest.mark.asyncio
-@allure.feature("登录功能")
-@allure.story("OMP系统登录验证")
+@allure.epic("WEB")
+@allure.feature("OMP系统登录验证")
 @pytest.mark.parametrize("scenario_key", [
     "valid",
     "invalid_username",
