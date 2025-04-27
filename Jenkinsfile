@@ -34,7 +34,7 @@ pipeline {
         // !!! 重要：根据你的实际 Docker 卷配置修改 HOST_JENKINS_HOME_ON_HOST !!!
         HOST_JENKINS_HOME_ON_HOST = '/var/lib/docker/volumes/jenkins_home/_data' // <-- !!! 示例路径，请务必检查 !!!
         HOST_WORKSPACE_PATH = "${HOST_JENKINS_HOME_ON_HOST}/workspace/${env.JOB_NAME}" // <-- 宿主机上的 Jenkins 工作区路径
-        HOST_ALLURE_RESULTS_PATH = "${HOST_WORKSPACE_PATH}/output/allure-results" // <-- 宿主机上的 Allure 结果路径 (用于写入元数据)
+        HOST_ALLURE_RESULTS_PATH = "${HOST_WORKSPACE_PATH}/output/allure-results" // <-- 宿主机上的 Allure 结果路径 (用于写入元数据和权限修改)
         HOST_ALLURE_REPORT_PATH = "${HOST_WORKSPACE_PATH}/output/reports/allure-report" // <-- 宿主机上的临时报告路径 (用于邮件通知脚本读取摘要)
 
         // --- 测试相关 ---
@@ -249,10 +249,16 @@ pipeline {
                            """
                            echo "Allure 元数据写入完成。"
 
-                           // --- 2. 修正 allure-results 目录权限 ---
-                           echo "修正 Agent 工作区 ${WORKSPACE}/output/allure-results 的权限..."
-                           // 确保 Jenkins Agent 用户可以读取由 Docker 容器 (root) 创建的文件
-                           sh "chmod -R a+r ${WORKSPACE}/output/allure-results || echo '权限修正失败，请检查 Jenkins Agent 用户权限'"
+                           // --- 2. 修正 allure-results 目录权限 (使用 Docker) ---
+                           echo "修正宿主机目录 ${env.HOST_ALLURE_RESULTS_PATH} 的权限 (使用 Docker)..."
+                           // 启动一个临时的 root 容器来执行 chmod
+                           sh """
+                           docker run --rm --name chmod-results-${BUILD_NUMBER} \\
+                             -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_to_fix:rw \\
+                             --user root \\
+                             ${env.DOCKER_IMAGE} \\
+                             chmod -R a+r /results_to_fix
+                           """
                            echo "权限修正完成。"
 
                            // --- 3. 使用 Allure Jenkins 插件生成和归档报告 ---
