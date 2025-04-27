@@ -59,8 +59,8 @@ def write_allure_environment(results_dir, app_env):
         with open(env_file_path, 'w', encoding='utf-8') as f:
             for key, value in environment.items():
                 # 替换换行符，避免多行值破坏格式
-                value_str = str(value).replace('\\n', ' ').replace('\\r', '')
-                f.write(f'{key}={value_str}\\n') # 使用标准换行符
+                value_str = str(value).replace('\n', ' ').replace('\r', '')
+                f.write(f'{key}={value_str}\n')
         print(f'环境信息写入成功: {env_file_path}')
     except IOError as e:
         print(f'错误：无法写入环境信息到 {env_file_path}: {e}', file=sys.stderr)
@@ -75,17 +75,19 @@ def write_allure_executor(results_dir):
     # 如果 Jenkinsfile 没有设置 ALLURE_PUBLIC_URL，则回退到 build_url
     report_url = os.environ.get('ALLURE_PUBLIC_URL', build_url)
 
-    # --- 修改部分：生成 MM DD HH mm 格式的时间戳作为 buildOrder ---
     # 获取当前时间
     now = datetime.now()
-    # 格式化为 MMDDHHMM
+    # 格式化为 MMDDHHMM (用于 buildOrder 和趋势图)
     timestamp_build_order = now.strftime('%m%d%H%M')
+    # 修改：格式化为 YYYY-MM-DD HH:MM (用于 buildName 显示)
+    timestamp_build_name = now.strftime('%Y-%m-%d %H:%M')
+
     executor_info = {
         "name": "Jenkins", # 执行器名称
         "type": "jenkins", # 执行器类型
         "url": os.environ.get('JENKINS_URL', '#'), # Jenkins 主 URL
-        "buildOrder": timestamp_build_order, # <-- 使用格式化的时间戳
-        "buildName": timestamp_build_order, # <-- 修改这里，使用时间戳作为显示名称
+        "buildOrder": timestamp_build_order, # <-- 保持 MMDDHHMM 用于趋势图
+        "buildName": timestamp_build_name,  # <-- 修改为 YYYY-MM-DD HH:MM 用于显示
         "buildUrl": build_url, # Jenkins 构建 URL (链接保持不变)
         "reportName": "自动化测试报告", # Allure 报告名称
         "reportUrl": report_url # Allure 报告的公共访问 URL
