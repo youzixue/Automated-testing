@@ -146,14 +146,15 @@ def _execute_pre_run_steps(skip_report_generation: bool):
         logger.info("由于跳过报告生成，故跳过写入 Allure 元数据。")
 
 def _execute_tests() -> bool:
-    """执行自动化测试。"""
+    """执行自动化测试并返回是否成功。"""
     logger.info("执行测试...")
-    test_result = run_tests()
-    if not test_result:
-        logger.error("测试执行失败！")
+    exit_code = run_tests() # 获取 pytest 的退出码
+    if exit_code != 0:      # 检查退出码是否不为 0
+        logger.error(f"测试执行失败！(Pytest 退出码: {exit_code})")
+        return False        # 返回 False 表示失败
     else:
-        logger.info("测试执行完成。")
-    return test_result
+        logger.info(f"测试执行成功。(Pytest 退出码: {exit_code})")
+        return True         # 返回 True 表示成功
 
 def _generate_report() -> bool:
     """生成 Allure 报告。"""
@@ -253,7 +254,7 @@ def main():
     skip_report_generation = os.environ.get('SKIP_REPORT_GENERATION', 'false').lower() == 'true'
     logger.info(f"配置: 跳过测试={skip_test_execution}, 跳过报告生成={skip_report_generation}")
 
-    test_run_successful = True # 假设测试成功，除非测试运行且失败
+    test_run_successful = True # 初始假设成功
     report_generation_successful = False
     deployment_successful = False # 涵盖上传/权限修正步骤
 
@@ -265,14 +266,20 @@ def main():
 
     # --- 步骤 2: 执行测试 --- (Conditional)
     if not skip_test_execution:
-        test_run_successful = _execute_tests()
+        test_run_successful = _execute_tests() # 正确接收 True/False
     else:
         logger.info("跳过测试执行 (SKIP_TEST_EXECUTION=true)。")
+        test_run_successful = True # 如果跳过，则认为是成功的
 
     # --- 步骤 3: 生成报告 --- (Conditional)
+    # 如果测试执行失败，可以选择跳过报告生成或继续生成包含失败信息的报告
+    # 当前逻辑：无论测试是否成功，只要不跳过就生成报告
     if not skip_report_generation:
+        # 可以在这里添加逻辑：如果 test_run_successful 为 False，是否仍要生成报告？
+        # if not test_run_successful:
+        #     logger.warning("测试执行失败，但仍尝试生成报告...")
         report_generation_successful = _generate_report()
-        # 如果报告生成失败，部署无法成功
+        # 如果报告生成成功，才进行部署/权限处理
         if report_generation_successful:
             # --- 步骤 4: 处理报告部署/权限 --- (Conditional on Generation)
             deployment_successful = _handle_report_deployment(report_generation_successful)
@@ -280,16 +287,29 @@ def main():
             deployment_successful = False # 如果生成失败，部署也隐式失败
     else:
         logger.info("跳过 Allure 报告生成。")
-        # 如果跳过生成，则假定报告已存在且部署已处理
-        report_generation_successful = True
-        deployment_successful = True
+        # 如果跳过生成，部署状态取决于测试是否上传了已存在的报告
+        # 这里的逻辑可能需要根据具体 CI 流程调整
+        # 暂时假设跳过生成时部署状态与测试成功与否无关，依赖后续通知步骤判断
+        deployment_successful = True # 假设跳过生成时，部署步骤不由这里决定
 
     # --- 步骤 5: 发送通知 ---
-    _send_notification(deployment_successful) # 基于部署/上传/修复状态进行通知
+    # 通知应能反映测试是否运行、报告是否生成、部署是否成功
+    # 当前 _send_notification 只接收 deployment_successful
+    # 可能需要传递 test_run_successful 和 report_generation_successful 给通知函数
+    _send_notification(deployment_successful)
 
     end_time = time.time()
     total_duration = format_duration(int((end_time - start_time) * 1000))
     logger.info(f"run_and_notify 进程在 {total_duration} 内完成。")
+
+    # 最终退出状态应反映整体流程是否成功
+    # 例如，如果测试失败或报告生成失败或部署失败，则应以非零状态退出
+    if not test_run_successful or not report_generation_successful or not deployment_successful:
+        logger.error("run_and_notify 进程检测到错误。")
+        sys.exit(1) # 以非零状态退出表示失败
+    else:
+        logger.info("run_and_notify 进程成功完成。")
+        sys.exit(0) # 以零状态退出表示成功
 
 
 if __name__ == "__main__":

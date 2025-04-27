@@ -35,14 +35,15 @@ pipeline {
         ALLURE_NGINX_HOST_PATH = "/usr/share/nginx/html/${ALLURE_NGINX_DIR_NAME}" // <-- Nginx 在宿主机上的路径
 
         // --- Docker Agent & 宿主机路径映射 ---
-        HOST_JENKINS_HOME_ON_HOST = '/var/lib/docker/volumes/jenkins_home/_data' // <-- !!! 重要：根据 docker inspect 结果设置 !!!
+        // !!! 重要：根据你的实际 Docker 卷配置修改 HOST_JENKINS_HOME_ON_HOST !!!
+        HOST_JENKINS_HOME_ON_HOST = '/var/lib/docker/volumes/jenkins_home/_data' // <-- !!! 检查你的 Jenkins Docker 卷路径 !!!
         HOST_WORKSPACE_PATH = "${HOST_JENKINS_HOME_ON_HOST}/workspace/${env.JOB_NAME}" // <-- 宿主机上的 Jenkins 工作区路径
         HOST_ALLURE_RESULTS_PATH = "${HOST_WORKSPACE_PATH}/output/allure-results" // <-- 宿主机上的 Allure 结果路径
         HOST_ALLURE_REPORT_PATH = "${HOST_WORKSPACE_PATH}/output/reports/allure-report" // <-- 宿主机上的 Allure 报告路径
 
         // --- 测试相关 ---
         TEST_SUITE_VALUE = "${params.TEST_SUITE == '全部' ? 'all' : (params.TEST_SUITE == '冒烟测试' ? 'smoke' : 'regression')}"
-        DOCKER_IMAGE = "automated-testing:dev"
+        DOCKER_IMAGE = "automated-testing:dev" // 你的测试执行 Docker 镜像
     }
 
     stages {
@@ -56,7 +57,7 @@ pipeline {
                     cleanWs()
                     checkout([
                         $class: 'GitSCM',
-                        branches: [[name: '*/main']],
+                        branches: [[name: '*/main']], // 或者你的开发分支
                         userRemoteConfigs: [[
                             url: INJECTED_GIT_REPO_URL,
                             credentialsId: env.GIT_CREDENTIALS_ID
@@ -72,21 +73,25 @@ pipeline {
         stage('准备环境') {
             steps {
                 echo "准备测试环境和目录 (在 Agent 上)..."
+                // 在 Agent 上创建目录，这些目录将被映射到宿主机
                 sh """
                 mkdir -p ${WORKSPACE}/output/allure-results
                 mkdir -p ${WORKSPACE}/output/reports/allure-report
                 echo "清空旧的 allure-results (在 Agent 上)..."
                 rm -rf ${WORKSPACE}/output/allure-results/*
-
+                """
                 echo "确保 Nginx 目录 ${env.ALLURE_NGINX_HOST_PATH} (在宿主机上) 存在并设置权限..."
-                docker run --rm -v ${env.ALLURE_NGINX_HOST_PATH}:/nginx_dir_on_host --user root alpine:latest sh -c "mkdir -p /nginx_dir_on_host && chmod -R 777 /nginx_dir_on_host"
-
+                // 使用一个临时容器在宿主机上创建/设置 Nginx 目录权限
+                // 注意：这里假设 Jenkins 有权限运行 Docker
+                sh """
+                docker run --rm -v ${env.ALLURE_NGINX_HOST_PATH}:${env.ALLURE_NGINX_HOST_PATH}:rw --user root alpine:latest sh -c "mkdir -p ${env.ALLURE_NGINX_HOST_PATH} && chmod -R 777 ${env.ALLURE_NGINX_HOST_PATH}" || echo 'Failed to prepare Nginx host directory, permissions might be an issue.'
                 echo "环境准备完成。"
                 """
             }
         }
 
         stage('检查脚本文件') {
+             // (可选) 保留此阶段用于调试
             steps {
                 echo "检查脚本文件是否存在于 Agent 路径: ${WORKSPACE}/ci/scripts/ ..."
                 sh "ls -la ${WORKSPACE}/ci/scripts/ || echo '>>> ci/scripts/ 目录不存在或无法列出 <<<' "
@@ -210,11 +215,13 @@ pipeline {
                                  parallel testsToRun
                             } else {
                                  echo "没有选择任何测试平台，跳过测试执行。"
+                                 // 即使跳过测试，也要确保结果目录存在，否则后续步骤可能失败
                                  sh "mkdir -p ${env.HOST_ALLURE_RESULTS_PATH}"
                             }
                         } // End withCredentials
                     } catch (err) {
                         echo "测试阶段出现错误: ${err}. 将继续执行报告生成和通知。"
+                        // 可以选择标记为不稳定
                         // currentBuild.result = 'UNSTABLE'
                     }
                 } // End script
@@ -244,12 +251,27 @@ pipeline {
                            echo "构建的 Allure 公共 URL: ${final_allure_public_url}"
 
                            echo "写入 Allure 元数据文件到 ${env.HOST_ALLURE_RESULTS_PATH} (在宿主机上)..."
+                           // 确保脚本有执行权限，并使用宿主机路径
                            sh """
                            docker run --rm --name write-metadata-${BUILD_NUMBER} -e APP_ENV=${params.APP_ENV} -e BUILD_NUMBER=${BUILD_NUMBER} -e BUILD_URL=${env.BUILD_URL} -e JOB_NAME=${env.JOB_NAME} -v ${env.HOST_WORKSPACE_PATH}:/workspace:ro -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw -v /etc/localtime:/etc/localtime:ro --user root ${env.DOCKER_IMAGE} python /workspace/ci/scripts/write_allure_metadata.py /results_out
                            """
                            echo "Allure 元数据写入完成。"
 
+                           // --- 从已部署的旧报告复制 history 到当前结果目录 ---
+                           echo "尝试从旧报告 ${env.ALLURE_NGINX_HOST_PATH} 复制 history 到 ${env.HOST_ALLURE_RESULTS_PATH} (在宿主机上)..."
+                           sh """
+                           docker run --rm --name copy-history-${BUILD_NUMBER} \\
+                             -v ${env.ALLURE_NGINX_HOST_PATH}:/prev_report:ro \\
+                             -v ${env.HOST_ALLURE_RESULTS_PATH}:/current_results:rw \\
+                             --user root \\
+                             alpine:latest \\
+                             sh -c "if [ -d /prev_report/history ]; then cp -rf /prev_report/history /current_results/ ; echo 'History copied.'; else echo 'Previous history not found, skipping copy.'; fi"
+                           echo "History copy step finished."
+                           """
+                           //--- 复制 history 结束 ---
+
                            echo "开始生成 Allure 报告 (从宿主机路径 ${env.HOST_ALLURE_RESULTS_PATH} 生成到 ${env.HOST_ALLURE_REPORT_PATH})..."
+                           // 使用宿主机路径进行报告生成
                            sh """
                            docker run --rm --name allure-generate-${BUILD_NUMBER} \\
                              -v ${env.HOST_ALLURE_RESULTS_PATH}:/results:ro \\
@@ -257,11 +279,12 @@ pipeline {
                              -v /etc/localtime:/etc/localtime:ro \\
                              --user root \\
                              ${env.DOCKER_IMAGE} \\
-                             /bin/bash -c "echo 'Generating report...'; ls -la /results || echo 'Results dir not found'; allure generate /results -o /report --clean || echo 'Allure generate command failed'"
+                             /bin/bash -c "echo 'Generating report using results from /results...'; ls -la /results || echo '/results dir not found or empty'; allure generate /results -o /report --clean || echo 'Allure generate command failed'"
                            echo "Allure 报告已生成到宿主机路径: ${env.HOST_ALLURE_REPORT_PATH}"
                            """
 
                            echo "准备 Nginx 目录 ${env.ALLURE_NGINX_HOST_PATH} (在宿主机上)..."
+                           // 使用宿主机路径和 alpine 镜像来准备目录
                            sh """
                            docker run --rm --name prep-nginx-dir-${BUILD_NUMBER} \\
                              -v ${env.ALLURE_NGINX_HOST_PATH}:/nginx_dir_on_host:rw \\
@@ -272,6 +295,7 @@ pipeline {
                            """
 
                            echo "部署 Allure 报告 (从宿主机 ${env.HOST_ALLURE_REPORT_PATH} 到 Nginx 宿主机 ${env.ALLURE_NGINX_HOST_PATH})..."
+                           // 使用宿主机路径进行部署
                            sh """
                            docker run --rm --name deploy-report-${BUILD_NUMBER} \\
                              -v ${env.HOST_ALLURE_REPORT_PATH}:/src_report:ro \\
@@ -285,6 +309,7 @@ pipeline {
 
                            echo "发送邮件通知..."
                            // --- 使用注入的邮件配置变量 ---
+                           // 注意：通知脚本需要能访问报告内容来生成摘要
                            sh """
                            echo "--- Sending notification email via run_and_notify.py --- (using host path ${env.HOST_WORKSPACE_PATH})"
                            docker run --rm --name notify-${BUILD_NUMBER} \\
@@ -315,6 +340,8 @@ pipeline {
                        } // End withCredentials
                    } catch (err) {
                        echo "报告生成或通知阶段出现错误: ${err}"
+                       // 标记构建失败，因为报告或通知失败了
+                       currentBuild.result = 'FAILURE'
                    }
 
                    // --- 设置构建描述 (使用动态构建的 URL) ---
@@ -324,7 +351,8 @@ pipeline {
                    if (params.RUN_WECHAT_TESTS) testTypes.add("微信")
                    if (params.RUN_APP_TESTS) testTypes.add("App")
                    if (testTypes.isEmpty()) testTypes.add("未选择")
-                   def finalStatus = currentBuild.currentResult ?: 'UNKNOWN'
+                   // 获取最终状态，如果上面 try-catch 设置了 FAILURE，这里会反映出来
+                   def finalStatus = currentBuild.result ?: 'SUCCESS' // 默认成功
                    def reportLink = final_allure_public_url ? "<a href='${final_allure_public_url}' target='_blank'>查看报告</a>" : "(报告URL未生成)"
                    currentBuild.description = "${params.APP_ENV.toUpperCase()} 环境 [${testTypes.join(', ')}] - ${finalStatus} - ${reportLink}"
                } // End script
@@ -335,13 +363,13 @@ pipeline {
                echo "Agent 工作空间已清理。"
            } // End always
            success {
-               echo "Pipeline 最终状态: 成功 (即使测试阶段可能失败)"
+               echo "Pipeline 最终状态: 成功"
            }
            failure {
-               echo "Pipeline 最终状态: 失败 (可能在测试阶段或报告/通知阶段失败)"
+               echo "Pipeline 最终状态: 失败"
            }
            unstable {
-               echo "Pipeline 最终状态: 不稳定 (可能在测试阶段标记为不稳定)"
+               echo "Pipeline 最终状态: 不稳定"
            }
        } // End post
    } // End pipeline
