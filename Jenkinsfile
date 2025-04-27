@@ -14,13 +14,20 @@ pipeline {
     environment {
         // --- 凭据 ID ---
         GIT_CREDENTIALS_ID = 'git-credentials'
+        GIT_REPO_URL_CREDENTIAL_ID = 'git-repo-url'
         TEST_ENV_CREDENTIALS_ID = 'test-env-credentials'
         PROD_ENV_CREDENTIALS_ID = 'prod-env-credentials'
         EMAIL_PASSWORD_CREDENTIALS_ID = 'email-password-credential'
+        TEST_WEB_URL_CREDENTIAL_ID = 'test-web-url'
+        TEST_API_URL_CREDENTIAL_ID = 'test-api-url'
+        PROD_WEB_URL_CREDENTIAL_ID = 'prod-web-url'
+        PROD_API_URL_CREDENTIAL_ID = 'prod-api-url'
+        ALLURE_BASE_URL_CREDENTIAL_ID = 'allure-base-url'
 
         // --- Allure 报告相关 (Nginx 宿主机路径) ---
         ALLURE_NGINX_DIR_NAME = "${params.APP_ENV == 'prod' ? 'allure-report-prod' : 'allure-report-test'}"
-        ALLURE_PUBLIC_URL = "${params.APP_ENV == 'prod' ? 'http://192.168.10.67:8000/allure-report-prod/' : 'http://192.168.10.67:8000/allure-report-test/'}"
+        // ALLURE_PUBLIC_URL 将在 post 块中动态构建
+        // ALLURE_PUBLIC_URL = "${params.APP_ENV == 'prod' ? 'http://192.168.10.67:8000/allure-report-prod/' : 'http://192.168.10.67:8000/allure-report-test/'}"
         ALLURE_NGINX_HOST_PATH = "/usr/share/nginx/html/${ALLURE_NGINX_DIR_NAME}" // <-- Nginx 在宿主机上的路径
 
         // --- Docker Agent & 宿主机路径映射 ---
@@ -31,27 +38,28 @@ pipeline {
 
         // --- 测试相关 ---
         TEST_SUITE_VALUE = "${params.TEST_SUITE == '全部' ? 'all' : (params.TEST_SUITE == '冒烟测试' ? 'smoke' : 'regression')}"
-        WEB_URL = "${params.APP_ENV == 'prod' ? 'https://cmpark.cmpo1914.com/' : 'https://test.cmpo1914.com:3006/omp/'}"
-        API_URL = "${params.APP_ENV == 'prod' ? 'https://cmpark.cmpo1914.com/api/' : 'https://test.cmpo1914.com:3006/api/'}"
         DOCKER_IMAGE = "automated-testing:dev"
-        // CI_NAME 不再由此处定义，由 write_allure_metadata.py 内部处理或用于 executor.json
-        // CI_NAME = "${params.APP_ENV == 'prod' ? '生产环境自动化' : '测试环境自动化'}"
     }
 
     stages {
         stage('检出代码') {
             steps {
-                echo "从代码仓库拉取最新代码: https://gittest.ylmo2o.com:8099/yzx/Automated-testing.git"
-                cleanWs()
-                checkout([
-                    $class: 'GitSCM',
-                    branches: [[name: '*/main']],
-                    userRemoteConfigs: [[
-                        url: 'https://gittest.ylmo2o.com:8099/yzx/Automated-testing.git',
-                        credentialsId: env.GIT_CREDENTIALS_ID
-                    ]]
-                ])
-                // 注意：这里的 WORKSPACE 仍然是 Jenkins Agent 内部的路径，但在宿主机上对应 HOST_WORKSPACE_PATH
+                // --- 使用 withCredentials 注入 Git URL 和认证凭据 ---
+                withCredentials([
+                    string(credentialsId: env.GIT_REPO_URL_CREDENTIAL_ID, variable: 'INJECTED_GIT_REPO_URL'),
+                    usernamePassword(credentialsId: env.GIT_CREDENTIALS_ID, usernameVariable: 'GIT_USERNAME', passwordVariable: 'GIT_PASSWORD') // 或者使用 SSH Key 凭据类型
+                ]) {
+                    echo "从代码仓库拉取最新代码: ${INJECTED_GIT_REPO_URL}"
+                    cleanWs()
+                    checkout([
+                        $class: 'GitSCM',
+                        branches: [[name: '*/main']],
+                        userRemoteConfigs: [[
+                            url: INJECTED_GIT_REPO_URL, // <-- 使用注入的变量
+                            credentialsId: env.GIT_CREDENTIALS_ID // <-- 认证凭据保持不变
+                        ]]
+                    ])
+                }
                 echo "代码检出完成到 Agent 路径: ${WORKSPACE}"
                 echo "对应的宿主机路径是: ${env.HOST_WORKSPACE_PATH}"
                 sh "echo '>>> Jenkins Agent Workspace Contents:' && ls -la ${WORKSPACE}"
@@ -88,128 +96,156 @@ pipeline {
         stage('并行执行测试') {
              steps {
                 script {
+                    // --- 动态选择凭据 ID ---
                     def accountCredentialsId = (params.APP_ENV == 'prod') ? env.PROD_ENV_CREDENTIALS_ID : env.TEST_ENV_CREDENTIALS_ID
-                    echo "选择凭据 ID: ${accountCredentialsId} 用于测试账户"
+                    def webUrlCredentialId = (params.APP_ENV == 'prod') ? env.PROD_WEB_URL_CREDENTIAL_ID : env.TEST_WEB_URL_CREDENTIAL_ID
+                    def apiUrlCredentialId = (params.APP_ENV == 'prod') ? env.PROD_API_URL_CREDENTIAL_ID : env.TEST_API_URL_CREDENTIAL_ID
+                    echo "选择凭据 ID: 账户=${accountCredentialsId}, WebURL=${webUrlCredentialId}, APIURL=${apiUrlCredentialId}"
 
-                    withCredentials([usernamePassword(credentialsId: accountCredentialsId,
-                                                     usernameVariable: 'ACCOUNT_USERNAME',
-                                                     passwordVariable: 'ACCOUNT_PASSWORD')]) {
-                        def testsToRun = [:]
+                    // 捕获测试阶段的错误，但不让它停止 Pipeline
+                    try {
+                        // --- 注入账户和 URL 凭据 ---
+                        withCredentials([
+                            usernamePassword(credentialsId: accountCredentialsId, usernameVariable: 'ACCOUNT_USERNAME', passwordVariable: 'ACCOUNT_PASSWORD'),
+                            string(credentialsId: webUrlCredentialId, variable: 'INJECTED_WEB_URL'),
+                            string(credentialsId: apiUrlCredentialId, variable: 'INJECTED_API_URL')
+                        ]) {
+                            def testsToRun = [:]
 
-                        if (params.RUN_WEB_TESTS) {
-                            testsToRun['Web测试'] = {
-                                echo "执行Web测试 (并发: auto, 重试: 2)"
-                                sh """
-                                docker run --rm --name pytest-web-${BUILD_NUMBER} \\
-                                  -e APP_ENV=${params.APP_ENV} \\
-                                  -e TEST_PLATFORM="web" \\
-                                  -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \\
-                                  -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
-                                  -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
-                                  -e WEB_BASE_URL="${env.WEB_URL}" \\
-                                  -e TZ="Asia/Shanghai" \\
-                                  -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
-                                  -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
-                                  --workdir /workspace \\
-                                  -v /etc/localtime:/etc/localtime:ro \\
-                                  --network host \\
-                                  ${env.DOCKER_IMAGE} \\
-                                  pytest tests/web -n auto --reruns 2 -v --alluredir=/results_out
-                                """
+                            if (params.RUN_WEB_TESTS) {
+                                testsToRun['Web测试'] = {
+                                    echo "执行Web测试 (并发: auto, 重试: 2)"
+                                    sh """
+                                    docker run --rm --name pytest-web-${BUILD_NUMBER} \\
+                                      -e APP_ENV=${params.APP_ENV} \\
+                                      -e TEST_PLATFORM="web" \\
+                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \\
+                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
+                                      -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
+                                      -e WEB_BASE_URL="${INJECTED_WEB_URL}" \\
+                                      -e TZ="Asia/Shanghai" \\
+                                      -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
+                                      -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
+                                      --workdir /workspace \\
+                                      -v /etc/localtime:/etc/localtime:ro \\
+                                      --network host \\
+                                      ${env.DOCKER_IMAGE} \\
+                                      pytest tests/web -n auto --reruns 2 -v --alluredir=/results_out
+                                    """
+                                }
+                            } else { echo "跳过Web测试" }
+
+                            if (params.RUN_API_TESTS) {
+                                testsToRun['API测试'] = {
+                                    echo "执行API测试 (并发: auto, 重试: 2)"
+                                    sh """
+                                    docker run --rm --name pytest-api-${BUILD_NUMBER} \\
+                                      -e APP_ENV=${params.APP_ENV} \\
+                                      -e TEST_PLATFORM="api" \\
+                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \\
+                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
+                                      -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
+                                      -e API_BASE_URL="${INJECTED_API_URL}" \\
+                                      -e TZ="Asia/Shanghai" \\
+                                      -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
+                                      -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
+                                      --workdir /workspace \\
+                                      -v /etc/localtime:/etc/localtime:ro \\
+                                      --network host \\
+                                      ${env.DOCKER_IMAGE} \\
+                                      pytest tests/api -n auto --reruns 2 -v --alluredir=/results_out
+                                    """
+                                }
+                            } else { echo "跳过API测试" }
+
+                            if (params.RUN_WECHAT_TESTS) {
+                               testsToRun['微信公众号测试'] = {
+                                    echo "执行微信公众号测试 (并发: auto, 重试: 2)"
+                                    sh """
+                                    docker run --rm --name pytest-wechat-${BUILD_NUMBER} \\
+                                      -e APP_ENV=${params.APP_ENV} \\
+                                      -e TEST_PLATFORM="wechat" \\
+                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \\
+                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
+                                      -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
+                                      -e TZ="Asia/Shanghai" \\
+                                      -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
+                                      -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
+                                      --workdir /workspace \\
+                                      -v /etc/localtime:/etc/localtime:ro \\
+                                      --network host \\
+                                      ${env.DOCKER_IMAGE} \\
+                                      pytest tests/wechat -n auto --reruns 2 -v --alluredir=/results_out
+                                    """
+                               }
+                            } else { echo "跳过微信公众号测试" }
+
+                            if (params.RUN_APP_TESTS) {
+                                testsToRun['App测试'] = {
+                                    echo "执行App测试 (并发: auto, 重试: 2)"
+                                    sh """
+                                    docker run --rm --name pytest-app-${BUILD_NUMBER} \\
+                                      -e APP_ENV=${params.APP_ENV} \\
+                                      -e TEST_PLATFORM="app" \\
+                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \\
+                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
+                                      -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
+                                      -e TZ="Asia/Shanghai" \\
+                                      -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
+                                      -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
+                                      --workdir /workspace \\
+                                      -v /etc/localtime:/etc/localtime:ro \\
+                                      --network host \\
+                                      ${env.DOCKER_IMAGE} \\
+                                      pytest tests/app -n auto --reruns 2 -v --alluredir=/results_out
+                                    """
+                                }
+                            } else { echo "跳过App测试" }
+
+                            if (!testsToRun.isEmpty()) {
+                                 echo "开始并行执行选定的测试 (使用宿主机路径 ${env.HOST_WORKSPACE_PATH} 挂载到容器 /workspace)..."
+                                 parallel testsToRun
+                            } else {
+                                 echo "没有选择任何测试平台，跳过测试执行。"
+                                 // 确保宿主机上的结果目录存在，即使没有测试运行
+                                 sh "mkdir -p ${env.HOST_ALLURE_RESULTS_PATH}"
                             }
-                        } else { echo "跳过Web测试" }
-
-                        if (params.RUN_API_TESTS) {
-                            testsToRun['API测试'] = {
-                                echo "执行API测试 (并发: auto, 重试: 2)"
-                                sh """
-                                docker run --rm --name pytest-api-${BUILD_NUMBER} \\
-                                  -e APP_ENV=${params.APP_ENV} \\
-                                  -e TEST_PLATFORM="api" \\
-                                  -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \\
-                                  -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
-                                  -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
-                                  -e API_BASE_URL="${env.API_URL}" \\
-                                  -e TZ="Asia/Shanghai" \\
-                                  -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
-                                  -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
-                                  --workdir /workspace \\
-                                  -v /etc/localtime:/etc/localtime:ro \\
-                                  --network host \\
-                                  ${env.DOCKER_IMAGE} \\
-                                  pytest tests/api -n auto --reruns 2 -v --alluredir=/results_out
-                                """
-                            }
-                        } else { echo "跳过API测试" }
-
-                        if (params.RUN_WECHAT_TESTS) {
-                           testsToRun['微信公众号测试'] = {
-                                echo "执行微信公众号测试 (并发: auto, 重试: 2)"
-                                sh """
-                                docker run --rm --name pytest-wechat-${BUILD_NUMBER} \\
-                                  -e APP_ENV=${params.APP_ENV} \\
-                                  -e TEST_PLATFORM="wechat" \\
-                                  -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \\
-                                  -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
-                                  -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
-                                  -e TZ="Asia/Shanghai" \\
-                                  -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
-                                  -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
-                                  --workdir /workspace \\
-                                  -v /etc/localtime:/etc/localtime:ro \\
-                                  --network host \\
-                                  ${env.DOCKER_IMAGE} \\
-                                  pytest tests/wechat -n auto --reruns 2 -v --alluredir=/results_out
-                                """
-                           }
-                        } else { echo "跳过微信公众号测试" }
-
-                        if (params.RUN_APP_TESTS) {
-                            testsToRun['App测试'] = {
-                                echo "执行App测试 (并发: auto, 重试: 2)"
-                                sh """
-                                docker run --rm --name pytest-app-${BUILD_NUMBER} \\
-                                  -e APP_ENV=${params.APP_ENV} \\
-                                  -e TEST_PLATFORM="app" \\
-                                  -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \\
-                                  -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
-                                  -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
-                                  -e TZ="Asia/Shanghai" \\
-                                  -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
-                                  -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
-                                  --workdir /workspace \\
-                                  -v /etc/localtime:/etc/localtime:ro \\
-                                  --network host \\
-                                  ${env.DOCKER_IMAGE} \\
-                                  pytest tests/app -n auto --reruns 2 -v --alluredir=/results_out
-                                """
-                            }
-                        } else { echo "跳过App测试" }
-
-                        if (!testsToRun.isEmpty()) {
-                             echo "开始并行执行选定的测试 (使用宿主机路径 ${env.HOST_WORKSPACE_PATH} 挂载到容器 /workspace)..."
-                             parallel testsToRun
-                        } else {
-                             echo "没有选择任何测试平台，跳过测试执行。"
-                             // 确保宿主机上的结果目录存在，即使没有测试运行
-                             sh "mkdir -p ${env.HOST_ALLURE_RESULTS_PATH}"
-                        }
-                    } // End withCredentials
+                        } // End withCredentials
+                    } catch (err) {
+                        echo "测试阶段出现错误: ${err}. 将继续执行报告生成和通知。"
+                        // 将构建状态标记为 UNSTABLE 而不是 FAILURE，如果需要区分
+                        // currentBuild.result = 'UNSTABLE'
+                    }
                 } // End script
             } // End steps
         } // End stage '并行执行测试'
 
-           stage('生成报告与通知') {
-               steps {
-                    script {
-                       withCredentials([string(credentialsId: env.EMAIL_PASSWORD_CREDENTIALS_ID, variable: 'EMAIL_PASSWORD')]) {
+       // --- 原'生成报告与通知' Stage 已被移除 ---
+
+       } // End stages
+
+       post {
+           always {
+               // --- 将报告生成和通知逻辑移动到这里 ---
+               echo "Pipeline 完成. 开始执行报告生成和通知步骤..."
+               script {
+                   // --- 定义将在内部使用的完整 Allure URL 变量 ---
+                   def final_allure_public_url = ""
+                   // 使用 try/catch 块来捕获可能的错误，确保后续清理能执行
+                   try {
+                       // --- 注入邮件密码和 Allure 基础 URL ---
+                       withCredentials([
+                           string(credentialsId: env.EMAIL_PASSWORD_CREDENTIALS_ID, variable: 'EMAIL_PASSWORD'),
+                           string(credentialsId: env.ALLURE_BASE_URL_CREDENTIAL_ID, variable: 'INJECTED_ALLURE_BASE_URL')
+                       ]) {
+                           // --- 动态构建完整的 Allure URL ---
+                           final_allure_public_url = "${INJECTED_ALLURE_BASE_URL.endsWith('/') ? INJECTED_ALLURE_BASE_URL : INJECTED_ALLURE_BASE_URL + '/'}${env.ALLURE_NGINX_DIR_NAME}/"
+                           echo "构建的 Allure 公共 URL: ${final_allure_public_url}"
 
                            echo "写入 Allure 元数据文件到 ${env.HOST_ALLURE_RESULTS_PATH} (在宿主机上)..."
-                           // --- 修改开始 ---
                            sh """
                            docker run --rm --name write-metadata-${BUILD_NUMBER} -e APP_ENV=${params.APP_ENV} -e BUILD_NUMBER=${BUILD_NUMBER} -e BUILD_URL=${env.BUILD_URL} -e JOB_NAME=${env.JOB_NAME} -v ${env.HOST_WORKSPACE_PATH}:/workspace:ro -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw -v /etc/localtime:/etc/localtime:ro --user root ${env.DOCKER_IMAGE} python /workspace/ci/scripts/write_allure_metadata.py /results_out
                            """
-                           // --- 修改结束 ---
                            echo "Allure 元数据写入完成。"
 
                            echo "开始生成 Allure 报告 (从宿主机路径 ${env.HOST_ALLURE_RESULTS_PATH} 生成到 ${env.HOST_ALLURE_REPORT_PATH})..."
@@ -220,7 +256,7 @@ pipeline {
                              -v /etc/localtime:/etc/localtime:ro \\
                              --user root \\
                              ${env.DOCKER_IMAGE} \\
-                             /bin/bash -c "echo 'Generating report...'; ls -la /results; allure generate /results -o /report --clean"
+                             /bin/bash -c "echo 'Generating report...'; ls -la /results || echo 'Results dir not found'; allure generate /results -o /report --clean || echo 'Allure generate command failed'"
                            echo "Allure 报告已生成到宿主机路径: ${env.HOST_ALLURE_REPORT_PATH}"
                            """
 
@@ -246,8 +282,8 @@ pipeline {
                            """
                            echo "报告已部署到 Nginx 目录。"
 
-
                            echo "发送邮件通知..."
+                           // --- 在 docker run 命令中传递动态构建的 URL ---
                            sh """
                            echo "--- Sending notification email via run_and_notify.py --- (using host path ${env.HOST_WORKSPACE_PATH})"
                            docker run --rm --name notify-${BUILD_NUMBER} \\
@@ -260,7 +296,7 @@ pipeline {
                              -e EMAIL_SENDER="yzx@ylmt2b.com" \\
                              -e EMAIL_RECIPIENTS="yzx@ylmt2b.com" \\
                              -e EMAIL_USE_SSL=true \\
-                             -e ALLURE_PUBLIC_URL="${env.ALLURE_PUBLIC_URL}" \\
+                             -e ALLURE_PUBLIC_URL="${final_allure_public_url}" \\
                              -e TZ="Asia/Shanghai" \\
                              -e ALLURE_RESULTS_DIR=/results \\
                              -e ALLURE_REPORT_DIR=/report \\
@@ -275,33 +311,38 @@ pipeline {
                              /bin/bash -c "cd /workspace && python ci/scripts/run_and_notify.py"
                            echo "通知脚本执行完毕。"
                            """
-
                        } // End withCredentials
-                    } // End script
-               } // End steps
-           } // End stage '生成报告与通知'
-       } // End stages
+                   } catch (err) {
+                       echo "报告生成或通知阶段出现错误: ${err}"
+                       // 即使这里出错，我们仍然希望执行清理
+                   }
 
-       post {
-           always {
-               echo "Pipeline 完成. 清理 Agent 工作空间 ${WORKSPACE}..."
-               script {
+                   // --- 设置构建描述 (使用动态构建的 URL) ---
                    def testTypes = []
                    if (params.RUN_WEB_TESTS) testTypes.add("Web")
                    if (params.RUN_API_TESTS) testTypes.add("API")
                    if (params.RUN_WECHAT_TESTS) testTypes.add("微信")
                    if (params.RUN_APP_TESTS) testTypes.add("App")
                    if (testTypes.isEmpty()) testTypes.add("未选择")
-                   currentBuild.description = "${params.APP_ENV.toUpperCase()} 环境 [${testTypes.join(', ')}] - <a href='${env.ALLURE_PUBLIC_URL}' target='_blank'>查看报告</a>"
-               }
+                   def finalStatus = currentBuild.currentResult ?: 'UNKNOWN'
+                   // 使用 final_allure_public_url，如果为空则提供提示
+                   def reportLink = final_allure_public_url ? "<a href='${final_allure_public_url}' target='_blank'>查看报告</a>" : "(报告URL未生成)"
+                   currentBuild.description = "${params.APP_ENV.toUpperCase()} 环境 [${testTypes.join(', ')}] - ${finalStatus} - ${reportLink}"
+               } // End script
+
+               // --- 清理工作空间 ---
+               echo "清理 Agent 工作空间 ${WORKSPACE}..."
                cleanWs()
                echo "Agent 工作空间已清理。"
-           }
+           } // End always
            success {
-               echo "Pipeline 成功完成！"
+               echo "Pipeline 最终状态: 成功 (即使测试阶段可能失败)"
            }
            failure {
-               echo "Pipeline 执行失败，请检查控制台输出获取详细信息。"
+               echo "Pipeline 最终状态: 失败 (可能在测试阶段或报告/通知阶段失败)"
+           }
+           unstable {
+               echo "Pipeline 最终状态: 不稳定 (可能在测试阶段标记为不稳定)"
            }
        } // End post
    } // End pipeline
