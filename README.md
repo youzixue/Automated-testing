@@ -3,219 +3,182 @@
 本项目为企业级自动化测试框架，集成 Playwright、OCR 验证码识别、Allure 报告等，支持多平台、多环境的高效自动化测试。
 
 ## 目录结构（七层架构）
-1. **测试用例层（tests/）**：存放所有自动化测试用例，按平台/业务分目录。
-2. **固件层（tests/conftest.py 等）**：pytest fixtures、全局前置后置、数据工厂。
-3. **业务对象层（src/web/pages/、src/api/services/、src/mobile/screens/）**：页面对象、服务对象、业务流程封装。
-4. **平台实现层（src/web/、src/api/、src/mobile/）**：平台相关实现与适配。
-5. **核心抽象层（src/core/base/）**：接口定义、抽象基类。
-6. **工具层（src/utils/）**：通用工具、OCR、日志、数据工厂等。
-7. **外部集成层（pyproject.toml）**：依赖声明与管理。
+本项目严格遵循清晰的七层架构设计，确保代码的可维护性和扩展性：
 
-## 环境变量配置说明
+1.  **测试用例层（tests/）**：存放所有自动化测试用例，按平台/业务分目录。
+2.  **固件层（tests/conftest.py 等）**：pytest fixtures、全局前置后置、数据工厂。
+3.  **业务对象层（src/web/pages/、src/api/services/、src/mobile/screens/）**：页面对象、服务对象、业务流程封装。
+4.  **平台实现层（src/web/、src/api/、src/mobile/）**：平台相关实现与适配。
+5.  **核心抽象层（src/core/base/）**：接口定义、抽象基类。
+6.  **工具层（src/utils/）**：通用工具、OCR、日志、配置管理、邮件通知等。
+7.  **外部集成层（pyproject.toml）**：通过 Poetry 管理第三方依赖。
 
-- 所有环境变量请参考 `.env.example`，复制为 `.env` 后补充实际值。
-- **本地开发推荐配置：**
-  - `UPLOAD_REPORT=true`  # 需要上传Allure报告到远程Web服务时设为true
-  - `EMAIL_ENABLED=false` # 本地调试建议关闭邮件通知，避免骚扰
-- **CI/CD环境推荐配置：**
-  - `UPLOAD_REPORT=false` # CI执行机和Web服务同一台时设为false（默认即可）
-  - `EMAIL_ENABLED=true`  # 自动发送测试报告邮件
-- 详细注释已在 `.env.example` 中给出，团队成员请按需调整。
+详细架构说明请参见 `docs/enhanced_architecture.md`。
 
-## 快速开始
-1. 安装依赖：`poetry install`
-2. 配置环境变量：复制 `.env.example` 为 `.env` 并补充实际值（见上文说明）
-3. 运行测试：`pytest -n auto --alluredir=output/allure`
-4. 查看报告：`allure serve output/allure`
+## 环境准备
 
-## Docker 开发环境
+1.  **Python**: 需要 Python 3.11 或更高版本。
+2.  **Git**: 用于代码版本控制。
+3.  **Poetry**: 用于项目依赖管理。
+    ```bash
+    # 安装 Poetry (如果未安装)
+    pip install poetry
+    # 配置国内源加速 (可选)
+    poetry config repositories.aliyun https://mirrors.aliyun.com/pypi/simple/
+    poetry config repositories.tuna https://pypi.tuna.tsinghua.edu.cn/simple
+    ```
+4.  **Allure CLI**: 用于本地生成和查看 Allure HTML 报告。CI 环境的 Docker 镜像中已包含。
+    ```bash
+    # 本地安装 Allure CLI (参考官方文档，方法多样)
+    # 例如：npm install -g allure-commandline 或下载解压
+    allure --version # 验证安装
+    ```
+5.  **Playwright 浏览器**: 项目依赖安装后需要安装浏览器驱动。
+    ```bash
+    # 在项目根目录运行
+    poetry install # 安装项目依赖
+    poetry run playwright install # 安装默认浏览器驱动
+    # 或 poetry run playwright install chromium firefox webkit
+    ```
+
+详细的环境搭建步骤（包括 Linux/Docker）请参见 `docs/环境依赖安装&CICD集成.md`。
+
+## 本地运行与调试
+
+1.  **克隆代码**: `git clone <your-repo-url>`
+2.  **安装依赖**: 在项目根目录运行 `poetry install`
+3.  **配置环境变量**: 复制 `.env.example` 为 `.env` 文件，并根据需要修改其中的配置（如 `APP_ENV`, `TEST_DEFAULT_USERNAME`, `TEST_DEFAULT_PASSWORD`, `TEST_WEB_URL`, `TEST_API_URL` 等）。**请勿将包含敏感信息的 `.env` 文件提交到 Git。**
+4.  **运行测试**: 在项目根目录运行 pytest，并将 Allure 结果输出到 `output/allure-results`：
+    ```bash
+    # 运行所有测试
+    poetry run pytest --alluredir=output/allure-results
+
+    # (可选) 仅运行 Web 测试
+    # poetry run pytest tests/web --alluredir=output/allure-results
+
+    # (可选) 使用标记运行特定套件 (需在 pyproject.toml 中定义 marker)
+    # poetry run pytest -m smoke --alluredir=output/allure-results
+    ```
+5.  **生成并查看报告**: 使用本地安装的 Allure CLI：
+    ```bash
+    # 生成 HTML 报告到 output/reports/allure-report
+    allure generate output/allure-results --clean -o output/reports/allure-report
+
+    # 在浏览器中打开报告
+    allure open output/reports/allure-report
+    ```
+
+## Docker 使用
+
+本项目提供 `Dockerfile` 用于构建包含所有依赖（Python, Poetry, Playwright 浏览器, Allure CLI 等）的测试环境镜像，推荐用于 CI/CD 和需要隔离环境的场景。
 
 ### 构建镜像
+
 ```bash
+# 确保 allure-2.27.0.zip (或对应版本) 在项目根目录
 docker build -t automated-testing:dev .
 ```
+**注意**: Dockerfile 设计为从本地复制 Allure CLI 安装包进行安装，以应对网络问题。请在 `.gitignore` 中忽略 `allure-*.zip`。
 
-### 本地开发（代码热更新）
+### 本地开发 (使用 Docker 环境)
+
+如果你希望在本地编码，但使用 Docker 容器作为运行时环境（例如确保与 CI 环境一致），可以挂载本地代码目录：
+
 ```bash
 docker run --rm \
-  -e CI_NAME="本地Docker开发" \
-  -e APP_ENV=test \
-  -e WEB_BASE_URL="https://test.example.com/web/" \
-  -e API_BASE_URL="https://test.example.com/api/" \
+  -e APP_ENV=test \ # 设置必要的环境变量
   -e TEST_DEFAULT_USERNAME="your_test_user" \
   -e TEST_DEFAULT_PASSWORD="your_test_password" \
-  -e EMAIL_ENABLED=false \
-  -v $(pwd):/app \
-  -v /usr/share/nginx/html/allure-report:/app/output/reports/allure-report \
-  automated-testing:dev \
-  bash -c "poetry run python ci/scripts/run_and_notify.py"
-```
+  -e TEST_WEB_URL="http://host.docker.internal:8080" \ # 示例: 访问宿主机服务
+  -v $(pwd):/workspace:rw \ # 将本地项目目录挂载到容器 /workspace
+  -v $(pwd)/output/allure-results:/results_out:rw \ # 挂载结果输出目录
+  --workdir /workspace \ # 设置工作目录
+  automated-testing:dev \ # 使用你构建的镜像
+  poetry run pytest --alluredir=/results_out # 在容器内运行测试
 
-### 完整参数运行（含邮件通知）
-```bash
-docker run --rm \
-  -e CI_NAME="本地Docker测试" \
-  -e APP_ENV=test \
-  -e WEB_BASE_URL="https://test.example.com/web/" \
-  -e API_BASE_URL="https://test.example.com/api/" \
-  -e TEST_DEFAULT_USERNAME="your_test_user" \
-  -e TEST_DEFAULT_PASSWORD="your_test_password" \
-  -e EMAIL_ENABLED=true \
-  -e EMAIL_SMTP_SERVER="smtp.example.com" \
-  -e EMAIL_SMTP_PORT=465 \
-  -e EMAIL_SENDER="sender@example.com" \
-  -e EMAIL_PASSWORD="your_email_password" \
-  -e EMAIL_USE_SSL=true \
-  -e EMAIL_RECIPIENTS="recipient@example.com" \
-  -e ALLURE_PUBLIC_URL="http://your-server:8000/allure-report/index.html" \
-  -e WEB_SERVER_USER="nginx" \
-  -v $(pwd):/app \
-  -v /usr/share/nginx/html/allure-report:/app/output/reports/allure-report \
-  automated-testing:dev \
-  bash -c "poetry run python ci/scripts/run_and_notify.py"
+# 测试完成后，可在本地使用 Allure CLI 生成和查看报告
+# allure generate output/allure-results --clean -o output/reports/allure-report
+# allure open output/reports/allure-report
 ```
+*   `-v $(pwd):/workspace:rw`: 将当前宿主机目录（你的项目代码）挂载到容器的 `/workspace` 目录，实现代码修改后无需重建镜像即可运行。
+*   `-v $(pwd)/output/allure-results:/results_out:rw`: 将 Allure 结果直接输出到宿主机的 `output/allure-results` 目录。
 
-### CI/CD 环境
-```bash
-docker run --rm \
-  -e CI_NAME="CI自动化服务器" \
-  -e CI=true \
-  -e APP_ENV=test \
-  -e WEB_BASE_URL="https://test.example.com/web/" \
-  -e API_BASE_URL="https://test.example.com/api/" \
-  -e TEST_DEFAULT_USERNAME="your_test_user" \
-  -e TEST_DEFAULT_PASSWORD="your_test_password" \
-  -e EMAIL_ENABLED=true \
-  -e EMAIL_SMTP_SERVER="smtp.example.com" \
-  -e EMAIL_SMTP_PORT=465 \
-  -e EMAIL_SENDER="sender@example.com" \
-  -e EMAIL_PASSWORD="your_email_password" \
-  -e EMAIL_RECIPIENTS="recipient@example.com" \
-  -e ALLURE_PUBLIC_URL="http://your-server:8000/allure-report/index.html" \
-  -e WEB_SERVER_USER="nginx" \
-  -v /usr/share/nginx/html/allure-report:/app/output/reports/allure-report \
-  automated-testing:latest \
-  bash -c "poetry run python ci/scripts/run_and_notify.py"
-```
+### CI/CD 集成 (Jenkins)
 
-### 使用环境变量文件
-```bash
-# 从.env文件加载所有环境变量
-docker run --rm \
-  --env-file .env \
-  -e CI_NAME="本地Docker测试" \
-  -v $(pwd):/app \
-  -v /usr/share/nginx/html/allure-report:/app/output/reports/allure-report \
-  automated-testing:dev \
-  bash -c "poetry run python ci/scripts/run_and_notify.py"
+本项目使用 Jenkins 进行 CI/CD 编排，详细流程定义在项目根目录的 `Jenkinsfile` 中。核心流程如下：
+
+1.  Jenkins Agent 检出最新代码。
+2.  Jenkins 使用 Docker (通常是 Docker-outside-of-Docker 模式) 运行测试：
+    *   启动基于 `automated-testing:dev` 镜像的容器。
+    *   通过卷挂载将**宿主机**上的工作区路径 (`HOST_WORKSPACE_PATH`) 和结果路径 (`HOST_ALLURE_RESULTS_PATH`) 映射到容器内。
+    *   在容器内执行 `poetry run pytest --alluredir=<挂载的结果路径>`。
+    *   所有环境变量和敏感信息通过 Jenkins Credentials 注入。
+3.  测试完成后，在 `post` 阶段执行：
+    *   **写入元数据**: 在 Docker 容器内运行 `ci/scripts/write_allure_metadata.py` 脚本，向结果目录写入环境、执行者等信息。
+    *   **权限修正**: 在 Docker 容器内修正结果目录权限，以便 Allure 插件读取。
+    *   **Allure Jenkins 插件**: Jenkins 调用插件处理结果目录，生成并展示报告在 Jenkins UI 中（这是查看报告的主要方式）。
+    *   **生成临时报告 (用于邮件)**: 在 Docker 容器内运行 `allure generate`，将报告输出到宿主机的临时目录 (`HOST_ALLURE_REPORT_PATH`)。
+    *   **发送邮件通知**: 在 Docker 容器内运行 `ci/scripts/run_and_notify.py`，读取临时报告中的 `summary.json` 获取统计信息，并使用 Jenkins 注入的邮件凭据发送通知邮件。
+    *   **清理**: 清理宿主机上的临时报告目录和 Jenkins Agent 工作区。
+
+**要点**: CI 流程依赖 Docker 镜像中包含的 Allure CLI 来生成临时报告以支持邮件通知。
+
+详细的 Jenkins 配置、凭据设置和 `Jenkinsfile` 解析，请参考 `docs/环境依赖安装&CICD集成.md`。
+
+## Allure 测试报告
+
+- **本地查看**: 使用 `allure generate` 和 `allure open` 命令（见上方本地运行部分）。
+- **CI 环境**: 主要通过 **Allure Jenkins 插件** 在 Jenkins 构建页面查看交互式报告和历史趋势。
+- **报告内容**: 包含测试结果、步骤、截图（如果失败）、环境信息、执行者信息、自定义分类等。
+
+## pytest 配置
+
+本项目使用 `pyproject.toml` 文件中的 `[tool.pytest.ini_options]` 部分统一管理 pytest 配置，包括测试路径、命名约定、PYTHONPATH 设置、默认参数、日志级别和自定义标记 (markers)。这种方式确保了在不同环境下（本地、Docker、CI）测试行为的一致性，并简化了配置管理。
+
+```toml
+# pyproject.toml (部分)
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+pythonpath = ["."] # 确保 src 包可以被导入
+addopts = "-ra --tb=short --strict-markers" # 常用选项
+log_cli = true
+log_cli_level = "INFO"
+markers = [
+    "web: web端自动化用例",
+    "api: 接口自动化用例",
+    "mobile: 移动端自动化用例",
+    "smoke: 冒烟测试",
+    "regression: 回归测试",
+    "slow: 慢速用例"
+]
 ```
 
 ## 主要特性
-- Playwright 跨浏览器 UI 自动化
-- ddddocr + Pillow 验证码识别
-- Allure/HTML 测试报告
-- 多环境配置（config/env/）
-- 智能等待与异常处理
-- 测试数据与逻辑分离
-- CI/CD 集成与代码质量保障
+
+- Playwright 实现跨浏览器 UI 自动化。
+- httpx 实现异步/同步 API 测试。
+- ddddocr + Pillow 实现验证码识别。
+- Allure 生成丰富、交互式的测试报告。
+- 基于 `pyproject.toml` 和 Poetry 的标准化依赖管理。
+- 使用 `.env` 进行本地环境配置管理，CI 环境使用凭据注入。
+- 支持多环境配置加载 (`src/utils/config/`)。
+- 统一日志管理 (`src/utils/log/`)。
+- 智能等待策略和自定义异常处理。
+- 测试数据与测试逻辑分离 (`data/`)。
+- 遵循七层架构设计，代码结构清晰。
+- 通过 Docker 实现环境一致性与 CI/CD 集成。
+- 集成 Jenkins Pipeline 实现自动化构建、测试、报告和通知。
 
 ## 参考文档
-- docs/enhanced_architecture.md （架构设计）
-- .cursor/rules/（项目规范）
 
-## Allure命令动态配置
-
-本项目支持本地和CI环境灵活调用Allure命令：
-- 默认直接调用`allure`（需将allure加入PATH）
-- 如需指定本地Allure路径，可设置环境变量`ALLURE_CMD`，如：
-  - Windows本地：`ALLURE_CMD=D:\allure-2.33.0\bin\allure.bat`
-  - Linux/Mac：`ALLURE_CMD=/usr/local/bin/allure`
-- CI环境推荐全局安装allure并确保`allure`命令可用，无需设置ALLURE_CMD
-
-脚本会自动优先读取`ALLURE_CMD`，未设置时回退为`allure`。
+- `docs/环境依赖安装&CICD集成.md`: 最全面的环境搭建、Docker 使用和 Jenkins 集成指南。
+- `docs/enhanced_architecture.md`: 详细的七层架构设计说明。
+- `.cursor/rules/`: 项目编码规范和最佳实践规则。
+- 各 `src` 和 `tests` 子目录下的 `README.md`: 提供模块的具体说明。
 
 ---
-如需扩展新平台、业务或工具，请先查阅相关目录下 README。
 
-## Docker环境下Allure CLI安装说明
-
-- 由于国内网络环境限制，建议在构建Docker镜像前，手动下载 Allure CLI 安装包（allure-2.27.0.zip）并放置于项目根目录（与Dockerfile同级）。
-- Dockerfile 会自动将该zip包COPY进镜像并完成解压与安装，无需外网下载。
-- **注意：allure-2.27.0.zip 不建议提交到Git仓库，请在.gitignore中添加 `allure-*.zip` 进行忽略。**
-- 下载地址（需科学上网）：https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.zip
-- 构建命令示例：
-  ```bash
-  docker build -t automated-testing:latest .
-  ```
-- 如需团队协作，请在文档或Wiki中明确说明此操作，确保所有成员一致。
-
-## pytest 配置最佳实践
-
-本项目采用 `pyproject.toml` 中的 `[tool.pytest.ini_options]` 进行测试配置管理，确保所有环境下 `src` 包可被正确导入，测试行为一致。
-
-- 主要配置内容如下：
-
-  ```toml
-  [tool.pytest.ini_options]
-  testpaths = ["tests"]
-  python_files = "test_*.py"
-  python_classes = "Test*"
-  python_functions = "test_*"
-  pythonpath = ["."]
-  addopts = "-ra --tb=short --strict-markers"
-  log_cli = true
-  log_cli_level = "INFO"
-  markers = [
-      "web: web端自动化用例",
-      "api: 接口自动化用例", 
-      "mobile: 移动端自动化用例",
-      "smoke: 冒烟测试",
-      "regression: 回归测试",
-      "slow: 慢速用例"
-  ]
-  ```
-- 这样配置后，无论本地、CI、Docker环境，`from src.xxx` 都能正常导入。
-- 将pytest配置集成到`pyproject.toml`是Python项目的现代最佳实践，避免了多个配置文件的管理复杂性。
-- 团队成员和CI/CD环境无需关心PYTHONPATH，直接运行测试命令即可。
-
-## Docker开发与CI/CD最佳实践
-
-本项目推荐如下Docker使用模式，兼顾开发效率与环境一致性：
-
-### 1. 本地开发/调试
-- **镜像只需构建一次**（依赖变动时重建）：
-  ```bash
-  docker build -t automated-testing:dev .
-  ```
-- **运行时挂载本地代码目录，代码热更新**：
-  ```bash
-  docker run --rm \
-    -e ...（你的环境变量） \
-    -v /your/project/path:/app \
-    automated-testing:dev \
-    bash -c "poetry run python ci/scripts/run_and_notify.py"
-  ```
-  > `/your/project/path` 替换为你本地项目根目录绝对路径。
-- **优点**：代码改动立即生效，无需重建镜像，极大提升开发效率。
-
-### 2. CI/CD与生产环境
-- **每次合并/发布自动重建镜像，保证环境一致性**：
-  ```bash
-  docker build -t automated-testing:latest .
-  ```
-- **运行时不挂载代码目录，只挂载报告目录**：
-  ```bash
-  docker run --rm \
-    -e ...（你的环境变量） \
-    -v /usr/share/nginx/html/allure-report:/app/output/reports/allure-report \
-    automated-testing:latest \
-    bash -c "poetry run python ci/scripts/run_and_notify.py"
-  ```
-- **优点**：环境、依赖、代码版本完全一致，测试结果可复现、可追溯。
-
-### 3. Dockerfile分层构建说明
-- 采用分层构建，先COPY依赖声明文件并安装依赖，再COPY全部代码，最大化利用缓存加速构建。
-- 依赖不变时，构建速度极快。
-
----
-如需进一步定制Dockerfile、CI/CD流水线或本地/远程环境切换脚本，详见项目内文档或联系维护者。
+欢迎贡献！请遵循项目规范（见 `.cursor/rules/`）。

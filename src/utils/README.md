@@ -39,8 +39,8 @@
 ```python
 from src.utils.screenshot import save_screenshot, gen_screenshot_filename
 file_name = gen_screenshot_filename("test_login_fail")
-await save_screenshot(driver, file_name, report=False)  # 保存到原始截图目录
-await save_screenshot(driver, file_name, report=True)   # 保存到报告归档目录
+await save_screenshot(driver, file_name, report=False) 
+await save_screenshot(driver, file_name, report=True)  
 ```
 
 ### log/
@@ -65,49 +65,6 @@ await save_screenshot(driver, file_name, report=True)   # 保存到报告归档�
 
 ### email_notifier.py
 - `send_email(subject, body, recipients)`：发送邮件，支持文本和HTML。
-
-### allure_report_tools.py
-- **用途**：
-  提供Allure报告产物的自动校验与补传工具函数，确保Allure静态报告在分布式/静态服务器环境下用例详情不404。适用于CI/CD流程和本地上传前的自动检查。
-
-- **主要函数**：
-  - `get_uid_files(data_dir: str) -> Set[str]`  
-    获取data目录下所有UID .json文件名（不含扩展名）。
-  - `get_allure_test_uids(report_dir: str) -> Set[str]`  
-    从suites.json中递归提取所有用例的UID。
-  - `upload_files(files: List[str], data_dir: str, remote_user: str, remote_host: str, remote_dir: str) -> List[str]`  
-    上传指定UID .json文件到服务器，返回失败文件列表。
-  - `upload_key_files(data_dir: str, remote_user: str, remote_host: str, remote_dir: str) -> List[str]`  
-    上传history.json、categories.json、summary.json等关键文件，返回失败文件列表。
-
-- **用法示例**：
-
-  ```python
-  from src.utils.allure_report_tools import (
-      get_uid_files, get_allure_test_uids, upload_files, upload_key_files
-  )
-
-  data_dir = "output/reports/allure-report/data"
-  report_dir = "output/reports/allure-report"
-  remote_user = "root"
-  remote_host = "1.2.3.4"
-  remote_dir = "/usr/share/nginx/html/allure-report/data/"
-
-  uids_in_data = get_uid_files(data_dir)
-  uids_in_suites = get_allure_test_uids(report_dir)
-  missing = uids_in_suites - uids_in_data
-
-  if missing:
-      failed = upload_files(list(missing), data_dir, remote_user, remote_host, remote_dir)
-      if failed:
-          print("部分UID .json文件补传失败：", failed)
-  upload_key_files(data_dir, remote_user, remote_host, remote_dir)
-  ```
-
-- **注意事项**：
-  - 需保证本地和服务器均已安装`scp`命令。
-  - 适用于Allure报告已生成后、上传到静态服务器前的校验和补传。
-  - 建议集成到CI/CD流程，自动保障报告完整性。
 
 ---
 
