@@ -2,16 +2,27 @@
 
 本项目为企业级自动化测试框架，集成 Playwright、OCR 验证码识别、Allure 报告等，支持多平台、多环境的高效自动化测试。
 
-## 目录结构（七层架构）
-本项目严格遵循清晰的七层架构设计，确保代码的可维护性和扩展性：
+## 目录结构概览
+本项目遵循清晰的分层和模块化设计，主要目录结构如下：
 
-1.  **测试用例层（tests/）**：存放所有自动化测试用例，按平台/业务分目录。
-2.  **固件层（tests/conftest.py 等）**：pytest fixtures、全局前置后置、数据工厂。
-3.  **业务对象层（src/web/pages/、src/api/services/、src/mobile/screens/）**：页面对象、服务对象、业务流程封装。
-4.  **平台实现层（src/web/、src/api/、src/mobile/）**：平台相关实现与适配。
-5.  **核心抽象层（src/core/base/）**：接口定义、抽象基类。
-6.  **工具层（src/utils/）**：通用工具、OCR、日志、配置管理、邮件通知等。
-7.  **外部集成层（pyproject.toml）**：通过 Poetry 管理第三方依赖。
+- **`src/`**: 核心源代码目录，遵循七层架构思想：
+    - `core/base/`: **核心抽象层** - 定义通用接口、基类、异常。
+    - `web/`, `api/`, `mobile/`, `wechat/`, `security/`: **平台实现层** - 各测试平台具体实现。
+    - `utils/`: **工具层** - 通用工具（日志、配置、OCR、签名、邮件等）。
+    - (*业务对象层在平台实现层内，如 `src/web/pages/`*)
+- **`tests/`**: **测试用例层** - 存放所有自动化测试脚本，按平台划分。
+- **`data/`**: **测试数据目录** - 存放参数化所需的测试数据文件 (YAML, JSON等)。
+- **`config/`**: **配置目录** - 存放 `settings.yaml` 及各环境配置 (`env/`)。
+- **`docs/`**: **文档目录** - 存放项目架构、环境部署、规范等详细文档。
+- **`ci/`**: **CI/CD 辅助目录** - 包含 Jenkins Pipeline (`Jenkinsfile`) 及相关脚本 (`ci/scripts/`)。
+- **`output/`**: **输出目录** - 存放 Allure 测试结果、报告、日志、截图等运行时生成的文件 (不提交到 Git)。
+- **`.cursor/`**: Cursor AI 规则目录。
+- `pyproject.toml`: 项目元数据及依赖管理 (Poetry)。
+- `poetry.lock`: 锁定项目依赖的具体版本。
+- `Dockerfile`: 用于构建测试环境的 Docker 镜像定义。
+- `.env.example`, `.env`: 环境变量配置模板和本地配置 (不提交 `.env`)。
+- `.gitignore`: 指定 Git 忽略的文件和目录。
+- `README.md`: 本项目说明文件。
 
 详细架构说明请参见 `docs/enhanced_architecture.md`。
 
@@ -164,9 +175,10 @@ markers = [
 - Allure 生成丰富、交互式的测试报告。
 - 基于 `pyproject.toml` 和 Poetry 的标准化依赖管理。
 - 使用 `.env` 进行本地环境配置管理，CI 环境使用凭据注入。
-- 支持多环境配置加载 (`src/utils/config/`)。
+- 支持多环境配置加载 (`config/`, `src/utils/config/`)。
 - 统一日志管理 (`src/utils/log/`)。
-- 智能等待策略和自定义异常处理。
+- 智能等待策略和自定义异常处理 (`src/core/base/`, `src/web/` 等)。
+- 实现支付兼容的 MD5 签名工具 (`src/utils/signature.py`)。
 - 测试数据与测试逻辑分离 (`data/`)。
 - 遵循七层架构设计，代码结构清晰。
 - 通过 Docker 实现环境一致性与 CI/CD 集成。

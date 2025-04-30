@@ -3,8 +3,15 @@
 本目录用于存放所有自动化测试所需的参数化数据文件，支持 YAML/JSON/CSV 等格式。
 
 ## 主要内容
-- Web端登录数据：data/web/login/login_data.yaml
-- 其他业务测试数据按业务/平台分目录存放
+- API测试数据：`data/api/payment_data.yaml`
+- Web端测试数据：
+    - 登录数据：`data/web/login/login_data.yaml`
+- 移动端测试数据 (按平台划分):
+    - Android: `data/mobile/android/` (目前为空)
+    - iOS: `data/mobile/ios/` (目前为空)
+- 微信测试数据 (按类型划分):
+    - 小程序: `data/wechat/miniprogram/` (目前为空)
+    - 公众号: `data/wechat/official/` (目前为空)
 
 ## 设计原则
 - 测试数据与测试逻辑分离，便于维护和复用（见 test-data-separation.mdc）

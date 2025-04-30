@@ -82,12 +82,7 @@ async def test_login_scenarios(
         login_url (str): 登录页URL
         scenario_key (str): 当前测试场景key
         captcha_config (Dict[str, Any]): 验证码相关配置
-    Raises:
-        AssertionError: 用于断言各类登录场景的预期结果
-        LoginError: 登录业务异常
-        CaptchaError: 验证码识别异常
     """
-    # 设置测试场景动态标题
     scenario_titles = {
         "valid": "有效账号登录成功验证",
         "invalid_username": "无效用户名登录失败验证",
@@ -98,7 +93,6 @@ async def test_login_scenarios(
     }
     allure.dynamic.title(scenario_titles.get(scenario_key, f"登录场景: {scenario_key}"))
     
-    # 添加测试描述和重要性级别
     scenario_descriptions = {
         "valid": "验证使用正确的用户名和密码能够成功登录系统",
         "invalid_username": "验证使用不存在的用户名登录时系统给出正确提示",
@@ -109,7 +103,6 @@ async def test_login_scenarios(
     }
     allure.dynamic.description(scenario_descriptions.get(scenario_key, ""))
     
-    # 根据场景设置不同优先级
     if scenario_key == "valid":
         allure.severity(allure.severity_level.CRITICAL)
     elif scenario_key in ["invalid_username", "invalid_password"]:
@@ -220,7 +213,6 @@ async def test_login_scenarios(
                         f"期望账号或密码错误，实际弹窗内容: {error_text}"
                     return
                 if expected_result == "success":
-                    # 支持后续参数化expected_url_pattern，默认/workbench
                     expected_url_pattern = user_data.get("expected_url_pattern", "/workbench")
                     login_success = await login_page.wait_for_login_result(expected_url_pattern=expected_url_pattern)
                     assert login_success, f"有效账号登录应成功，实际: {login_success}"

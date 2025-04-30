@@ -13,5 +13,3 @@ __all__ = [
     'DashboardPage',
     'OmpLoginPage',
 ]
-
-# 如需日志请用: from src.utils.log.manager import get_logger

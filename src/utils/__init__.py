@@ -5,7 +5,6 @@
 """
 from .log.manager import get_logger
 
-# 导出常用工具函数和类
 __all__ = [
     'get_config', 
     'log_exception', 

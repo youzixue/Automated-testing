@@ -2,6 +2,7 @@ from __future__ import annotations
 import random
 import string
 from typing import Dict, Any, List, Optional
+from datetime import datetime, timedelta
 from src.utils.log.manager import get_logger
 
 class DataGenerator:
@@ -89,3 +90,52 @@ class DataGenerator:
         users = [self.random_user() for _ in range(count)]
         self.logger.debug(f"批量生成随机用户: {users}")
         return users
+
+    def generate_nonce_str(self, length: int = 20, chars: str = '1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ') -> str:
+        """
+        生成支付接口所需的随机字符串 (nonce_str)。
+        参考微信支付规范，默认使用大小写字母和数字。
+
+        Args:
+            length: 随机字符串长度 (默认 20)。
+            chars: 允许的字符集。
+
+        Returns:
+            随机字符串。
+        """
+        nonce = self.random_string(length, chars)
+        self.logger.debug(f"生成 nonce_str: {nonce}")
+        return nonce
+
+    def generate_out_trade_no(self, prefix: str = "") -> str:
+        """
+        生成商户订单号 (out_trade_no)。
+        格式：可选前缀 + YYYYMMDDHHMMSS + 4位随机数。
+
+        Args:
+            prefix: 订单号前缀 (可选)。
+
+        Returns:
+            商户订单号字符串。
+        """
+        now_str = datetime.now().strftime("%Y%m%d%H%M%S")
+        random_num_str = str(random.randint(1000, 9999))
+        out_trade_no = f"{prefix}{now_str}{random_num_str}"
+        self.logger.debug(f"生成 out_trade_no: {out_trade_no}")
+        return out_trade_no
+
+    def generate_trade_expire_time(self, hours_later: int = 24) -> str:
+        """
+        生成交易结束时间 (trade_expire_time)。
+        格式：YYYYMMDDHHMMSS。
+
+        Args:
+            hours_later: 从当前时间开始的小时数 (默认 24 小时后)。
+
+        Returns:
+            交易结束时间字符串。
+        """
+        expire_time = datetime.now() + timedelta(hours=hours_later)
+        expire_time_str = expire_time.strftime("%Y%m%d%H%M%S")
+        self.logger.debug(f"生成 trade_expire_time ({hours_later}小时后): {expire_time_str}")
+        return expire_time_str

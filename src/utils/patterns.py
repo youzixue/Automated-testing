@@ -2,10 +2,6 @@ from __future__ import annotations
 import re
 from typing import Pattern, Dict, Optional, Type
 
-from src.utils.log.manager import get_logger
-
-logger = get_logger(__name__)
-
 def Singleton(cls: Type) -> Type:
     """
     单例装饰器，用于修饰类，使其实例全局唯一。
@@ -33,29 +29,22 @@ class RegexPatterns:
 
     @classmethod
     def match(cls, pattern: Pattern, text: str) -> bool:
-        logger.info(f"[match] 正则匹配开始，pattern: {pattern.pattern}, text: {text}")
         try:
             result = bool(pattern.fullmatch(text))
-            logger.info(f"[match] 匹配结果: {result}")
             return result
-        except Exception as e:
-            logger.error(f"[match] 匹配异常: {e}", exc_info=True)
+        except Exception:
             return False
 
     @classmethod
     def search(cls, pattern: Pattern, text: str) -> Optional[re.Match]:
-        logger.info(f"[search] 正则搜索开始，pattern: {pattern.pattern}, text: {text}")
         try:
             match = pattern.search(text)
-            logger.info(f"[search] 搜索结果: {bool(match)}")
             return match
-        except Exception as e:
-            logger.error(f"[search] 搜索异常: {e}", exc_info=True)
+        except Exception:
             return None
 
     @classmethod
     def get_all_patterns(cls) -> Dict[str, Pattern]:
-        logger.info("[get_all_patterns] 获取所有正则模式")
         patterns = {
             "EMAIL": cls.EMAIL,
             "PHONE": cls.PHONE,
@@ -66,5 +55,4 @@ class RegexPatterns:
             "CHINESE": cls.CHINESE,
             "ID_CARD": cls.ID_CARD,
         }
-        logger.debug(f"[get_all_patterns] 模式字典: {list(patterns.keys())}")
         return patterns

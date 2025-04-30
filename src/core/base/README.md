@@ -3,9 +3,12 @@
 本目录用于定义自动化测试框架的核心接口、抽象基类和异常体系，确保各平台实现和业务对象的解耦与可扩展性。
 
 ## 主要内容
-- 所有平台（Web/API/移动端）通用的接口定义（如 BaseDriver、BaseElement、BaseConditionHandler 等）
-- 层次化异常体系（如 AutomationError、DriverError、ElementError、ApiError 等）
-- 条件与等待机制的抽象接口（如 ExpectedCondition、BaseConditionHandler 等）
+- **通用接口**: `driver.py`, `element.py` 定义了与平台无关的驱动和元素操作基础接口。
+- **异常体系**: `errors.py` 定义了框架的层次化异常，如 `AutomationError`, `DriverError`, `ElementError` 等。
+- **等待与条件**: `conditions.py`, `wait.py` 定义了显式等待相关的条件和处理机制接口。
+- **日志接口**: `log_interfaces.py` 定义了日志记录相关的接口或类型。
+- **配置定义**: `config_defs.py` 定义了核心配置相关的结构或类型。
+- **初始化**: `__init__.py` 导出核心基类和异常。
 - 业务对象和平台实现必须依赖接口而非具体实现，禁止跨层依赖
 - 推荐使用 Python ABC 抽象基类，便于类型检查和扩展
 

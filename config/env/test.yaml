@@ -3,24 +3,27 @@ environment: test
 
 web:
   base_url: "${env:WEB_BASE_URL}" # 从环境变量获取测试环境 Web URL
-  browser: "${env:BROWSER:-chromium}" # 默认使用 chromium
-  headless: ${env:HEADLESS:-false} # 测试环境默认显示浏览器便于调试
-  timeout: ${env:DEFAULT_TIMEOUT:-15} # 测试环境可使用较长超时
-  slow_mo: ${env:SLOW_MO:-100} # 测试环境可使用慢放以便观察
-  screenshot_on_failure: true # 测试环境截图便于调试
-  # URL 成功模式 (仅在测试环境使用)
+  headless: ${env:HEADLESS:-false} # (覆盖默认值: false)
+  timeout: ${env:DEFAULT_TIMEOUT:-15} # (覆盖默认值: 15秒回退)
+  slow_mo: ${env:SLOW_MO:-100} # (覆盖默认值: 100毫秒)
+  # URL 成功模式 (环境特定配置)
   urls:
     success_patterns:
-      - "/omp/workbench/workbench-manage"  # 实际登录成功后的路径
+      - "/omp/workbench/workbench-manage"
 
 
 api:
   base_url: "${env:API_BASE_URL}" # 从环境变量获取测试环境 API URL
-  timeout: ${env:DEFAULT_TIMEOUT:-15} # 使用较长的超时时间
-  verify_ssl: true # 验证SSL证书
-  retry_attempts: 2 # 失败重试次数
+  timeout: ${env:DEFAULT_TIMEOUT:-15} # (环境特定配置或覆盖默认)
+  verify_ssl: true # (环境特定配置或覆盖默认)
+  retry_attempts: 2 # (环境特定配置或覆盖默认)
+  # 支付相关配置 (环境特定配置)
+  payment:
+    key: "${env:PAYMENT_API_KEY}"
+    mch_id: "${env:PAYMENT_MCH_ID}"
+    device_info: "${env:PAYMENT_DEVICE_INFO}"
 
-# 登录信息 (引用测试环境变量)
+# 登录信息 (环境特定配置, 引用测试环境变量)
 credentials:
   admin:
     username: "${env:TEST_ADMIN_USERNAME}"
@@ -32,29 +35,18 @@ credentials:
 # 测试环境邮件配置
 notification:
   email:
-    enabled: ${env:EMAIL_ENABLED:-true} # 测试环境默认启用邮件
-    smtp_server: "${env:EMAIL_SMTP_SERVER}" # 必须来自环境变量
-    smtp_port: ${env:EMAIL_SMTP_PORT:-465} # 可以有默认值
-    sender: "${env:EMAIL_SENDER}" # 必须来自环境变量
-    password: "${env:EMAIL_PASSWORD}" # 必须来自环境变量
-    use_ssl: ${env:EMAIL_USE_SSL:-true} # 可以有默认值
-    pop3_server: "${env:EMAIL_POP3_SERVER}" # 必须来自环境变量
-    pop3_port: ${env:EMAIL_POP3_PORT:-995} # 可以有默认值
-    pop3_use_ssl: ${env:EMAIL_POP3_USE_SSL:-true} # 可以有默认值
-    recipients: "${env:EMAIL_RECIPIENTS}" # 必须来自环境变量
-    # 测试环境邮件模板
+    enabled: ${env:EMAIL_ENABLED:-true} # (覆盖默认值: true回退)
+    # 邮件模板 (环境特定配置)
     templates:
       test_success: "测试成功通知模板"
       test_failure: "测试失败通知模板"
 
 # 日志设置
 log:
-  level: "${env:LOG_LEVEL:-DEBUG}" # 测试环境默认使用DEBUG级别
+  level: "${env:LOG_LEVEL:-DEBUG}" # (覆盖默认值: DEBUG回退)
   console:
-    enabled: ${env:LOG_CONSOLE_ENABLED:-true} # 默认启用控制台日志
-    color: true # 使用彩色日志
+    pass # 控制台配置继承 settings.yaml
   file:
-    enabled: ${env:LOG_FILE_ENABLED:-true} # 默认启用文件日志
-    path: "logs/test" # 测试环境日志存放位置
-    max_size: 20 # MB
-    backup_count: 5 # 保留5个备份文件 
+    path: "logs/test" # (覆盖默认值)
+    max_size: 20 # (覆盖默认值: 20MB)
+    # 文件日志其他配置继承 settings.yaml 

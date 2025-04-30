@@ -29,7 +29,7 @@ python-dotenv = "1.1.0"        # 环境变量管理
 pyyaml = "6.0.2"               # 配置文件解析
 
 # OCR相关依赖
-pillow = "9.5.0"               # 图像处理
+pillow = "<10"                 # 图像处理 (固定<10兼容ddddocr的旧API)
 ddddocr = "1.5.6"              # 验证码识别
 numpy = "2.2.4"                # 数值计算
 onnxruntime = "1.21.0"         # OCR推理引擎
@@ -148,7 +148,8 @@ markers = [
     "mobile: 移动端自动化用例",
     "smoke: 冒烟测试",
     "regression: 回归测试",
-    "slow: 慢速用例"
+    "slow: 慢速用例",
+    "negative: 异常场景测试",
 ]
 
 # Deptry依赖检查工具配置

@@ -19,7 +19,6 @@ def get_screenshot_dir(report: bool = False) -> str:
     dir_path = os.environ.get(dir_env)
     if dir_path:
         return dir_path
-    # 读取配置文件
     try:
         with open("config/settings.yaml", "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)

@@ -1,0 +1,120 @@
+# 支付模块 API (统一支付下单) 测试数据
+# 用于 tests/api/test_payment_unified_order.py
+
+# 定义下单接口基础参数集，并设置锚点
+base_create_order_params: &baseOrderParams
+  # 必须从 PaymentService 或配置中获取的值 (以下为示例)
+  mch_id: "1000000086" # 示例商户号 (应与配置一致)
+  device_info: "S100021" # 示例设备号 (应与配置一致)
+  # 动态生成的值 (以下为示例，实际测试中会被覆盖)
+  nonce_str: "GENERATED_NONCE" # 占位符
+  out_trade_no: "GENERATED_OUT_TRADE_NO" # 占位符
+  trade_expire_time: "20251231235959" # 示例过期时间 (格式 YYYYMMDDHHMMSS)
+  # 其他测试用例所需的基本参数
+  total_fee: 6 # 订单总金额 (单位: 分)
+  one_data: # ONE 数据结构 (服务层会序列化为 JSON)
+    oneUserId: "66"
+    consumeSceneId: "JZXT-TC5000"
+    bizAccountId: "fc106773-f385-11ec-b621-00163e0e6293"
+    customParam: "自定义入参-非必填"
+    goodsDetail:
+      - category: "category_1"
+        spName: "测试1"
+        taxRate: 0.1
+        totalAmount: 0.06
+        needDeduction: 1
+        sortNo: 1
+        orderItemId: "XCX20240903005-1"
+  sub_appid: "wx98238fa57845d6d2"
+  sub_openid: "oPPiI4tQv4ivifX5UqH61VqkRbz4"
+  pay_type: "unified.cashier.wap" # 假设是这个，需要根据实际情况调整
+  attach: "ONE蛇口积分抵扣测试附加信息-成功场景"
+  detail: "ONE蛇口积分抵扣测试商品详情-成功场景"
+  goods_detail: "ONE蛇口积分抵扣测试商品名称-成功场景"
+  notify_url: "https://pay.test.cmskscy.com/notice/noticeSuccess"
+  return_url: "http://success.com/"
+  spbill_create_id: "192.168.1.100"
+  division_flag: "false"
+  asyn_division_flag: "false"
+
+# 测试统一支付下单接口
+unified_order_success:
+  # 获取签名接口所需的订单参数
+  get_sign_order_params:
+    total_fee: 6 # <--- 修改为整数
+    one_data: # <--- 修改为 YAML 字典
+      oneUserId: "66"
+      consumeSceneId: "JZXT-TC5000"
+      bizAccountId: "fc106773-f385-11ec-b621-00163e0e6293"
+      customParam: "自定义入参-非必填"
+      goodsDetail:
+        - category: "category_1"
+          spName: "测试1"
+          taxRate: 0.1
+          totalAmount: 0.06
+          needDeduction: 1
+          sortNo: 1
+          orderItemId: "XCX20240903005-1"
+    sub_appid: "wx98238fa57845d6d2"
+    sub_openid: "oPPiI4tQv4ivifX5UqH61VqkRbz4"
+    pay_type: "unified.cashier.wap"
+    attach: "ONE蛇口积分抵扣测试附加信息-成功场景"
+    detail: "ONE蛇口积分抵扣测试商品详情-成功场景"
+    goods_detail: "ONE蛇口积分抵扣测试商品名称-成功场景"
+    notify_url: "https://pay.test.cmskscy.com/notice/noticeSuccess" # 可能需要配置化
+    return_url: "http://success.com/" # 示例返回 URL
+    spbill_create_id: "192.168.1.100" # 示例 IP
+    division_flag: "false"
+    asyn_division_flag: "false"
+
+  # 使用别名引用基础下单参数
+  create_order_params: *baseOrderParams # 这里的 one_data 和 total_fee 会自动使用上面修改后的值
+
+  # 预期结果
+  expected_create_order_status: 200 # 保持不变
+
+# --- 参数化测试数据 ---
+
+# 无效格式或类型测试场景
+unified_order_invalid_format_type_cases:
+  - name: "Invalid total_fee (string 'abc')"
+    field_name: "total_fee"
+    invalid_value: "abc"
+    expected_error_msg_part: "金额格式错误"
+  - name: "Invalid total_fee (float 100.50)"
+    field_name: "total_fee"
+    invalid_value: 100.50
+    expected_error_msg_part: "金额格式错误"
+  - name: "Invalid trade_expire_time format"
+    field_name: "trade_expire_time"
+    invalid_value: "2023-12-31 23:59:59"
+    expected_error_msg_part: "时间格式错误"
+  - name: "Invalid spbill_create_id (IP 'invalid-ip')"
+    field_name: "spbill_create_id"
+    invalid_value: "invalid-ip"
+    expected_error_msg_part: "IP错误"
+  # 可以根据需要添加更多无效格式的测试用例
+
+# 长度约束测试场景
+unified_order_length_constraint_cases:
+  - name: "out_trade_no length 4 (fail)"
+    field_name: "out_trade_no"
+    test_value: "1234"
+    expect_success: false
+    expected_error_msg_part: "单号格式错误"
+  - name: "out_trade_no length 5 (fail)"
+    field_name: "out_trade_no"
+    test_value: "12345"
+    expect_success: false
+    expected_error_msg_part: "此交易订单号重复"
+  - name: "out_trade_no length 32 (success)"
+    field_name: "out_trade_no"
+    test_value: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    expect_success: true
+    expected_error_msg_part: null
+  - name: "out_trade_no length 33 (fail)"
+    field_name: "out_trade_no"
+    test_value: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" # 33 'a's
+    expect_success: false
+    expected_error_msg_part: "单号格式错误"
+  # 可以添加其他字段的长度约束测试用例 
