@@ -77,19 +77,19 @@ unified_order_success:
 
 # 无效格式或类型测试场景
 unified_order_invalid_format_type_cases:
-  - name: "Invalid total_fee (string 'abc')"
+  - name: "无效 total_fee (字符串 'abc')"
     field_name: "total_fee"
     invalid_value: "abc"
     expected_error_msg_part: "金额格式错误"
-  - name: "Invalid total_fee (float 100.50)"
+  - name: "无效 total_fee (浮点数 100.50)"
     field_name: "total_fee"
     invalid_value: 100.50
     expected_error_msg_part: "金额格式错误"
-  - name: "Invalid trade_expire_time format"
+  - name: "无效 trade_expire_time (格式错误)"
     field_name: "trade_expire_time"
     invalid_value: "2023-12-31 23:59:59"
     expected_error_msg_part: "时间格式错误"
-  - name: "Invalid spbill_create_id (IP 'invalid-ip')"
+  - name: "无效 spbill_create_id (IP 'invalid-ip')"
     field_name: "spbill_create_id"
     invalid_value: "invalid-ip"
     expected_error_msg_part: "IP错误"
@@ -97,22 +97,22 @@ unified_order_invalid_format_type_cases:
 
 # 长度约束测试场景
 unified_order_length_constraint_cases:
-  - name: "out_trade_no length 4 (fail)"
+  - name: "订单号 out_trade_no 长度 4 (失败)"
     field_name: "out_trade_no"
     test_value: "1234"
     expect_success: false
     expected_error_msg_part: "单号格式错误"
-  - name: "out_trade_no length 5 (fail)"
+  - name: "订单号 out_trade_no 长度 5 (失败)"
     field_name: "out_trade_no"
     test_value: "12345"
     expect_success: false
     expected_error_msg_part: "此交易订单号重复"
-  - name: "out_trade_no length 32 (success)"
+  - name: "订单号 out_trade_no 长度 32 (成功)"
     field_name: "out_trade_no"
     test_value: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     expect_success: true
     expected_error_msg_part: null
-  - name: "out_trade_no length 33 (fail)"
+  - name: "订单号 out_trade_no 长度 33 (失败)"
     field_name: "out_trade_no"
     test_value: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" # 33 'a's
     expect_success: false
