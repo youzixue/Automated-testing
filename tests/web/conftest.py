@@ -16,10 +16,16 @@ from playwright.async_api import async_playwright, Page, Browser
 from src.utils.screenshot import save_screenshot, gen_screenshot_filename
 from src.utils.config.manager import get_config
 
-# 明确指定.env路径，保证任何目录运行都能加载
+# --- .env 加载逻辑到 Web Conftest --- 
 project_root = Path(__file__).parents[2]
 env_path = project_root / '.env'
-load_dotenv(dotenv_path=str(env_path))
+if env_path.is_file():
+    # 使用 override=True 确保 .env 优先
+    load_dotenv(dotenv_path=env_path, override=True) 
+    print(f"[Web Conftest] Loaded environment variables from: {env_path}")
+else:
+    print(f"[Web Conftest] .env file not found at: {env_path}")
+# -------------------------------------------
 
 
 @pytest_asyncio.fixture(scope="session")

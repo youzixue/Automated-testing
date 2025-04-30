@@ -7,9 +7,7 @@
 from src.utils.config.loaders import YamlConfigLoader as YamlLoader, JsonConfigLoader as JsonLoader, EnvConfigLoader as EnvLoader
 
 __all__ = [
-    # 移除 ConfigManager
-    # 'ConfigManager',
-    'get_config', # 只导出获取实例的函数
+    'get_config', 
     'YamlLoader',
     'JsonLoader',
     'EnvLoader'

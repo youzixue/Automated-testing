@@ -1,18 +1,18 @@
 pipeline {
-    agent any // 或者指定你的 Docker Agent: agent { label 'docker' } 或 agent { docker { image 'your-agent-image' ... } }
+    agent any // 或者指定 Docker Agent
 
     parameters {
         choice(name: 'APP_ENV', choices: ['test', 'prod'], description: '选择测试环境')
         booleanParam(name: 'RUN_WEB_TESTS', defaultValue: true, description: '运行Web测试')
         booleanParam(name: 'RUN_API_TESTS', defaultValue: true, description: '运行API测试')
-        booleanParam(name: 'RUN_WECHAT_TESTS', defaultValue: false, description: '运行微信公众号测试')
+        booleanParam(name: 'RUN_WECHAT_TESTS', defaultValue: false, description: '运行微信公众号&小程序测试')
         booleanParam(name: 'RUN_APP_TESTS', defaultValue: false, description: '运行App测试')
         choice(name: 'TEST_SUITE', choices: ['全部', '冒烟测试', '回归测试'], description: '选择测试套件')
         booleanParam(name: 'SEND_EMAIL', defaultValue: true, description: '是否发送邮件通知')
     }
 
     environment {
-        // --- 凭据 ID ---
+        // --- 基础凭据 ID ---
         GIT_CREDENTIALS_ID = 'git-credentials'
         GIT_REPO_URL_CREDENTIAL_ID = 'git-repo-url'
         TEST_ENV_CREDENTIALS_ID = 'test-env-credentials'
@@ -21,6 +21,15 @@ pipeline {
         TEST_API_URL_CREDENTIAL_ID = 'test-api-url'
         PROD_WEB_URL_CREDENTIAL_ID = 'prod-web-url'
         PROD_API_URL_CREDENTIAL_ID = 'prod-api-url'
+
+        // --- 支付相关凭据 ID ---
+        TEST_PAYMENT_API_KEY_CREDENTIAL_ID = 'test-payment-api-key'
+        TEST_PAYMENT_MCH_ID_CREDENTIAL_ID = 'test-payment-mch-id'
+        TEST_PAYMENT_DEVICE_INFO_CREDENTIAL_ID = 'test-payment-device-info'
+        PROD_PAYMENT_API_KEY_CREDENTIAL_ID = 'prod-payment-api-key'
+        PROD_PAYMENT_MCH_ID_CREDENTIAL_ID = 'prod-payment-mch-id'
+        PROD_PAYMENT_DEVICE_INFO_CREDENTIAL_ID = 'prod-payment-device-info'
+
         // --- 邮件相关凭据 ID ---
         EMAIL_PASSWORD_CREDENTIALS_ID = 'email-password-credential'
         EMAIL_SMTP_SERVER_CREDENTIAL_ID = 'email-smtp-server'
@@ -31,15 +40,14 @@ pipeline {
 
         // --- Docker Agent & 宿主机路径映射 (关键) ---
         // !!! 重要：根据你的实际 Docker 卷配置修改 HOST_JENKINS_HOME_ON_HOST !!!
-        HOST_JENKINS_HOME_ON_HOST = '/var/lib/docker/volumes/jenkins_home/_data' // <-- !!! 示例路径，请务必检查 !!!
-        HOST_WORKSPACE_PATH = "${HOST_JENKINS_HOME_ON_HOST}/workspace/${env.JOB_NAME}" // <-- 宿主机上的 Jenkins 工作区路径
-        HOST_ALLURE_RESULTS_PATH = "${HOST_WORKSPACE_PATH}/output/allure-results" // <-- 宿主机上的 Allure 结果路径 (用于写入元数据和权限修改)
-        // HOST_ALLURE_REPORT_PATH 用于临时存放报告，以便 notify 脚本读取 summary.json
-        HOST_ALLURE_REPORT_PATH = "${HOST_WORKSPACE_PATH}/output/reports/temp-allure-report-for-summary" // <-- 宿主机上的临时报告路径
+        HOST_JENKINS_HOME_ON_HOST = '/var/lib/docker/volumes/jenkins_home/_data' // <-- !!! 示例路径，请务必检查并修改 !!!
+        HOST_WORKSPACE_PATH = "${HOST_JENKINS_HOME_ON_HOST}/workspace/${env.JOB_NAME}" // 宿主机上的 Jenkins 工作区路径
+        HOST_ALLURE_RESULTS_PATH = "${HOST_WORKSPACE_PATH}/output/allure-results" // 宿主机上的 Allure 结果路径
+        HOST_ALLURE_REPORT_PATH = "${HOST_WORKSPACE_PATH}/output/reports/temp-allure-report-for-summary" // 宿主机上的临时报告路径 (用于获取 summary.json)
 
         // --- 测试相关 ---
         TEST_SUITE_VALUE = "${params.TEST_SUITE == '全部' ? 'all' : (params.TEST_SUITE == '冒烟测试' ? 'smoke' : 'regression')}"
-        DOCKER_IMAGE = "automated-testing:dev" // 你的测试执行 Docker 镜像
+        DOCKER_IMAGE = "automated-testing:dev" // 测试执行 Docker 镜像
     }
 
     stages {
@@ -50,10 +58,10 @@ pipeline {
                     usernamePassword(credentialsId: env.GIT_CREDENTIALS_ID, usernameVariable: 'GIT_USERNAME', passwordVariable: 'GIT_PASSWORD')
                 ]) {
                     echo "从代码仓库拉取最新代码: ${INJECTED_GIT_REPO_URL}"
-                    cleanWs() // 清理 Agent 工作区
+                    cleanWs()
                     checkout([
                         $class: 'GitSCM',
-                        branches: [[name: '*/main']], // 或者你的开发分支
+                        branches: [[name: '*/main']], // 或开发分支
                         userRemoteConfigs: [[
                             url: INJECTED_GIT_REPO_URL,
                             credentialsId: env.GIT_CREDENTIALS_ID
@@ -69,7 +77,6 @@ pipeline {
         stage('准备环境 (Agent)') {
             steps {
                 echo "准备测试环境和目录 (在 Agent ${WORKSPACE} 上)..."
-                // 确保结果和临时报告目录在 Agent 上存在对应的目录结构
                 sh """
                 mkdir -p ${WORKSPACE}/output/allure-results
                 mkdir -p ${WORKSPACE}/output/reports/temp-allure-report-for-summary/widgets
@@ -98,7 +105,13 @@ pipeline {
                     def apiUrlCredentialId = (params.APP_ENV == 'prod') ? env.PROD_API_URL_CREDENTIAL_ID : env.TEST_API_URL_CREDENTIAL_ID
                     echo "选择凭据 ID: 账户=${accountCredentialsId}, WebURL=${webUrlCredentialId}, APIURL=${apiUrlCredentialId}"
 
+                    def paymentApiKeyCredentialId = (params.APP_ENV == 'prod') ? env.PROD_PAYMENT_API_KEY_CREDENTIAL_ID : env.TEST_PAYMENT_API_KEY_CREDENTIAL_ID
+                    def paymentMchIdCredentialId = (params.APP_ENV == 'prod') ? env.PROD_PAYMENT_MCH_ID_CREDENTIAL_ID : env.TEST_PAYMENT_MCH_ID_CREDENTIAL_ID
+                    def paymentDeviceInfoCredentialId = (params.APP_ENV == 'prod') ? env.PROD_PAYMENT_DEVICE_INFO_CREDENTIAL_ID : env.TEST_PAYMENT_DEVICE_INFO_CREDENTIAL_ID // 如果需要
+                    echo "选择支付凭据 ID: API Key=${paymentApiKeyCredentialId}, MCH ID=${paymentMchIdCredentialId}, Device Info=${paymentDeviceInfoCredentialId ?: '未使用'}"
+
                     try {
+                        // --- 外层 withCredentials 获取通用账户和 URL ---
                         withCredentials([
                             usernamePassword(credentialsId: accountCredentialsId, usernameVariable: 'ACCOUNT_USERNAME', passwordVariable: 'ACCOUNT_PASSWORD'),
                             string(credentialsId: webUrlCredentialId, variable: 'INJECTED_WEB_URL'),
@@ -106,296 +119,309 @@ pipeline {
                         ]) {
                             def testsToRun = [:]
 
+                            // --- Web 测试 ---
                             if (params.RUN_WEB_TESTS) {
                                 testsToRun['Web测试'] = {
                                     echo "执行Web测试 (并发: auto, 重试: 2)"
                                     sh """
-                                    docker run --rm --name pytest-web-${BUILD_NUMBER} \\
-                                      -e APP_ENV=${params.APP_ENV} \\
-                                      -e TEST_PLATFORM="web" \\
-                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \\
-                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
-                                      -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
-                                      -e WEB_BASE_URL="${INJECTED_WEB_URL}" \\
-                                      -e TZ="Asia/Shanghai" \\
-                                      -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
-                                      -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
-                                      --workdir /workspace \\
-                                      -v /etc/localtime:/etc/localtime:ro \\
-                                      --network host \\
-                                      ${env.DOCKER_IMAGE} \\
+                                    docker run --rm --name pytest-web-${BUILD_NUMBER} \
+                                      -e APP_ENV=${params.APP_ENV} \
+                                      -e TEST_PLATFORM="web" \
+                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \
+                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \
+                                      -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \
+                                      -e WEB_BASE_URL="${INJECTED_WEB_URL}" \
+                                      -e TZ="Asia/Shanghai" \
+                                      -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \
+                                      -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \
+                                      --workdir /workspace \
+                                      -v /etc/localtime:/etc/localtime:ro \
+                                      --network host \
+                                      ${env.DOCKER_IMAGE} \
                                       pytest tests/web -n auto --reruns 2 -v --alluredir=/results_out
                                     """
                                 }
                             } else { echo "跳过Web测试" }
 
+                            // --- API 测试 (包含支付凭据注入) ---
                             if (params.RUN_API_TESTS) {
                                 testsToRun['API测试'] = {
                                     echo "执行API测试 (并发: auto, 重试: 2)"
-                                    sh """
-                                    docker run --rm --name pytest-api-${BUILD_NUMBER} \\
-                                      -e APP_ENV=${params.APP_ENV} \\
-                                      -e TEST_PLATFORM="api" \\
-                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \\
-                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
-                                      -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
-                                      -e API_BASE_URL="${INJECTED_API_URL}" \\
-                                      -e TZ="Asia/Shanghai" \\
-                                      -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
-                                      -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
-                                      --workdir /workspace \\
-                                      -v /etc/localtime:/etc/localtime:ro \\
-                                      --network host \\
-                                      ${env.DOCKER_IMAGE} \\
-                                      pytest tests/api -n auto --reruns 2 -v --alluredir=/results_out
-                                    """
+                                    // --- 内层 withCredentials 获取支付凭据 ---
+                                    withCredentials([
+                                        string(credentialsId: paymentApiKeyCredentialId, variable: 'INJECTED_PAYMENT_API_KEY'),
+                                        string(credentialsId: paymentMchIdCredentialId, variable: 'INJECTED_PAYMENT_MCH_ID'),
+                                        // string(credentialsId: paymentDeviceInfoCredentialId, variable: 'INJECTED_PAYMENT_DEVICE_INFO') // 如果需要
+                                    ]) {
+                                        // 构造支付环境变量注入字符串 (需与 config/env/*.yaml 匹配)
+                                        def paymentEnvVars = "-e ${params.APP_ENV == 'prod' ? 'PROD_PAYMENT_API_KEY' : 'PAYMENT_API_KEY'}='${INJECTED_PAYMENT_API_KEY}' " +
+                                                             "-e ${params.APP_ENV == 'prod' ? 'PROD_MCH_ID' : 'PAYMENT_MCH_ID'}='${INJECTED_PAYMENT_MCH_ID}' "
+                                        // if (paymentDeviceInfoCredentialId) {
+                                        //    paymentEnvVars += "-e ${params.APP_ENV == 'prod' ? 'PROD_DEVICE_INFO' : 'PAYMENT_DEVICE_INFO'}='${INJECTED_PAYMENT_DEVICE_INFO}' "
+                                        // }
+
+                                        sh """
+                                        docker run --rm --name pytest-api-${BUILD_NUMBER} \
+                                          -e APP_ENV=${params.APP_ENV} \
+                                          -e TEST_PLATFORM="api" \
+                                          -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \
+                                          -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \
+                                          -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \
+                                          -e API_BASE_URL="${INJECTED_API_URL}" \
+                                          ${paymentEnvVars} \
+                                          -e TZ="Asia/Shanghai" \
+                                          -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \
+                                          -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \
+                                          --workdir /workspace \
+                                          -v /etc/localtime:/etc/localtime:ro \
+                                          --network host \
+                                          ${env.DOCKER_IMAGE} \
+                                          pytest tests/api -n auto --reruns 2 -v --alluredir=/results_out
+                                        """
+                                    }
                                 }
                             } else { echo "跳过API测试" }
 
+                            // --- 微信测试 ---
                             if (params.RUN_WECHAT_TESTS) {
                                testsToRun['微信公众号测试'] = {
                                     echo "执行微信公众号测试 (并发: auto, 重试: 2)"
                                     sh """
-                                    docker run --rm --name pytest-wechat-${BUILD_NUMBER} \\
-                                      -e APP_ENV=${params.APP_ENV} \\
-                                      -e TEST_PLATFORM="wechat" \\
-                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \\
-                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
-                                      -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
-                                      -e TZ="Asia/Shanghai" \\
-                                      -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
-                                      -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
-                                      --workdir /workspace \\
-                                      -v /etc/localtime:/etc/localtime:ro \\
-                                      --network host \\
-                                      ${env.DOCKER_IMAGE} \\
+                                    docker run --rm --name pytest-wechat-${BUILD_NUMBER} \
+                                      -e APP_ENV=${params.APP_ENV} \
+                                      -e TEST_PLATFORM="wechat" \
+                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \
+                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \
+                                      -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \
+                                      -e TZ="Asia/Shanghai" \
+                                      -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \
+                                      -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \
+                                      --workdir /workspace \
+                                      -v /etc/localtime:/etc/localtime:ro \
+                                      --network host \
+                                      ${env.DOCKER_IMAGE} \
                                       pytest tests/wechat -n auto --reruns 2 -v --alluredir=/results_out
                                     """
                                }
                             } else { echo "跳过微信公众号测试" }
 
+                            // --- App 测试 ---
                             if (params.RUN_APP_TESTS) {
                                 testsToRun['App测试'] = {
                                     echo "执行App测试 (并发: auto, 重试: 2)"
                                     sh """
-                                    docker run --rm --name pytest-app-${BUILD_NUMBER} \\
-                                      -e APP_ENV=${params.APP_ENV} \\
-                                      -e TEST_PLATFORM="app" \\
-                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \\
-                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
-                                      -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
-                                      -e TZ="Asia/Shanghai" \\
-                                      -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
-                                      -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
-                                      --workdir /workspace \\
-                                      -v /etc/localtime:/etc/localtime:ro \\
-                                      --network host \\
-                                      ${env.DOCKER_IMAGE} \\
+                                    docker run --rm --name pytest-app-${BUILD_NUMBER} \
+                                      -e APP_ENV=${params.APP_ENV} \
+                                      -e TEST_PLATFORM="app" \
+                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \
+                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \
+                                      -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \
+                                      -e TZ="Asia/Shanghai" \
+                                      -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \
+                                      -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \
+                                      --workdir /workspace \
+                                      -v /etc/localtime:/etc/localtime:ro \
+                                      --network host \
+                                      ${env.DOCKER_IMAGE} \
                                       pytest tests/app -n auto --reruns 2 -v --alluredir=/results_out
                                     """
                                 }
                             } else { echo "跳过App测试" }
 
+                            // --- 执行并行测试 ---
                             if (!testsToRun.isEmpty()) {
                                  echo "开始并行执行选定的测试 (结果写入宿主机 ${env.HOST_ALLURE_RESULTS_PATH})..."
                                  parallel testsToRun
                             } else {
                                  echo "没有选择任何测试平台，跳过测试执行。"
-                                 // 确保 allure-results 目录存在，即使没有测试执行
-                                 sh "mkdir -p ${WORKSPACE}/output/allure-results"
+                                 sh "mkdir -p ${WORKSPACE}/output/allure-results" // 确保目录存在
                             }
-                        } // End withCredentials
+                        }
                     } catch (err) {
                         echo "测试阶段出现错误: ${err}. 将继续执行报告生成和通知。"
-                        // 可以标记为 UNSTABLE，以便 post 阶段可以识别并处理
                         currentBuild.result = 'UNSTABLE'
                     }
-                } // End script
-            } // End steps
-        } // End stage '并行执行测试'
+                }
+            }
+        }
+    }
 
-       } // End stages
+    // --- Post Build Actions ---
+    post {
+        always {
+            echo "Pipeline 完成. 开始执行报告生成和通知步骤..."
+            script {
+                def allureReportUrl = ""
+                def allureStepSuccess = false
+                def tempReportGenSuccess = false
 
-       // --- Post Build Actions ---
-       post {
-           always {
-               echo "Pipeline 完成. 开始执行报告生成和通知步骤..."
-               script {
-                   def allureReportUrl = ""
-                   def allureStepSuccess = false
-                   def tempReportGenSuccess = false
+                try {
+                    // --- 获取邮件凭据 ---
+                    withCredentials([
+                        string(credentialsId: env.EMAIL_PASSWORD_CREDENTIALS_ID, variable: 'INJECTED_EMAIL_PASSWORD'),
+                        string(credentialsId: env.EMAIL_SMTP_SERVER_CREDENTIAL_ID, variable: 'INJECTED_EMAIL_SMTP_SERVER'),
+                        string(credentialsId: env.EMAIL_SMTP_PORT_CREDENTIAL_ID, variable: 'INJECTED_EMAIL_SMTP_PORT'),
+                        string(credentialsId: env.EMAIL_SENDER_CREDENTIAL_ID, variable: 'INJECTED_EMAIL_SENDER'),
+                        string(credentialsId: env.EMAIL_RECIPIENTS_CREDENTIAL_ID, variable: 'INJECTED_EMAIL_RECIPIENTS'),
+                        string(credentialsId: env.EMAIL_USE_SSL_CREDENTIAL_ID, variable: 'INJECTED_EMAIL_USE_SSL')
+                    ]) {
 
-                   try {
-                       withCredentials([
-                           string(credentialsId: env.EMAIL_PASSWORD_CREDENTIALS_ID, variable: 'INJECTED_EMAIL_PASSWORD'),
-                           string(credentialsId: env.EMAIL_SMTP_SERVER_CREDENTIAL_ID, variable: 'INJECTED_EMAIL_SMTP_SERVER'),
-                           string(credentialsId: env.EMAIL_SMTP_PORT_CREDENTIAL_ID, variable: 'INJECTED_EMAIL_SMTP_PORT'),
-                           string(credentialsId: env.EMAIL_SENDER_CREDENTIAL_ID, variable: 'INJECTED_EMAIL_SENDER'),
-                           string(credentialsId: env.EMAIL_RECIPIENTS_CREDENTIAL_ID, variable: 'INJECTED_EMAIL_RECIPIENTS'),
-                           string(credentialsId: env.EMAIL_USE_SSL_CREDENTIAL_ID, variable: 'INJECTED_EMAIL_USE_SSL')
-                       ]) {
+                        // --- 1. 写入 Allure 元数据 ---
+                        echo "写入 Allure 元数据文件到 ${env.HOST_ALLURE_RESULTS_PATH} (在宿主机上)..."
+                        def jenkinsAllureReportUrl = "${env.BUILD_URL}allure/"
+                        sh """
+                        docker run --rm --name write-metadata-${BUILD_NUMBER} \
+                          -e APP_ENV=${params.APP_ENV} \
+                          -e BUILD_NUMBER=${BUILD_NUMBER} \
+                          -e BUILD_URL=${env.BUILD_URL} \
+                          -e JOB_NAME=${env.JOB_NAME} \
+                          -e ALLURE_PUBLIC_URL='${jenkinsAllureReportUrl}' \
+                          -v ${env.HOST_WORKSPACE_PATH}:/workspace:ro \
+                          -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \
+                          -v /etc/localtime:/etc/localtime:ro \
+                          --user root \
+                          ${env.DOCKER_IMAGE} \
+                          python /workspace/ci/scripts/write_allure_metadata.py /results_out
+                        """
+                        echo "Allure 元数据写入完成。"
 
-                           // --- 1. 写入 Allure 元数据 (插件和手动生成都需要) ---
-                           echo "写入 Allure 元数据文件到 ${env.HOST_ALLURE_RESULTS_PATH} (在宿主机上)..."
-                           def jenkinsAllureReportUrl = "${env.BUILD_URL}allure/"
-                           sh """
-                           docker run --rm --name write-metadata-${BUILD_NUMBER} \\
-                             -e APP_ENV=${params.APP_ENV} \\
-                             -e BUILD_NUMBER=${BUILD_NUMBER} \\
-                             -e BUILD_URL=${env.BUILD_URL} \\
-                             -e JOB_NAME=${env.JOB_NAME} \\
-                             -e ALLURE_PUBLIC_URL='${jenkinsAllureReportUrl}' \\
-                             -v ${env.HOST_WORKSPACE_PATH}:/workspace:ro \\
-                             -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
-                             -v /etc/localtime:/etc/localtime:ro \\
-                             --user root \\
-                             ${env.DOCKER_IMAGE} \\
-                             python /workspace/ci/scripts/write_allure_metadata.py /results_out
-                           """
-                           echo "Allure 元数据写入完成。"
+                        // --- 2. 修正 allure-results 目录权限 ---
+                        echo "修正宿主机目录 ${env.HOST_ALLURE_RESULTS_PATH} 的权限 (使用 Docker)..."
+                        sh """
+                        docker run --rm --name chown-chmod-results-${BUILD_NUMBER} \
+                          -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_to_fix:rw \
+                          --user root \
+                          ${env.DOCKER_IMAGE} \
+                          sh -c 'chown -R 1000:1000 /results_to_fix || echo "chown to 1000:1000 failed, continuing..."; chmod -R a+r /results_to_fix || echo "chmod failed!"'
+                        """
+                        echo "权限修正尝试完成。"
 
-                           // --- 2. 修正 allure-results 目录权限 (供 Allure 插件和手动生成读取) ---
-                           echo "修正宿主机目录 ${env.HOST_ALLURE_RESULTS_PATH} 的权限 (使用 Docker)..."
-                           sh """
-                           docker run --rm --name chown-chmod-results-${BUILD_NUMBER} \\
-                             -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_to_fix:rw \\
-                             --user root \\
-                             ${env.DOCKER_IMAGE} \\
-                             sh -c 'chown -R 1000:1000 /results_to_fix || echo "chown to 1000:1000 failed, continuing..."; chmod -R a+r /results_to_fix || echo "chmod failed!"'
-                           """
-                           echo "权限修正尝试完成。"
+                        // --- 3. 使用 Allure Jenkins 插件生成和归档报告 ---
+                        echo "使用 Allure Jenkins 插件处理 ${WORKSPACE}/output/allure-results 中的结果..."
+                        try {
+                            allure([
+                                properties: [],
+                                reportBuildPolicy: 'ALWAYS',
+                                results: [
+                                    [path: 'output/allure-results'] // 相对于 WORKSPACE 的路径
+                                ]
+                            ])
+                            allureStepSuccess = true
+                            allureReportUrl = jenkinsAllureReportUrl
+                            echo "Allure 插件报告处理完成。报告 URL: ${allureReportUrl}"
+                        } catch (allurePluginError) {
+                            echo "Allure 插件步骤失败: ${allurePluginError}"
+                            allureStepSuccess = false
+                            allureReportUrl = "(Allure 插件报告生成失败)"
+                        }
 
-                           // --- 3. 使用 Allure Jenkins 插件生成和归档报告 (用于 Jenkins UI 显示和历史记录) ---
-                           echo "使用 Allure Jenkins 插件处理 ${WORKSPACE}/output/allure-results 中的结果..."
-                           try {
-                               allure([
-                                   properties: [],
-                                   reportBuildPolicy: 'ALWAYS',
-                                   results: [
-                                       [path: 'output/allure-results'] // 相对于 WORKSPACE 的路径
-                                   ]
-                               ])
-                               allureStepSuccess = true
-                               allureReportUrl = jenkinsAllureReportUrl // 使用插件生成的 URL
-                               echo "Allure 插件报告处理完成。报告 URL: ${allureReportUrl}"
-                           } catch (allurePluginError) {
-                               echo "Allure 插件步骤失败: ${allurePluginError}"
-                               allureStepSuccess = false
-                               allureReportUrl = "(Allure 插件报告生成失败)"
-                           }
+                        // --- 4. 手动生成报告到临时目录 (获取 summary.json) ---
+                        echo "生成临时报告到 ${env.HOST_ALLURE_REPORT_PATH} 以获取 summary.json..."
+                        echo "确保宿主机目录 ${env.HOST_ALLURE_REPORT_PATH}/widgets 存在 (使用 Docker)..."
+                        sh """
+                        docker run --rm --name mkdir-temp-report-${BUILD_NUMBER} \
+                          -v ${env.HOST_WORKSPACE_PATH}:/host_workspace:rw \
+                          --user root \
+                          ${env.DOCKER_IMAGE} \
+                          sh -c 'mkdir -p /host_workspace/output/reports/temp-allure-report-for-summary/widgets && echo "Host directory ensured."'
+                        """
+                        sh """
+                        docker run --rm --name allure-gen-temp-${BUILD_NUMBER} \
+                          -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_in:ro \
+                          -v ${env.HOST_ALLURE_REPORT_PATH}:/report_out:rw \
+                          --user root \
+                          ${env.DOCKER_IMAGE} \
+                          sh -c 'allure generate /results_in --clean -o /report_out && echo "Temporary report generated to /report_out" || echo "Failed to generate temporary report!"'
+                        """
+                        // 检查 summary.json 是否成功生成
+                        def summaryCheckExitCode = sh script: "docker run --rm -v ${env.HOST_ALLURE_REPORT_PATH}:/report_check:ro ${env.DOCKER_IMAGE} test -f /report_check/widgets/summary.json", returnStatus: true
+                        if (summaryCheckExitCode == 0) {
+                            tempReportGenSuccess = true
+                            echo "summary.json 已成功生成到宿主机路径: ${env.HOST_ALLURE_REPORT_PATH}/widgets/summary.json"
+                        } else {
+                            tempReportGenSuccess = false
+                            echo "[警告] 未能在 ${env.HOST_ALLURE_REPORT_PATH}/widgets/ 中找到 summary.json。邮件可能缺少统计信息。"
+                        }
 
-                           // --- 4. 手动生成报告到临时目录 (获取 summary.json) ---
-                           echo "生成临时报告到 ${env.HOST_ALLURE_REPORT_PATH} 以获取 summary.json..."
-                           // --- 使用 Docker 创建宿主机上的目标目录 ---
-                           echo "确保宿主机目录 ${env.HOST_ALLURE_REPORT_PATH}/widgets 存在 (使用 Docker)..."
-                           // 挂载宿主机的 workspace 目录，然后在容器内基于 workspace 创建相对路径
-                           sh """
-                           docker run --rm --name mkdir-temp-report-${BUILD_NUMBER} \\
-                             -v ${env.HOST_WORKSPACE_PATH}:/host_workspace:rw \\
-                             --user root \\
-                             ${env.DOCKER_IMAGE} \\
-                             sh -c 'mkdir -p /host_workspace/output/reports/temp-allure-report-for-summary/widgets && echo "Host directory ensured."'
-                           """
-                           // 使用 Docker 运行 allure generate
-                           sh """
-                           docker run --rm --name allure-gen-temp-${BUILD_NUMBER} \\
-                             -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_in:ro \\
-                             -v ${env.HOST_ALLURE_REPORT_PATH}:/report_out:rw \\
-                             --user root \\
-                             ${env.DOCKER_IMAGE} \\
-                             sh -c 'allure generate /results_in --clean -o /report_out && echo "Temporary report generated to /report_out" || echo "Failed to generate temporary report!"'
-                           """
-                           // 检查 summary.json 是否成功生成
-                           def summaryCheckExitCode = sh script: "docker run --rm -v ${env.HOST_ALLURE_REPORT_PATH}:/report_check:ro ${env.DOCKER_IMAGE} test -f /report_check/widgets/summary.json", returnStatus: true
-                           if (summaryCheckExitCode == 0) {
-                               tempReportGenSuccess = true
-                               echo "summary.json 已成功生成到宿主机路径: ${env.HOST_ALLURE_REPORT_PATH}/widgets/summary.json"
-                           } else {
-                               tempReportGenSuccess = false
-                               echo "[警告] 未能在 ${env.HOST_ALLURE_REPORT_PATH}/widgets/ 中找到 summary.json。邮件可能缺少统计信息。"
-                           }
+                        // --- 5. 发送邮件通知 ---
+                        if (params.SEND_EMAIL) {
+                            echo "发送邮件通知 (尝试读取 ${env.HOST_ALLURE_REPORT_PATH}/widgets/summary.json)..."
+                            sh """
+                            echo "--- Sending notification email via run_and_notify.py ---"
+                            docker run --rm --name notify-${BUILD_NUMBER} \
+                              -e CI=true \
+                              -e APP_ENV=${params.APP_ENV} \
+                              -e EMAIL_ENABLED=${params.SEND_EMAIL} \
+                              -e EMAIL_PASSWORD='${INJECTED_EMAIL_PASSWORD}' \
+                              -e EMAIL_SMTP_SERVER="${INJECTED_EMAIL_SMTP_SERVER}" \
+                              -e EMAIL_SMTP_PORT=${INJECTED_EMAIL_SMTP_PORT} \
+                              -e EMAIL_SENDER="${INJECTED_EMAIL_SENDER}" \
+                              -e EMAIL_RECIPIENTS="${INJECTED_EMAIL_RECIPIENTS}" \
+                              -e EMAIL_USE_SSL=${INJECTED_EMAIL_USE_SSL} \
+                              -e ALLURE_PUBLIC_URL="${allureReportUrl}" \
+                              -e BUILD_STATUS="${currentBuild.result ?: 'SUCCESS'}" \
+                              -e BUILD_URL="${env.BUILD_URL}" \
+                              -e JOB_NAME="${env.JOB_NAME}" \
+                              -e BUILD_NUMBER="${BUILD_NUMBER}" \
+                              -e TZ="Asia/Shanghai" \
+                              -v ${env.HOST_WORKSPACE_PATH}:/workspace:ro \
+                              -v ${env.HOST_ALLURE_REPORT_PATH}:/report:ro \
+                              -v /etc/localtime:/etc/localtime:ro \
+                              --network host \
+                              ${env.DOCKER_IMAGE} \
+                              python /workspace/ci/scripts/run_and_notify.py
+                            echo "通知脚本执行完毕。"
+                            """
+                        } else {
+                            echo "邮件通知已禁用 (SEND_EMAIL=false)。"
+                        }
 
-                           // --- 5. 发送邮件通知 ---
-                           if (params.SEND_EMAIL) {
-                               echo "发送邮件通知 (尝试读取 ${env.HOST_ALLURE_REPORT_PATH}/widgets/summary.json)..."
-                               sh """
-                               echo "--- Sending notification email via run_and_notify.py ---"
-                               docker run --rm --name notify-${BUILD_NUMBER} \\
-                                 -e CI=true \\
-                                 -e APP_ENV=${params.APP_ENV} \\
-                                 -e EMAIL_ENABLED=${params.SEND_EMAIL} \\
-                                 -e EMAIL_PASSWORD='${INJECTED_EMAIL_PASSWORD}' \\
-                                 -e EMAIL_SMTP_SERVER="${INJECTED_EMAIL_SMTP_SERVER}" \\
-                                 -e EMAIL_SMTP_PORT=${INJECTED_EMAIL_SMTP_PORT} \\
-                                 -e EMAIL_SENDER="${INJECTED_EMAIL_SENDER}" \\
-                                 -e EMAIL_RECIPIENTS="${INJECTED_EMAIL_RECIPIENTS}" \\
-                                 -e EMAIL_USE_SSL=${INJECTED_EMAIL_USE_SSL} \\
-                                 -e ALLURE_PUBLIC_URL="${allureReportUrl}" \\
-                                 -e BUILD_STATUS="${currentBuild.result ?: 'SUCCESS'}" \\
-                                 -e BUILD_URL="${env.BUILD_URL}" \\
-                                 -e JOB_NAME="${env.JOB_NAME}" \\
-                                 -e BUILD_NUMBER="${BUILD_NUMBER}" \\
-                                 -e TZ="Asia/Shanghai" \\
-                                 -v ${env.HOST_WORKSPACE_PATH}:/workspace:ro \\
-                                 -v ${env.HOST_ALLURE_REPORT_PATH}:/report:ro \\
-                                 -v /etc/localtime:/etc/localtime:ro \\
-                                 --network host \\
-                                 ${env.DOCKER_IMAGE} \\
-                                 python /workspace/ci/scripts/run_and_notify.py
-                               echo "通知脚本执行完毕。"
-                               """
-                           } else {
-                               echo "邮件通知已禁用 (SEND_EMAIL=false)。"
-                           }
+                    }
+                } catch (err) {
+                    echo "Post-build 阶段出现严重错误: ${err}"
+                    if (!allureStepSuccess && !tempReportGenSuccess) {
+                        currentBuild.result = 'FAILURE'
+                    } else {
+                        if (currentBuild.result == null || currentBuild.result == 'SUCCESS') {
+                           currentBuild.result = 'UNSTABLE'
+                        }
+                    }
+                } finally {
+                    // --- 6. 设置构建描述 ---
+                    def testTypes = []
+                    if (params.RUN_WEB_TESTS) testTypes.add("Web")
+                    if (params.RUN_API_TESTS) testTypes.add("API")
+                    if (params.RUN_WECHAT_TESTS) testTypes.add("微信")
+                    if (params.RUN_APP_TESTS) testTypes.add("App")
+                    if (testTypes.isEmpty()) testTypes.add("未选择")
 
-                       } // End withCredentials
-                   } catch (err) {
-                       echo "Post-build 阶段出现严重错误: ${err}"
-                       if (!allureStepSuccess && !tempReportGenSuccess) {
-                           currentBuild.result = 'FAILURE'
-                       } else {
-                           if (currentBuild.result == null || currentBuild.result == 'SUCCESS') {
-                              currentBuild.result = 'UNSTABLE'
-                           }
-                       }
-                   } finally {
-                       // --- 6. 设置构建描述 ---
-                       def testTypes = []
-                       if (params.RUN_WEB_TESTS) testTypes.add("Web")
-                       if (params.RUN_API_TESTS) testTypes.add("API")
-                       if (params.RUN_WECHAT_TESTS) testTypes.add("微信")
-                       if (params.RUN_APP_TESTS) testTypes.add("App")
-                       if (testTypes.isEmpty()) testTypes.add("未选择")
+                    def finalStatus = currentBuild.result ?: 'SUCCESS'
+                    def reportLink = allureStepSuccess && allureReportUrl.startsWith("http") ? "<a href='${allureReportUrl}' target='_blank'>查看报告</a>" : allureReportUrl ?: "(报告链接不可用)"
 
-                       def finalStatus = currentBuild.result ?: 'SUCCESS'
-                       def reportLink = allureStepSuccess && allureReportUrl.startsWith("http") ? "<a href='${allureReportUrl}' target='_blank'>查看报告</a>" : allureReportUrl ?: "(报告链接不可用)"
+                    currentBuild.description = "${params.APP_ENV.toUpperCase()} 环境 [${testTypes.join(', ')}] - ${finalStatus} - ${reportLink}"
 
-                       currentBuild.description = "${params.APP_ENV.toUpperCase()} 环境 [${testTypes.join(', ')}] - ${finalStatus} - ${reportLink}"
-
-                       // --- 7. 清理工作空间和临时报告目录 ---
-                       echo "清理 Agent 工作空间 ${WORKSPACE} 和临时报告目录 ${env.HOST_ALLURE_REPORT_PATH} (在宿主机上)..."
-                       // 在宿主机上删除临时报告目录 (使用 Docker 执行 rm)
-                       sh """
-                       docker run --rm --name cleanup-temp-report-${BUILD_NUMBER} \\
-                         -v ${env.HOST_WORKSPACE_PATH}:/host_workspace:rw \\
-                         --user root \\
-                         ${env.DOCKER_IMAGE} \\
-                         sh -c 'rm -rf /host_workspace/output/reports/temp-allure-report-for-summary && echo "Host temporary report directory removed."'
-                       """
-                       // 清理 Agent 工作区
-                       cleanWs()
-                       echo "Agent 工作空间和临时报告目录已清理。"
-                   } // End finally
-               } // End script
-           } // End always
-           success {
-               echo "Pipeline 最终状态: 成功"
-           }
-           failure {
-               echo "Pipeline 最终状态: 失败"
-           }
-           unstable {
-               echo "Pipeline 最终状态: 不稳定"
-           }
-       } // End post
-   } // End pipeline
+                    // --- 7. 清理工作空间和临时报告目录 ---
+                    echo "清理 Agent 工作空间 ${WORKSPACE} 和临时报告目录 ${env.HOST_ALLURE_REPORT_PATH} (在宿主机上)..."
+                    sh """
+                    docker run --rm --name cleanup-temp-report-${BUILD_NUMBER} \
+                      -v ${env.HOST_WORKSPACE_PATH}:/host_workspace:rw \
+                      --user root \
+                      ${env.DOCKER_IMAGE} \
+                      sh -c 'rm -rf /host_workspace/output/reports/temp-allure-report-for-summary && echo "Host temporary report directory removed."'
+                    """
+                    cleanWs()
+                    echo "Agent 工作空间和临时报告目录已清理。"
+                }
+            }
+        }
+        success {
+            echo "Pipeline 最终状态: 成功"
+        }
+        failure {
+            echo "Pipeline 最终状态: 失败"
+        }
+        unstable {
+            echo "Pipeline 最终状态: 不稳定"
+        }
+    }
+}

@@ -1,79 +1,48 @@
 """
-Core base components for the test automation framework.
-
-Includes base classes and interfaces for drivers, pages, and errors.
+核心基础模块，定义接口、基础类和异常。
 """
 
-# Import core interfaces and base classes
 from .driver import BaseDriver
-from .wait import WaitStrategy, ElementCondition
-from .config_defs import ConfigLevel, CONFIG_PRIORITY_ORDER, CONFIG_MERGE_ORDER
-from .log_interfaces import LogLevel, LogFormatter, LogHandler, Logger
-from .errors import *
-
-# Import core exception types
+from .element import WebElement
 from .errors import (
     AutomationError,
-    ElementError,
-    ElementNotFoundError,
-    ElementNotVisibleError,
-    ElementNotInteractableError,
-    DriverError,
-    DriverInitError,
-    NavigationError,
-    TimeoutError,
-    ConfigurationError,
     ApiError,
     ApiRequestError,
-    DataError,
-    TestSetupError,
-    TestTeardownError,
-    SecurityError,
-    ResourceError,
+    CaptchaError,
+    ConfigurationError,
+    DriverError,
+    DriverInitError,
+    ElementError,
+    ElementNotInteractableError,
+    ElementNotFoundError,
+    ElementNotVisibleError,
+    LoginError,
+    NavigationError,
     ReportGenerationError,
-    FrameworkError,
+    TimeoutError,
+    BrowserError
 )
+from .wait import ElementCondition, WaitStrategy
 
-# Import conditions
-from .conditions import ExpectedCondition, ElementStateCondition, VisibilityCondition, BaseConditionHandler, BaseConditionHandlerRegistry
-
-# Define publicly available components
 __all__ = [
-    # Base interfaces and classes
     "BaseDriver",
-    "WaitStrategy",
-    "ElementCondition",
-    "ExpectedCondition",
-    "ElementStateCondition",
-    "VisibilityCondition",
-    "BaseConditionHandler",
-    "BaseConditionHandlerRegistry",
-    "ConfigLevel",
-    "CONFIG_PRIORITY_ORDER",
-    "CONFIG_MERGE_ORDER",
-    "LogLevel",
-    "LogFormatter",
-    "LogHandler",
-    "Logger",
-
-    # Core Exception Hierarchy
+    "WebElement",
     "AutomationError",
-    "ElementError",
-    "ElementNotFoundError",
-    "ElementNotVisibleError",
-    "ElementNotInteractableError",
-    "DriverError",
-    "DriverInitError",
-    "NavigationError",
-    "TimeoutError",
-    "ConfigurationError",
     "ApiError",
     "ApiRequestError",
-    "DataError",
-    "TestSetupError",
-    "TestTeardownError",
-    "SecurityError",
-    "ResourceError",
+    "CaptchaError",
+    "ConfigurationError",
+    "DriverError",
+    "DriverInitError",
+    "ElementError",
+    "ElementNotInteractableError",
+    "ElementNotFoundError",
+    "ElementNotVisibleError",
+    "LoginError",
+    "NavigationError",
     "ReportGenerationError",
-    "FrameworkError",
+    "TimeoutError",
+    "BrowserError",
+    "ElementCondition",
+    "WaitStrategy",
 ] 

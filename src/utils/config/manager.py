@@ -22,8 +22,14 @@ def get_config(env=None):
     """统一加载配置，优先级：settings.yaml < env/{env}.yaml < 环境变量"""
     base = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../'))
     settings_path = os.path.join(base, 'config/settings.yaml')
-    env = env or os.environ.get("APP_ENV", "dev")
-    env_path = os.path.join(base, f'config/env/{env}.yaml')
+    
+    # --- 确定环境 --- 
+    determined_env = env or os.environ.get("APP_ENV", "dev")
+    # --- !!! 添加调试打印 !!! ---
+    print(f"[DEBUG] get_config: Determined environment to load: {determined_env} (from parameter: {env}, from os.environ['APP_ENV']: {os.environ.get('APP_ENV')}, default: dev)")
+    # ---------------------------
+    
+    env_path = os.path.join(base, f'config/env/{determined_env}.yaml') # 使用 determined_env
 
     loader = YamlConfigLoader()
     config = loader.load(settings_path)

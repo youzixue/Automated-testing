@@ -53,7 +53,6 @@ class VisibleConditionHandler(BaseConditionHandler[Any]):
         logger.debug(f"元素不可见: {selector}")
         return None
 
-# 其它条件处理器可按此模式实现...
 
 class ConditionHandlerRegistry(BaseConditionHandlerRegistry[Any]):
     """

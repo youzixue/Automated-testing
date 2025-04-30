@@ -8,7 +8,7 @@ class DashboardPage:
     """仪表盘页面对象，封装欢迎语、导航栏、统计卡片等核心元素和操作。"""
 
     # 元素定位符
-    USERNAME_TEXT = ".user .name"  # 用户名显示
+    USERNAME_TEXT = ".user .name"
     SIDEBAR_MENU = ".el-menu"
     MAIN_CARD = ".main-card, .dashboard-card"
     QUICK_ENTRY = ".quick-entry, .dashboard-quick-entry"

@@ -1,14 +1,27 @@
 # tests 测试用例层说明
 
-本目录用于组织所有自动化测试用例，按平台和业务分目录，支持参数化、分层和多环境执行。
+本目录是自动化测试框架七层架构中的 **测试用例层 (Tests)**，用于组织所有自动化测试用例，按平台和业务分目录，支持参数化、分层和多环境执行。
 
 ## 目录结构
-- `tests/web/`：Web UI自动化测试用例
-- `tests/api/`：API自动化测试用例
-- `tests/mobile/`：移动端自动化测试用例
-- `tests/unit/`：单元测试
-- `tests/integration/`：集成测试
-- `conftest.py`：全局pytest fixture与数据工厂
+- `tests/web/`: Web UI 自动化测试用例。
+    - `omp/`: OMP 后台相关测试用例 (例如：`test_login.py`)。
+    - `conftest.py`: Web 平台特定的 Fixtures。
+- `tests/api/`: API 自动化测试用例。
+    - `test_payment_unified_order.py`: 支付统一下单接口测试。
+    - `conftest.py`: API 平台特定的 Fixtures。
+- `tests/mobile/`: 移动端自动化测试用例 (按平台划分，目前为空)。
+    - `android/`
+    - `ios/`
+- `tests/wechat/`: 微信平台自动化测试用例 (按类型划分，目前为空)。
+    - `miniprogram/`
+    - `official/`
+- `tests/unit/`: 单元测试 (按模块划分，目前为空)。
+    - `core/`
+    - `utils/`
+- `tests/integration/`: 集成测试 (按集成场景划分，目前为空)。
+    - `api_web/`
+- `conftest.py`: 全局 pytest Fixtures 与配置。
+- `README.md`: 本说明文件。
 
 ## 设计原则
 - 测试用例与测试数据分离，数据统一存放于 `data/` 目录

@@ -11,7 +11,6 @@ from abc import ABC, abstractmethod
 
 from src.utils.patterns import Singleton
 from src.core.base.errors import ConfigurationError
-from src.utils.log.manager import get_logger
 
 
 class ConfigLoader(ABC):
@@ -57,7 +56,7 @@ class YamlConfigLoader(ConfigLoader):
     
     def __init__(self):
         """初始化YAML配置加载器。"""
-        self._logger = get_logger(self.__class__.__name__)
+        pass
     
     def load(self, path: str) -> Dict[str, Any]:
         """从YAML文件加载配置。
@@ -76,14 +75,10 @@ class YamlConfigLoader(ConfigLoader):
         try:
             import yaml
         except ImportError:
-            self._logger.error("未安装PyYAML，请使用 pip install pyyaml 安装")
             raise ImportError("未安装PyYAML，请使用 pip install pyyaml 安装")
         
         if not os.path.exists(path):
-            self._logger.error(f"配置文件不存在: {path}")
             raise FileNotFoundError(f"配置文件不存在: {path}")
-        
-        self._logger.debug(f"从YAML文件加载配置: {path}")
         
         try:
             with open(path, 'r', encoding='utf-8') as file:
@@ -92,7 +87,6 @@ class YamlConfigLoader(ConfigLoader):
                     config = {}
                 return config
         except yaml.YAMLError as e:
-            self._logger.error(f"YAML解析错误: {e}")
             raise
     
     def supports(self, path: str) -> bool:
@@ -115,7 +109,7 @@ class JsonConfigLoader(ConfigLoader):
     
     def __init__(self):
         """初始化JSON配置加载器。"""
-        self._logger = get_logger(self.__class__.__name__)
+        pass
     
     def load(self, path: str) -> Dict[str, Any]:
         """从JSON文件加载配置。
@@ -131,16 +125,12 @@ class JsonConfigLoader(ConfigLoader):
             json.JSONDecodeError: JSON解析错误
         """
         if not os.path.exists(path):
-            self._logger.error(f"配置文件不存在: {path}")
             raise FileNotFoundError(f"配置文件不存在: {path}")
-        
-        self._logger.debug(f"从JSON文件加载配置: {path}")
         
         try:
             with open(path, 'r', encoding='utf-8') as file:
                 return json.load(file)
         except json.JSONDecodeError as e:
-            self._logger.error(f"JSON解析错误: {e}")
             raise
     
     def supports(self, path: str) -> bool:
@@ -167,7 +157,6 @@ class EnvConfigLoader(ConfigLoader):
         Args:
             prefix: 环境变量前缀，默认为"APP_"
         """
-        self._logger = get_logger(self.__class__.__name__)
         self._prefix = prefix
     
     def load(self, path: str = None) -> Dict[str, Any]:
@@ -188,23 +177,15 @@ class EnvConfigLoader(ConfigLoader):
         config = {}
         
         for key, value in os.environ.items():
-            # 检查前缀
+
             if not key.startswith(self._prefix):
                 continue
-            
-            # 去除前缀，转换为小写
-            config_key = key[len(self._prefix):].lower()
-            
-            # 将下划线转换为点号
+
+            config_key = key[len(self._prefix):].lower() 
             config_key = config_key.replace("__", ".")
-            
-            # 尝试转换值类型
             config_value = self._convert_value(value)
-            
-            # 添加到配置
+
             config[config_key] = config_value
-            
-            self._logger.debug(f"从环境变量加载配置: {key} -> {config_key}={config_value}")
         
         return config
     
@@ -220,7 +201,6 @@ class EnvConfigLoader(ConfigLoader):
         Returns:
             是否支持加载
         """
-        # 环境变量加载器不依赖文件路径
         return True
     
     def _convert_value(self, value: str) -> Any:
@@ -234,34 +214,27 @@ class EnvConfigLoader(ConfigLoader):
         Returns:
             转换后的值
         """
-        # 布尔值
+
         if value.lower() in ['true', 'yes', '1', 'on']:
             return True
         if value.lower() in ['false', 'no', '0', 'off']:
             return False
         
-        # 整数
         try:
             return int(value)
         except ValueError:
             pass
         
-        # 浮点数
         try:
             return float(value)
         except ValueError:
             pass
         
-        # JSON对象
         if (value.startswith('{') and value.endswith('}')) or \
            (value.startswith('[') and value.endswith(']')):
             try:
                 return json.loads(value)
             except json.JSONDecodeError:
                 pass
-        
-        # 字符串
-        return value
 
-# ConfigLoaderRegistry, init_loader_registry, load_config removed as unused.
-# loader_registry removed as unused. 
+        return value
