@@ -48,7 +48,7 @@ def parse_one_data(one_data_dict: Dict[str, Any]) -> OneDataModel:
 # --- 成功场景测试 ---
 @pytest.mark.api
 @pytest.mark.smoke
-@allure.feature("API")
+@allure.feature("API 测试")
 @allure.story("统一支付下单 API 验证")
 @allure.title("成功下单场景")
 def test_unified_order_success(
@@ -134,7 +134,7 @@ MANDATORY_CREATE_ORDER_FIELDS = [
 @pytest.mark.api
 @pytest.mark.negative
 @pytest.mark.parametrize("field_to_omit", MANDATORY_CREATE_ORDER_FIELDS)
-@allure.feature("API")
+@allure.feature("API 测试")
 @allure.story("统一支付下单 API 验证")
 @allure.title("缺少必填字段: {field_to_omit}")
 def test_unified_order_missing_mandatory_field(
@@ -176,8 +176,24 @@ def test_unified_order_missing_mandatory_field(
     logger.info(f"强制使用唯一订单号: {unique_out_trade_no}")
     # !!! 结束新增 !!!
 
-    # 预期行为：现在预期 API 调用成功返回，但业务失败，total_fee 缺失时可能返回 null 导致验证错误
-    if field_to_omit == 'total_fee':
+    # -- 修改：根据文档调整 one_data 缺失时的预期 --
+    if field_to_omit == 'one_data':
+        # 根据文档，one_data 非必填，预期业务成功
+        try:
+            validated_response: CreateOrderResponse = payment_service.create_unified_order(create_order_params)
+            logger.debug(f"缺少字段 '{field_to_omit}' 时的响应: {validated_response.model_dump_json(indent=2, exclude_none=True)}")
+            assert validated_response.return_code == SUCCESS_CODE, \
+                f"缺少字段 '{field_to_omit}' 时，预期通信成功 (return_code='{SUCCESS_CODE}'), 实际为 '{validated_response.return_code}'"
+            assert validated_response.result_code == SUCCESS_CODE, \
+                f"缺少字段 '{field_to_omit}' 时，根据文档预期业务成功 (result_code='{SUCCESS_CODE}'), 实际为 '{validated_response.result_code}'"
+            # 成功时，可以断言 pay_url 存在或其他成功标识
+            assert validated_response.pay_url is not None, f"缺少字段 '{field_to_omit}' 时，预期成功应包含 pay_url"
+            logger.info(f"场景通过: 缺少非必填字段 '{field_to_omit}' 时按预期业务成功")
+        except (ApiRequestError, ValueError, TypeError) as e:
+            logger.error(f"缺少字段 '{field_to_omit}' 时发生意外异常 (预期成功)", exc_info=True)
+            pytest.fail(f"缺少字段 '{field_to_omit}' 时发生意外异常: {e}")
+
+    elif field_to_omit == 'total_fee':
         # 特殊处理：total_fee 缺失导致 API 可能返回 null，触发模型验证错误
         try:
             with pytest.raises(ApiRequestError) as excinfo:
@@ -190,7 +206,7 @@ def test_unified_order_missing_mandatory_field(
             logger.error(f"测试缺少 {field_to_omit} 时发生意外情况 (非预期 ApiRequestError)", exc_info=True)
             pytest.fail(f"测试缺少 {field_to_omit} 时发生意外情况: {e}")
     else:
-        # 其他字段缺失，预期业务失败
+        # 其他字段缺失（假定为必填），预期业务失败
         try:
             validated_response: CreateOrderResponse = payment_service.create_unified_order(create_order_params)
             logger.debug(f"缺少字段 '{field_to_omit}' 时的响应: {validated_response.model_dump_json(indent=2, exclude_none=True)}")
@@ -200,11 +216,17 @@ def test_unified_order_missing_mandatory_field(
                 f"缺少字段 '{field_to_omit}' 时，预期通信成功 (return_code='{SUCCESS_CODE}'), 实际为 '{validated_response.return_code}'"
             assert validated_response.result_code == FAILED_CODE, \
                 f"缺少字段 '{field_to_omit}' 时，预期业务失败 (result_code='{FAILED_CODE}'), 实际为 '{validated_response.result_code}'"
+            # 检查错误码 (基于日志观察，可根据实际 API 调整)
+            assert validated_response.err_code == 400, \
+                f"缺少字段 '{field_to_omit}' 时，预期业务错误码为 400, 实际为 '{validated_response.err_code}'"
             assert validated_response.err_msg is not None, \
                 f"缺少字段 '{field_to_omit}' 时，预期业务失败应包含 err_msg"
+            # 检查错误消息关键字 (基于通用模式，可根据实际 API 调整)
+            assert ("参数" in validated_response.err_msg or "缺少" in validated_response.err_msg), \
+                f"缺少字段 '{field_to_omit}' 时，预期 err_msg ('{validated_response.err_msg}') 包含 '参数' 或 '缺少'"
             logger.info(f"场景通过: 缺少字段 '{field_to_omit}' 时按预期业务失败，err_msg: '{validated_response.err_msg}'")
 
-        except (ApiRequestError, ValueError, TypeError) as e:
+        except (ApiRequestError, ValueError, TypeError) as e: # 捕获预期失败但发生意外异常的情况
             # 如果这里仍然捕获到异常，说明服务层在处理前就出错了，或者 API 返回了无法解析的格式
             logger.error(f"缺少字段 '{field_to_omit}' 时发生意外异常", exc_info=True)
             pytest.fail(f"缺少字段 '{field_to_omit}' 时发生意外异常: {e}")
@@ -383,7 +405,7 @@ def test_unified_order_length_constraint(
 # --- 测试无效签名 ---
 @pytest.mark.api
 @pytest.mark.negative
-@allure.feature("API")
+@allure.feature("API 测试")
 @allure.story("统一支付下单 API 验证")
 @allure.title("无效签名场景")
 def test_unified_order_invalid_signature(
