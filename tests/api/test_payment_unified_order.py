@@ -228,7 +228,7 @@ def test_unified_order_missing_mandatory_field(
             elif field_to_omit == 'notify_url':
                 expected_msg_part = "URL格式错误"
             elif field_to_omit == 'pay_type':
-                expected_msg_part = "支付类型未传"
+                expected_msg_part = "接口类型错误"
             elif field_to_omit == 'spbill_create_id':
                 expected_msg_part = "IP错误"
             # 可以继续为其他明确知道错误信息的字段添加 elif
