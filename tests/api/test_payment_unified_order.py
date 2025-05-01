@@ -48,7 +48,9 @@ def parse_one_data(one_data_dict: Dict[str, Any]) -> OneDataModel:
 # --- 成功场景测试 ---
 @pytest.mark.api
 @pytest.mark.smoke
-@allure.title("统一支付下单 - 成功场景")
+@allure.feature("API 测试")
+@allure.story("统一支付下单 API 验证")
+@allure.title("成功下单场景")
 def test_unified_order_success(
     payment_service: PaymentService,
     payment_api_data: dict
@@ -132,7 +134,9 @@ MANDATORY_CREATE_ORDER_FIELDS = [
 @pytest.mark.api
 @pytest.mark.negative
 @pytest.mark.parametrize("field_to_omit", MANDATORY_CREATE_ORDER_FIELDS)
-@allure.title("统一支付下单 - 缺少必填字段: {field_to_omit}")
+@allure.feature("API 测试")
+@allure.story("统一支付下单 API 验证")
+@allure.title("缺少必填字段: {field_to_omit}")
 def test_unified_order_missing_mandatory_field(
     payment_service: PaymentService,
     payment_api_data: dict,
@@ -204,7 +208,9 @@ def test_unified_order_missing_mandatory_field(
 @pytest.mark.api
 @pytest.mark.negative
 @pytest.mark.parametrize("test_case_data", INVALID_FORMAT_CASES_DATA, ids=INVALID_FORMAT_IDS)
-@allure.title("统一支付下单 - 参数格式或类型无效")
+@allure.feature("API 测试")
+@allure.story("统一支付下单 API 验证")
+@allure.title("参数格式或类型无效")
 def test_unified_order_invalid_format_or_type(
     payment_service: PaymentService,
     payment_api_data: dict,
@@ -278,7 +284,9 @@ def test_unified_order_invalid_format_or_type(
 # --- 参数化测试 - 长度约束 ---
 @pytest.mark.api
 @pytest.mark.parametrize("test_case_data", LENGTH_CONSTRAINT_CASES_DATA, ids=LENGTH_CONSTRAINT_IDS)
-@allure.title("统一支付下单 - 参数长度约束")
+@allure.feature("API 测试")
+@allure.story("统一支付下单 API 验证")
+@allure.title("参数长度约束")
 def test_unified_order_length_constraint(
     payment_service: PaymentService,
     payment_api_data: dict,
@@ -369,7 +377,9 @@ def test_unified_order_length_constraint(
 # --- 测试无效签名 ---
 @pytest.mark.api
 @pytest.mark.negative
-@allure.title("统一支付下单 - 无效签名")
+@allure.feature("API 测试")
+@allure.story("统一支付下单 API 验证")
+@allure.title("无效签名场景")
 def test_unified_order_invalid_signature(
     payment_service: PaymentService,
     payment_api_data: dict,
@@ -433,7 +443,9 @@ def test_unified_order_invalid_signature(
 # --- 测试重复订单号 ---
 @pytest.mark.api
 @pytest.mark.negative
-@allure.title("统一支付下单 - 重复订单号")
+@allure.feature("API 测试")
+@allure.story("统一支付下单 API 验证")
+@allure.title("重复订单号场景")
 def test_unified_order_duplicate_out_trade_no(
     payment_service: PaymentService,
     payment_api_data: dict

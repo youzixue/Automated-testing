@@ -107,7 +107,7 @@ pipeline {
 
                     def paymentApiKeyCredentialId = (params.APP_ENV == 'prod') ? env.PROD_PAYMENT_API_KEY_CREDENTIAL_ID : env.TEST_PAYMENT_API_KEY_CREDENTIAL_ID
                     def paymentMchIdCredentialId = (params.APP_ENV == 'prod') ? env.PROD_PAYMENT_MCH_ID_CREDENTIAL_ID : env.TEST_PAYMENT_MCH_ID_CREDENTIAL_ID
-                    def paymentDeviceInfoCredentialId = (params.APP_ENV == 'prod') ? env.PROD_PAYMENT_DEVICE_INFO_CREDENTIAL_ID : env.TEST_PAYMENT_DEVICE_INFO_CREDENTIAL_ID // 如果需要
+                    def paymentDeviceInfoCredentialId = (params.APP_ENV == 'prod') ? env.PROD_PAYMENT_DEVICE_INFO_CREDENTIAL_ID : env.TEST_PAYMENT_DEVICE_INFO_CREDENTIAL_ID
                     echo "选择支付凭据 ID: API Key=${paymentApiKeyCredentialId}, MCH ID=${paymentMchIdCredentialId}, Device Info=${paymentDeviceInfoCredentialId ?: '未使用'}"
 
                     try {
@@ -151,14 +151,14 @@ pipeline {
                                     withCredentials([
                                         string(credentialsId: paymentApiKeyCredentialId, variable: 'INJECTED_PAYMENT_API_KEY'),
                                         string(credentialsId: paymentMchIdCredentialId, variable: 'INJECTED_PAYMENT_MCH_ID'),
-                                        // string(credentialsId: paymentDeviceInfoCredentialId, variable: 'INJECTED_PAYMENT_DEVICE_INFO') // 如果需要
+                                        string(credentialsId: paymentDeviceInfoCredentialId, variable: 'INJECTED_PAYMENT_DEVICE_INFO')
                                     ]) {
                                         // 构造支付环境变量注入字符串 (需与 config/env/*.yaml 匹配)
                                         def paymentEnvVars = "-e ${params.APP_ENV == 'prod' ? 'PROD_PAYMENT_API_KEY' : 'PAYMENT_API_KEY'}='${INJECTED_PAYMENT_API_KEY}' " +
                                                              "-e ${params.APP_ENV == 'prod' ? 'PROD_MCH_ID' : 'PAYMENT_MCH_ID'}='${INJECTED_PAYMENT_MCH_ID}' "
-                                        // if (paymentDeviceInfoCredentialId) {
-                                        //    paymentEnvVars += "-e ${params.APP_ENV == 'prod' ? 'PROD_DEVICE_INFO' : 'PAYMENT_DEVICE_INFO'}='${INJECTED_PAYMENT_DEVICE_INFO}' "
-                                        // }
+                                        if (paymentDeviceInfoCredentialId) {
+                                           paymentEnvVars += "-e ${params.APP_ENV == 'prod' ? 'PROD_DEVICE_INFO' : 'PAYMENT_DEVICE_INFO'}='${INJECTED_PAYMENT_DEVICE_INFO}' "
+                                        }
 
                                         sh """
                                         docker run --rm --name pytest-api-${BUILD_NUMBER} \
