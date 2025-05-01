@@ -48,7 +48,7 @@ def parse_one_data(one_data_dict: Dict[str, Any]) -> OneDataModel:
 # --- 成功场景测试 ---
 @pytest.mark.api
 @pytest.mark.smoke
-@allure.feature("API 测试")
+@allure.feature("API")
 @allure.story("统一支付下单 API 验证")
 @allure.title("成功下单场景")
 def test_unified_order_success(
@@ -134,7 +134,7 @@ MANDATORY_CREATE_ORDER_FIELDS = [
 @pytest.mark.api
 @pytest.mark.negative
 @pytest.mark.parametrize("field_to_omit", MANDATORY_CREATE_ORDER_FIELDS)
-@allure.feature("API 测试")
+@allure.feature("API")
 @allure.story("统一支付下单 API 验证")
 @allure.title("缺少必填字段: {field_to_omit}")
 def test_unified_order_missing_mandatory_field(
@@ -169,6 +169,12 @@ def test_unified_order_missing_mandatory_field(
         logger.warning(f"基础测试数据中不包含字段 {field_to_omit}，跳过此参数组合")
         pytest.skip(f"基础数据不含字段 {field_to_omit}")
         return
+
+    # !!! 新增：强制生成唯一的 out_trade_no !!!
+    unique_out_trade_no = payment_service.data_generator.generate_out_trade_no(f"MISSING_{field_to_omit.upper()[:5]}_")
+    create_order_params['out_trade_no'] = unique_out_trade_no
+    logger.info(f"强制使用唯一订单号: {unique_out_trade_no}")
+    # !!! 结束新增 !!!
 
     # 预期行为：现在预期 API 调用成功返回，但业务失败，total_fee 缺失时可能返回 null 导致验证错误
     if field_to_omit == 'total_fee':
@@ -377,7 +383,7 @@ def test_unified_order_length_constraint(
 # --- 测试无效签名 ---
 @pytest.mark.api
 @pytest.mark.negative
-@allure.feature("API 测试")
+@allure.feature("API")
 @allure.story("统一支付下单 API 验证")
 @allure.title("无效签名场景")
 def test_unified_order_invalid_signature(
