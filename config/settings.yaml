@@ -19,7 +19,7 @@ notification:
 # 日志配置 (环境可覆盖)
 log:
   format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-  level: ${env:LOG_LEVEL:-INFO}
+  level: ${env:LOG_LEVEL:-INFO} # 根日志级别
   file:
     enabled: ${env:LOG_FILE_ENABLED:-true}
     path: ${env:LOG_FILE_PATH:-output/logs/${env:APP_ENV:-dev}}
@@ -28,6 +28,15 @@ log:
   console:
     enabled: ${env:LOG_CONSOLE_ENABLED:-true}
     color: true
+  # 新增：为特定 logger 设置级别，以减少冗余日志输出
+  loggers:
+    src.utils.signature:
+      level: INFO
+    src.utils.data_generator:
+      level: INFO
+    # 您可以根据需要添加更多 logger，例如 tests.api.conftest 等
+    # tests.api.conftest:
+    #  level: WARNING
 
 # 浏览器默认配置 (环境可覆盖)
 browser:
