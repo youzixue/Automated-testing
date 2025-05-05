@@ -1,22 +1,41 @@
-# data 测试数据层说明
+# 测试数据目录说明
 
-本目录用于存放所有自动化测试所需的参数化数据文件，支持 YAML/JSON/CSV 等格式。
+本目录按平台组织测试数据，遵循项目的架构设计理念，将不同平台的测试数据分开管理，同时提供共享数据区域。
 
-## 主要内容
-- API测试数据：`data/api/payment_data.yaml`
-- Web端测试数据：
-    - 登录数据：`data/web/login/login_data.yaml`
-- 移动端测试数据 (按平台划分):
-    - Android: `data/mobile/android/` (目前为空)
-    - iOS: `data/mobile/ios/` (目前为空)
-- 微信测试数据 (按类型划分):
-    - 小程序: `data/wechat/miniprogram/` (目前为空)
-    - 公众号: `data/wechat/official/` (目前为空)
+## 目录结构
 
-## 设计原则
-- 测试数据与测试逻辑分离，便于维护和复用（见 test-data-separation.mdc）
-- 数据文件需有详细注释，字段含义清晰
-- 新增/调整数据结构时，务必补充本 README
+```
+data/
+├── common/             # 跨平台共享的测试数据
+│   ├── images/         # 共享图像资源
+│   │   └── monthly_card/ # 月卡WebView流程图像
+│   └── test_data/      # 共享测试用例数据（未来可能添加）
+├── mobile/             # 积余服务App平台相关数据
+│   ├── images/         # App特定图像资源
+│   └── test_data/      # App测试数据（如login_data.yaml）
+└── wechat/             # 微信平台相关数据
+    ├── images/         # 微信特定图像资源
+    └── test_data/      # 微信测试数据
+```
 
-## 参考
-- .cursor/rules/test-data-separation.mdc
+## 数据类型说明
+
+### 图像资源 (images/)
+Airtest图像模板，用于图像识别定位元素
+
+### 测试用例数据 (test_data/)
+存储YAML/JSON格式的测试参数、输入、期望结果等
+
+### 其他可能的数据类型
+- 配置数据 (configs/)
+- 元素定位映射 (locators/)
+- 模拟响应数据 (mocks/)
+
+## 维护原则
+
+1. **平台隔离原则**：特定平台的数据必须放在对应平台目录下
+2. **共享优先原则**：多平台共用的数据应放在common目录下
+3. **类型分组原则**：同一类型的数据应放在同一子目录下
+4. **命名一致原则**：文件命名应反映其用途和关联的测试用例
+
+查看各平台目录下的README获取更多详细信息。

@@ -1,31 +1,58 @@
 ---
 description: 禁止使用硬编码等待时间，必须使用智能等待机制提高测试稳定性
-globs: ["**/*.py"]
+globs: ["tests/**/*.py", "src/**/*.py"] # 应用于测试和实现代码
 alwaysApply: true
-priority: 50
+priority: 90
 ---
 # 智能等待策略
 
-禁止使用硬编码等待时间，必须使用智能等待机制，提高测试稳定性和效率。
+禁止使用硬编码等待时间 (`time.sleep()`)，必须使用智能等待机制，提高测试稳定性和效率。
 
 ## 关键实践
-- 使用显式等待机制等待特定条件
-- 定义明确的等待条件(可见、可点击、存在等)
-- 设置合理的默认超时时间
-- 使用重试机制处理暂时性失败
-- 直接实现业务功能代码，不提供示例代码
+- **优先使用框架内置等待**:
+    - **Web (Playwright)**: 使用 `page.wait_for_selector()`, `expect(locator).to_be_visible()` 等 Playwright 内置的等待和断言机制。
+    - **Mobile/WeChat (Airtest/PocoUI)**: 使用 **Poco** 的 `wait_for_appearance()`, `wait_for_disappearance()` 等待 UI 元素状态变化；使用 **Airtest** 的 `wait(Template(...))` 等待图像出现。
+- **定义明确的等待条件**: 等待元素可见 (`visible`), 可点击 (`clickable`), 存在 (`present`), 或特定图像出现。
+- **设置合理的超时时间**:
+    - 超时时间应配置在 `config/settings.yaml` 或环境特定配置文件中。
+    - 应根据操作类型（页面加载、元素交互、异步操作）和环境性能设置不同的默认超时。
+    - 测试代码应从配置中读取超时值。
+- **(可选) 使用重试机制**: 对于网络波动或暂时性问题，可以在工具层封装带重试逻辑的操作。
+- 直接实现业务功能代码，不提供示例代码。
 
-## 等待条件规范
-- 使用项目中已定义的等待条件枚举
-- 为元素等待设置合理的默认超时时间
-- 超时时间应基于实际业务场景和性能要求
-- 禁止使用time.sleep()等硬编码等待
+## 等待条件规范 (示例)
+- **Poco**:
+    ```python
+    # 从配置获取超时
+    timeout = config.get('airtest', {}).get('timeouts', {}).get('element_wait', 20)
+    # 等待元素出现
+    element = poco("element_id").wait_for_appearance(timeout=timeout)
+    # 等待元素消失
+    poco("loading_spinner").wait_for_disappearance(timeout=timeout)
+    ```
+- **Airtest**:
+    ```python
+    from airtest.core.api import wait, Template
+    # 从配置获取超时
+    timeout = config.get('airtest', {}).get('timeouts', {}).get('image_wait', 30)
+    image_tpl = Template(r"data/images/success_icon.png")
+    # 等待图像出现
+    wait(image_tpl, timeout=timeout, interval=0.5)
+    ```
+- **Playwright**:
+    ```python
+    # 默认超时在 Playwright 配置中设置
+    # 等待元素可见
+    page.locator("#submit-button").wait_for(state="visible", timeout=15000) # timeout in ms
+    # 使用 expect 断言（内置等待）
+    expect(page.locator(".success-message")).to_be_visible(timeout=20000)
+    ```
 
-## 动态等待策略
-- 根据网络和系统性能动态调整等待时间
-- 对关键操作使用较长超时，对非关键操作使用较短超时
-- 实现指数退避重试机制处理间歇性问题
+## 禁止项
+- **严禁**在测试代码中使用 `time.sleep()` 进行固定等待。
 
 ## 文件参考
-- @src/utils/waits.py
-- @src/core/base/element.py
+- @src/utils/waits.py (如果封装了自定义等待逻辑)
+- @src/core/base/element.py (如果基类封装了等待)
+- @config/settings.yaml
+- @docs/微信&APP自动化测试开发指南.md

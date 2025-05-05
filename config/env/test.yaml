@@ -45,7 +45,7 @@ notification:
 log:
   level: "${env:LOG_LEVEL:-DEBUG}" # (覆盖默认值: DEBUG回退)
   console:
-    pass # 控制台配置继承 settings.yaml
+    enabled: true # <-- Correct format: Set enabled explicitly
   file:
     path: "logs/test" # (覆盖默认值)
     max_size: 20 # (覆盖默认值: 20MB)

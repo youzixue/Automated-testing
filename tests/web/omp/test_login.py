@@ -133,7 +133,36 @@ async def test_login_scenarios(
 
     try:
         with allure.step(f"登录场景: {scenario_key}"):
-            if scenario_key in ["invalid_username", "invalid_password"]:
+            if scenario_key == "invalid_captcha":
+                actual_login_success = await login_page.login(
+                    username=user_data["username"],
+                    password=user_data["password"],
+                    captcha="wrong_captcha",
+                    scenario_key=scenario_key,
+                    max_retry=1
+                )
+                error_text = await wait_and_get_popup_message(page)
+                assert "验证码错误" in error_text, f"期望验证码错误，实际弹窗内容: {error_text}"
+                return
+            elif scenario_key in ["empty_username", "empty_password"]:
+                await page.goto(login_url)
+                driver = PlaywrightDriverAdapter(page)
+                login_page = OmpLoginPage(driver)
+                await login_page.wait_until_loaded()
+                if scenario_key == "empty_username":
+                    await page.fill('input[placeholder=\"用户名\"]', "")
+                    await page.fill('input[type=\"password\"][placeholder=\"密码\"]', user_data["password"])
+                else:
+                    await page.fill('input[placeholder=\"用户名\"]', user_data["username"])
+                    await page.fill('input[type=\"password\"][placeholder=\"密码\"]', "")
+                await page.click('button.login-form__btn')
+                await page.wait_for_selector('.el-form-item__error', state='visible', timeout=1000)
+                error_text = await page.inner_text('.el-form-item__error')
+                logger.debug(f"表单错误提示: {error_text}")
+                assert ("账号不能为空" in error_text or "密码不能为空" in error_text), \
+                    f"期望提示'账号或密码不能为空'，实际: {error_text}"
+                return
+            elif scenario_key in ["invalid_username", "invalid_password"]:
                 retry = 0
                 last_img_src = None
                 while retry < max_retry:
@@ -167,51 +196,13 @@ async def test_login_scenarios(
                 assert ("账户或密码错误" in error_text or "用户名或密码错误" in error_text), \
                     f"期望账号或密码错误，实际弹窗内容: {error_text}"
                 return
-            elif scenario_key == "invalid_captcha":
-                await login_page.login(
-                    username=user_data["username"],
-                    password=user_data["password"],
-                    captcha="wrong_captcha",
-                    scenario_key=scenario_key
-                )
-                error_text = await wait_and_get_popup_message(page)
-                assert "验证码错误" in error_text, f"期望验证码错误，实际弹窗内容: {error_text}"
-                return
-            elif scenario_key in ["empty_username", "empty_password"]:
-                await page.goto(login_url)
-                driver = PlaywrightDriverAdapter(page)
-                login_page = OmpLoginPage(driver)
-                await login_page.wait_until_loaded()
-                if scenario_key == "empty_username":
-                    await page.fill('input[placeholder=\"用户名\"]', "")
-                    await page.fill('input[type=\"password\"][placeholder=\"密码\"]', user_data["password"])
-                else:
-                    await page.fill('input[placeholder=\"用户名\"]', user_data["username"])
-                    await page.fill('input[type=\"password\"][placeholder=\"密码\"]', "")
-                await page.click('button.login-form__btn')
-                await page.wait_for_selector('.el-form-item__error', state='visible', timeout=1000)
-                error_text = await page.inner_text('.el-form-item__error')
-                logger.debug(f"表单错误提示: {error_text}")
-                assert ("账号不能为空" in error_text or "密码不能为空" in error_text), \
-                    f"期望提示'账号或密码不能为空'，实际: {error_text}"
-                return
             else:
                 await login_page.login(
                     username=user_data["username"],
                     password=user_data["password"],
-                    captcha="wrong_captcha" if scenario_key == "invalid_captcha" else None,
+                    captcha=None,
                     scenario_key=scenario_key
                 )
-                error_text = await wait_and_get_popup_message(page)
-                if scenario_key == "invalid_captcha":
-                    assert "验证码错误" in error_text, f"期望验证码错误，实际弹窗内容: {error_text}"
-                    return
-                elif scenario_key in ["invalid_username", "invalid_password"]:
-                    if "验证码错误" in error_text:
-                        assert False, f"验证码识别失败，实际弹窗内容: {error_text}"
-                    assert ("账户或密码错误" in error_text or "用户名或密码错误" in error_text), \
-                        f"期望账号或密码错误，实际弹窗内容: {error_text}"
-                    return
                 if expected_result == "success":
                     expected_url_pattern = user_data.get("expected_url_pattern", "/workbench")
                     login_success = await login_page.wait_for_login_result(expected_url_pattern=expected_url_pattern)

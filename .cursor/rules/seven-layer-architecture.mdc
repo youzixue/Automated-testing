@@ -1,6 +1,6 @@
 ---
 description: 强制执行项目的七层架构设计，确保代码组织清晰且依赖关系正确
-globs: ["**/*.py"]
+globs: ["**/*.py", "docs/enhanced_architecture.md"]
 alwaysApply: true
 priority: 100
 ---
@@ -18,37 +18,37 @@ priority: 100
 7. 外部集成层 (External)
 
 ## 目录结构对应关系
-- 测试用例层: tests/unit/, tests/integration/, tests/web/, tests/api/, tests/mobile/
-- 固件层: tests/conftest.py, tests/web/conftest.py, tests/api/conftest.py, tests/mobile/conftest.py
-- 业务对象层: src/web/pages/, src/api/services/, src/mobile/screens/, data/
-- 平台实现层: src/web/, src/api/, src/mobile/, src/wechat/, src/security/
-- 核心抽象层: src/core/base/
-- 工具层: src/utils/
-- 外部集成层: 在pyproject.toml中声明，不直接修改
+- 测试用例层: `tests/unit/`, `tests/integration/`, `tests/web/`, `tests/api/`, `tests/mobile/`, `tests/wechat/`
+- 固件层: `tests/conftest.py`, `tests/web/conftest.py`, `tests/api/conftest.py`, `tests/mobile/conftest.py`, `tests/wechat/conftest.py`
+- 业务对象层: `src/web/pages/`, `src/api/services/`, `src/mobile/screens/`, `src/wechat/components/` 或 `src/wechat/screens/`, `data/`
+- 平台实现层: `src/web/` (Playwright 适配), `src/api/` (httpx 适配), `src/mobile/` (**Airtest/PocoUI 适配**), `src/wechat/` (**Airtest/PocoUI 适配**), `src/security/`
+- 核心抽象层: `src/core/base/`
+- 工具层: `src/utils/`
+- 外部集成层: 在 `pyproject.toml` 中声明，不直接修改 (如 Playwright, httpx, Airtest, PocoUI, Pytest, Allure)
 
 ## 层级依赖规则
-- 严格遵循依赖方向：上层依赖下层，下层不依赖上层
-- 强制依赖路径：测试用例层 → 固件层 → 业务对象层 → 平台实现层 → 核心抽象层 → 工具层 → 外部集成层
-- 禁止跨层依赖：任何模块不得跳过中间层直接依赖更下层的模块
+- 严格遵循依赖方向：上层依赖下层，下层不依赖上层。
+- 强制依赖路径：测试用例层 → 固件层 → 业务对象层 → 平台实现层 → 核心抽象层 → 工具层 → 外部集成层。
+- 禁止跨层依赖：任何模块不得跳过中间层直接依赖更下层的模块。
 
 ## 平台特定实现指南
-- Web测试: 使用Playwright框架，页面对象必须放在src/web/pages/
-- API测试: 使用Requests库，服务对象必须放在src/api/services/
-- 移动测试: 使用Appium，页面对象必须放在src/mobile/screens/
-- 微信测试: 使用wxauto，组件必须放在src/wechat/components/
+- Web 测试: 使用 Playwright 框架，页面对象必须放在 `src/web/pages/`。
+- API 测试: 使用 httpx 库，服务对象必须放在 `src/api/services/`。
+- **移动测试**: 使用 **Airtest/PocoUI**，屏幕对象必须放在 `src/mobile/screens/`。
+- **微信测试**: 主要使用 **Airtest/PocoUI**，组件/屏幕对象必须放在 `src/wechat/components/` 或 `src/wechat/screens/`。
 
 ## 验证架构合规性
-- 检查import语句，确保没有违反层级依赖
-- 确认文件放置在正确目录
-- 验证接口定义与实现分离
-- 业务逻辑和测试逻辑正确分层
+- 检查 import 语句，确保没有违反层级依赖。
+- 确认文件放置在正确目录。
+- 验证接口定义与实现分离。
+- 业务逻辑和测试逻辑正确分层。
 
 ## 外部集成层管理
-- 外部依赖必须通过pyproject.toml的[tool.poetry.dependencies]管理
-- 开发工具依赖必须通过[tool.poetry.group.dev.dependencies]管理
-- 版本限制必须明确指定，避免自动升级导致兼容性问题
-- 新增依赖必须提供合理的使用理由，避免冗余依赖
-- 添加依赖后必须更新Documentation，说明依赖的用途
+- 外部依赖必须通过 `pyproject.toml` 的 `[tool.poetry.dependencies]` 管理。
+- 开发工具依赖必须通过 `[tool.poetry.group.dev.dependencies]` 管理。
+- 版本限制必须明确指定，避免自动升级导致兼容性问题。
+- 新增依赖必须提供合理的使用理由，避免冗余依赖。
+- 添加依赖后必须更新 Documentation，说明依赖的用途。
 
 ## 文件参考
 - @docs/enhanced_architecture.md
