@@ -1,91 +1,127 @@
 ---
 description: 使用特定的异常类型替代通用异常，提高代码可维护性和错误处理精确性
-globs: ["**/*.py"]
+globs: ["src/**/*.py", "tests/**/*.py"] # 应用于可能抛出或捕获异常的代码
 alwaysApply: true
-priority: 80
+priority: 50
 ---
 # 异常专一性
 
-使用专门的异常类型而非通用异常，提高代码可维护性和可调试性。
+使用专门的异常类型而非通用异常 (`Exception`)，提高代码可维护性和错误处理精确性。
 
 ## 关键实践
-- 定义框架专用的基础异常类
-- 为不同错误场景创建专用异常子类
-- 捕获具体异常而非通用Exception
-- 异常类名应清晰表明错误类型
+- 定义框架专用的基础异常类 (`AutomationError`)。
+- 为不同错误场景创建专用异常子类（如 `ElementNotFoundError`, `TimeoutError`, `NavigationError`）。
+- 捕获具体异常而非通用 `Exception`。
+- 异常类名应清晰表明错误类型。
+- **考虑包装底层库异常**: 捕获 Playwright, Airtest, Poco 等库的特定异常，并包装成框架定义的异常，以便上层统一处理。
 
-## 异常层次结构
+## 异常层次结构 (示例)
 ```python
-# 基础异常
+# src/core/base/errors.py
+
 class AutomationError(Exception):
     """自动化测试框架基础异常类"""
     pass
 
-# 元素相关异常
+# --- 元素相关 ---
 class ElementError(AutomationError):
     """元素操作相关异常基类"""
     pass
-    
+
 class ElementNotFoundError(ElementError):
-    """元素未找到异常"""
-    pass
-    
-class ElementNotVisibleError(ElementError):
-    """元素不可见异常"""
-    pass
-    
-class ElementNotInteractableError(ElementError):
-    """元素不可交互异常"""
+    """元素未找到异常 (通用)"""
     pass
 
-# 驱动相关异常
+class ElementTimeoutError(ElementError, TimeoutError): # 继承 TimeoutError
+    """等待元素超时异常"""
+    pass
+
+# --- 驱动/设备相关 ---
 class DriverError(AutomationError):
-    """驱动操作相关异常基类"""
+    """驱动/设备操作相关异常基类"""
     pass
-    
-class DriverInitError(DriverError):
-    """驱动初始化异常"""
+
+class DeviceConnectionError(DriverError):
+    """设备连接异常"""
     pass
-    
+
 class NavigationError(DriverError):
     """页面导航异常"""
     pass
 
-# 其他异常类型
-class TimeoutError(AutomationError):
+# --- Airtest/Poco 特定考虑 (可选择包装) ---
+# 可以直接捕获 airtest.core.error.TargetNotFoundError
+# 或包装成框架异常：
+class ImageNotFoundError(ElementNotFoundError):
+    """Airtest 图像未找到异常"""
+    pass
+
+# 可以直接捕获 Poco 相关异常 (如 PocoNoSuchNodeException, PocoTargetTimeout)
+# 或包装成框架异常：
+class PocoElementNotFoundError(ElementNotFoundError):
+    """Poco 节点未找到异常"""
+    pass
+
+class PocoTimeoutError(ElementTimeoutError):
+    """Poco 操作超时异常"""
+    pass
+
+# --- 其他通用异常 ---
+class TimeoutError(AutomationError): # 基础 TimeoutError
     """操作超时异常"""
     pass
-    
+
 class ConfigError(AutomationError):
     """配置错误异常"""
     pass
-    
+
 class ApiError(AutomationError):
     """API相关异常基类"""
-    pass
-    
-class ApiRequestError(ApiError):
-    """API请求异常"""
     pass
 ```
 
 ## 异常命名规范
-- 所有异常类名以Error结尾
-- 异常类名应明确表达错误类型
-- 异常类需包含详细的文档字符串
-- 子系统异常应继承相应的基础异常类
+- 所有自定义异常类名以 `Error` 结尾。
+- 异常类名应明确表达错误类型。
+- 异常类需包含详细的文档字符串。
+- 子系统异常应继承相应的基础异常类。
 
-## 示例代码
+## 示例代码 (捕获与包装)
 ```python
+# 在平台实现层或工具层捕获底层异常
+from airtest.core.error import TargetNotFoundError as AirtestTargetNotFoundError
+from poco.exceptions import PocoNoSuchNodeException, PocoTargetTimeout # 导入Poco异常
+
+def find_image_robustly(template, timeout=10):
+    try:
+        wait(template, timeout=timeout)
+        return exists(template)
+    except AirtestTargetNotFoundError as e:
+        logger.error(f"Airtest 图像未找到: {template.filename}", exc_info=True)
+        # 包装成框架定义的异常
+        raise ImageNotFoundError(f"图像 '{template.filename}' 未在 {timeout}s 内找到") from e
+
+def find_poco_element_robustly(poco_selector, timeout=10):
+    try:
+        element = poco(poco_selector).wait_for_appearance(timeout=timeout)
+        return element
+    except PocoNoSuchNodeException as e:
+        logger.error(f"Poco 元素未找到: {poco_selector}", exc_info=True)
+        raise PocoElementNotFoundError(f"Poco元素 '{poco_selector}' 未找到") from e
+    except PocoTargetTimeout as e: # Poco 超时异常
+        logger.error(f"等待 Poco 元素超时: {poco_selector}", exc_info=True)
+        raise PocoTimeoutError(f"等待 Poco元素 '{poco_selector}' 超时 {timeout}s") from e
+
+# 在业务对象层或测试用例层捕获框架异常
 try:
+    element = screen.find_element("#login_button") # 调用封装了健壮查找的方法
     element.click()
-except ElementNotVisibleError as e:
-    logger.warning(f"元素不可见: {e}")
-    wait_for_element_visible(element)
-    element.click()
-except ElementNotInteractableError as e:
-    logger.error(f"元素不可交互: {e}")
-    raise
+except (PocoElementNotFoundError, ImageNotFoundError) as e:
+    logger.warning(f"登录按钮未找到，尝试备选方案: {e}")
+    # ... 处理逻辑 ...
+except ElementTimeoutError as e: # 捕获框架定义的超时错误
+    logger.error(f"等待元素超时: {e}")
+    pytest.fail(f"测试失败，元素等待超时: {e}")
 ```
 
 ## 文件参考

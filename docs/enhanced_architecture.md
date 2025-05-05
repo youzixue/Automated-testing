@@ -39,7 +39,7 @@
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                             业务对象层 (Business)                            │
 ├───────────────┬───────────────┬────────────────┬───────────────┬────────────┤
-│ Web页面对象    │ API服务对象    │ 移动页面对象     │ 微信页面对象   │ 测试数据   │
+│ Web页面对象    │ API服务对象    │ 移动屏幕对象     │ 微信页面/组件  │ 测试数据   │
 └───────┬───────┴───────┬───────┴────────┬───────┴───────┬───────┴──────┬─────┘
         │◄─────────────►│◄──────────────►│◄──────────────►│◄────────────►│
         │               │                │                │              │
@@ -49,8 +49,8 @@
 ├───────────────┬───────────────┬────────────────┬───────────────┬────────────┤
 │  Web实现       │  API实现       │  移动实现       │  微信实现      │ 安全测试    │
 │ ┌──────────┐  │ ┌──────────┐  │ ┌───────────┐  │ ┌──────────┐  │ ┌─────────┐│
-│ │WebDriver │  │ │ApiClient │  │ │AndroidDrv │  │ │MiniProgram│  │ │Sec.Tests││
-│ │WebElement│  │ │ApiResponse│  │ │IOSDriver │  │ │WeChatOfcl│  │ │Scanning ││
+│ │WebDriver │  │ │ApiClient │  │ │Poco Adapter │  │ │MiniProgram│  │ │Sec.Tests││
+│ │WebElement│  │ │ApiResponse│  │ │Airtest Device│  │ │WeChatOfcl │  │ │Scanning ││
 │ └──────────┘  │ └──────────┘  │ └───────────┘  │ └──────────┘  │ └─────────┘│
 └───────┬───────┴───────┬───────┴────────┬───────┴───────┬───────┴──────┬─────┘
         ▲               ▲                ▲                ▲              ▲
@@ -81,84 +81,74 @@
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                        外部集成层 (External)                                  │
 ├─────────────┬──────────────┬─────────────┬────────────────┬─────────────────┤
-│  Playwright │   httpx      │   Appium    │     pytest     │   Allure报告     │
+│  Playwright │   httpx      │ Airtest/Poco│     pytest     │   Allure报告     │
 └─────────────┴──────────────┴─────────────┴────────────────┴─────────────────┘
 ```
 
 ## 2. 核心抽象层详细设计
 
-```
-┌─────────────────────────────── 核心抽象层 ─────────────────────────────────┐
-│                                                                           │
-│  ┌────────────────────────────── BaseDriver ───────────────────────────┐  │
-│  │                                                                     │  │
-│  │  // 所有驱动的基类，定义通用接口                                         │  │
-│  │                                                                     │  │
-│  │  + start(): void                  // 启动驱动                         │  │
-│  │  + stop(): void                   // 停止驱动                         │  │
-│  │  + navigate(url: str): void       // 导航到指定URL或页面               │  │
-│  │  + get_element(selector): Element // 获取元素                         │  │
-│  │  + screenshot(path: str): bool    // 截图                            │  │
-│  │                                                                     │  │
-│  └─────────────────────────────────────────────────────────────────────┘  │
-│                                                                           │
-│  ┌────────────────────────────── BaseElement ──────────────────────────┐  │
-│  │                                                                     │  │
-│  │  // 统一元素操作接口                                                   │  │
-│  │                                                                     │  │
-│  │  + click(): void                  // 点击元素                         │  │
-│  │  + input(text: str): void         // 输入文本                         │  │
-│  │  + get_text() -> str              // 获取元素文本                      │  │
-│  │  + is_visible() -> bool           // 判断元素是否可见                   │  │
-│  │  + wait_for(timeout: int): bool   // 等待元素出现                      │  │
-│  │  + get_attribute(name): str       // 获取元素属性                      │  │
-│  │  + screenshot(path: str): bool    // 元素截图                         │  │
-│  │                                                                     │  │
-│  └─────────────────────────────────────────────────────────────────────┘  │
-│                                                                           │
-│  ┌────────────────────────────── TestBase ─────────────────────────────┐  │
-│  │                                                                     │  │
-│  │  // 所有测试类的基类，定义测试生命周期方法                                  │  │
-│  │                                                                     │  │
-│  │  + setup(): void                  // 测试前置准备                      │  │
-│  │  + teardown(): void               // 测试后置清理                      │  │
-│  │  + execute(): any                 // 执行测试                         │  │
-│  │  + run(): any                     // 测试执行流程                      │  │
-│  │                                                                     │  │
-│  └─────────────────────────────────────────────────────────────────────┘  │
-│                                                                           │
-│  ┌────────────────────────────── TestContext ──────────────────────────┐  │
-│  │                                                                     │  │
-│  │  // 测试上下文，管理测试状态和共享数据                                     │  │
-│  │                                                                     │  │
-│  │  + config: Dict                   // 配置信息                         │  │
-│  │  + data: Dict                     // 测试数据                         │  │
-│  │  + driver: BaseDriver             // 驱动实例                         │  │
-│  │  + current_page: any              // 当前页面                         │  │
-│  │  + results: Dict                  // 测试结果                         │  │
-│  │                                                                     │  │
-│  │  + set_data(key, value): self     // 设置测试数据                      │  │
-│  │  + get_data(key, default): any    // 获取测试数据                      │  │
-│  │  + set_result(key, value): self   // 设置测试结果                      │  │
-│  │                                                                     │  │
-│  └─────────────────────────────────────────────────────────────────────┘  │
-│                                                                           │
-│  ┌────────────────────────────── PluginSystem ─────────────────────────┐  │
-│  │                                                                     │  │
-│  │  // 插件系统，提供钩子点支持扩展                                          │  │
-│  │                                                                     │  │
-│  │  + register_plugin(plugin): void   // 注册插件                        │  │
-│  │  + get_plugins(): List             // 获取所有插件                     │  │
-│  │  + execute_hook(name, *args): any  // 执行指定钩子                     │  │
-│  │                                                                     │  │
-│  │  // 钩子点                                                           │  │
-│  │  + before_test(test_context)       // 测试执行前钩子                   │  │
-│  │  + after_test(test_context, result)// 测试执行后钩子                   │  │
-│  │  + on_element_action(element, action, params) // 元素操作钩子          │  │
-│  │                                                                     │  │
-│  └─────────────────────────────────────────────────────────────────────┘  │
-│                                                                           │
-└───────────────────────────────────────────────────────────────────────────┘
+核心抽象层定义了框架的基础接口和抽象类，是框架的backbone。它包含以下主要部分：
+
+### 2.1 TestContext
+
+`TestContext` 是一个存储测试上下文信息的类，它作为测试过程中的状态容器。它通常包含:
+
+- **driver**: (可选) 用于Web测试的 Playwright 浏览器驱动实例
+- **config**: 当前环境的配置信息
+- **test_data**: 测试数据
+- **runtime_vars**: 测试运行时的动态变量
+
+它允许在测试过程中共享状态，避免全局变量。**注意**: 移动测试 (Airtest/Poco) 通常通过 Fixtures 或直接注入方式获取 `device` 和 `poco` 实例，而非通过 `TestContext`。
+
+```python
+class TestContext:
+    """
+    存储测试通用上下文信息或 Web 测试特定上下文的类。
+    移动测试 (Airtest/Poco) 通常直接传递 device 和 poco 实例，不通过此 Context。
+    """
+    def __init__(self):
+        self.driver = None  # Web: Playwright 浏览器实例 (可选)
+        # self.device = None  # 移除: 移动测试不通过 Context 传递
+        # self.poco = None    # 移除: 移动测试不通过 Context 传递
+        self.config = {}    # 配置信息
+        self.test_data = {} # 测试数据
+        self.runtime_vars = {} # 运行时变量
+        # 可能添加 Web 特定的上下文属性
+
+    def set_driver(self, driver):
+        self.driver = driver
+
+    # 移除 set_mobile_context 方法
+    # def set_mobile_context(self, device, poco):
+    #     self.device = device
+    #     self.poco = poco
+
+    # ... 其他方法，例如设置/获取 config, test_data, runtime_vars ...
+    def set_config(self, config_data: dict):
+        self.config = config_data
+
+    def get_config(self, key: str, default=None):
+        # 支持点状符号访问嵌套配置
+        keys = key.split('.')
+        value = self.config
+        try:
+            for k in keys:
+                value = value[k]
+            return value
+        except (KeyError, TypeError):
+            return default
+
+    def set_data(self, key: str, value):
+        self.test_data[key] = value
+
+    def get_data(self, key: str, default=None):
+        return self.test_data.get(key, default)
+
+    def set_var(self, key: str, value):
+        self.runtime_vars[key] = value
+
+    def get_var(self, key: str, default=None):
+        return self.runtime_vars.get(key, default)
 ```
 
 ## 3. 特定测试场景流程
@@ -201,6 +191,52 @@
                ▼
 ┌─────────────────────────────────────┐
 │ Playwright browser.page.xxx()       │  ◄── 外部集成层
+└──────────────┬──────────────────────┘
+               │
+               │ 6. 返回结果，验证登录是否成功
+               ▼
+┌─────────────────────────────────────┐
+│ 测试断言 assertion.assert_xxx()      │  ◄── 测试用例层
+└─────────────────────────────────────┘
+```
+
+### 移动App登录测试流程
+
+```
+┌──────────────┐
+│  LoginTest   │  ◄───────── 测试用例层
+└──────┬───────┘
+       │
+       │ 1. 调用测试固件获取设备和Poco实例
+       ▼
+┌──────────────┐
+│ MobileFixture│  ◄───────── 固件层
+└──────┬───────┘
+       │
+       │ 2. 提供已配置的Airtest和Poco实例
+       ▼
+┌──────────────┐
+│ LoginScreen  │  ◄───────── 业务对象层
+└──────┬───────┘
+       │
+       │ 3. 执行perform_login(username, password)
+       ▼
+┌─────────────────────────────────────┐
+│ PocoAdapter.input(username_field)   │
+│ PocoAdapter.input(password_field)   │  ◄── 平台实现层
+│ PocoAdapter.click(login_button)     │
+└──────────────┬──────────────────────┘
+               │
+               │ 4. 处理登录结果验证
+               ▼
+┌─────────────────────────────────────┐
+│ SmartWait.wait_for_element()        │  ◄── 工具层
+└──────────────┬──────────────────────┘
+               │
+               │ 5. 使用底层驱动执行操作
+               ▼
+┌─────────────────────────────────────┐
+│ Airtest Device/Poco UI 操作         │  ◄── 外部集成层
 └──────────────┬──────────────────────┘
                │
                │ 6. 返回结果，验证登录是否成功
@@ -2008,12 +2044,12 @@ sudo apt install android-tools-adb
    
    # 3. 在Python代码中处理
    try:
-       driver = AppiumDriver(device_id="emulator-5554")
+       device = airtest.core.api.connect_device("Android:///")
    except ConnectionError:
        # 重启ADB并重试
        subprocess.run(["adb", "kill-server"])
        subprocess.run(["adb", "start-server"])
-       driver = AppiumDriver(device_id="emulator-5554")
+       device = airtest.core.api.connect_device("Android:///")
    ```
 
 2. **元素识别问题**
@@ -2022,29 +2058,70 @@ sudo apt install android-tools-adb
    
    **解决方案**:
    ```python
-   # 1. 使用Appium Inspector检查元素属性
+   # 1. 使用Airtest IDE查看Poco UI树，检查元素属性
    
    # 2. 尝试多种定位策略
    try:
-       element = driver.find_element_by_accessibility_id("login_button")
-   except ElementNotFound:
+       # 首先尝试通过name/id定位
+       element = poco(name="login_button")
+       if not element.exists():
+           raise Exception("Element not found")
+   except Exception:
        try:
-           element = driver.find_element_by_id("com.example.app:id/login_button")
-       except ElementNotFound:
-           element = driver.find_element_by_xpath("//*[@text='登录']")
+           # 尝试通过文本定位
+           element = poco(text="登录")
+       except Exception:
+           # 最后尝试图像识别定位
+           from airtest.core.api import Template
+           login_btn_tpl = Template("path/to/login_button.png")
+           touch(login_btn_tpl)
    
-   # 3. 使用自定义等待
-   def wait_for_element(driver, locator, timeout=20):
-       start_time = time.time()
-       while time.time() - start_time < timeout:
-           try:
-               element = driver.find_element(*locator)
-               if element.is_displayed():
-                   return element
-           except:
-               pass
-           time.sleep(0.5)
-       raise TimeoutException(f"Element {locator} not found within {timeout} seconds")
+   # 3. 使用Poco的智能等待
+   poco(text="登录").wait_for_appearance(timeout=20)
+   # 或者对于图像识别
+   from airtest.core.api import wait
+   wait(Template("path/to/element.png"), timeout=20)
+   ```
+
+3. **iOS特定问题**
+
+   **症状**: iOS设备连接或WDA问题
+   
+   **解决方案**:
+   ```python
+   # 1. 确保WDA正确启动
+   # 检查tidevice列表
+   import subprocess
+   subprocess.run(["tidevice", "list"])
+   
+   # 2. 使用特定端口启动WDA代理
+   # tidevice wdaproxy -B com.facebook.WebDriverAgentRunner.xctrunner -p 8100
+   
+   # 3. 连接iOS设备
+   from airtest.core.api import connect_device
+   from poco.drivers.ios import iosPoco
+   
+   device = connect_device("iOS:///127.0.0.1:8100")
+   poco = iosPoco(device)
+   ```
+
+4. **WebView内元素无法识别**
+
+   **症状**: 在应用内WebView中无法定位元素
+   
+   **解决方案**:
+   ```python
+   # 1. 首先尝试使用Poco直接定位
+   # 如果应用启用了WebView调试或已集成Poco SDK，可能能够直接识别
+   webview_element = poco(name="webview_element_id")
+   
+   # 2. 如果WebView无法被Poco识别，可使用Airtest图像识别
+   from airtest.core.api import Template, touch
+   
+   web_btn_tpl = Template("path/to/web_button.png")
+   touch(web_btn_tpl)
+   
+   # 3. 对于需要频繁交互的WebView，建议与开发沟通集成Poco SDK
    ```
 
 ### 13.8 部署与维护手册
@@ -2447,639 +2524,380 @@ jobs:
 
 #### 14.1.1 设备发现与注册
 
-自动识别和注册连接的设备，支持以下设备类型：
+设备连接应从配置文件获取设备URI，而不是硬编码固定值：
 
 ```python
-class DeviceType(Enum):
-    """设备类型枚举"""
-    ANDROID_REAL = "android_real"         # 真实Android设备
-    ANDROID_EMULATOR = "android_emulator" # Android模拟器
-    IOS_REAL = "ios_real"                 # 真实iOS设备
-    IOS_SIMULATOR = "ios_simulator"       # iOS模拟器
+# 从配置中获取设备URI
+device_uri = config.get('app', {}).get('jiyu', {}).get('device_uri', 'Android:///')
+# 或者根据不同应用使用不同的设备URI
+# device_uri = config.get('app', {}).get('wechat', {}).get('device_uri', 'Android:///')
+
+# 连接设备
+device = airtest.core.api.connect_device(device_uri)
 ```
 
-设备发现流程：
+这样可以根据不同的测试需求和环境灵活配置设备连接。
 
-1. 系统启动时执行设备扫描
-2. 定期执行设备轮询更新
-3. 通过设备连接事件监听(如USB连接)触发
+#### 14.1.2 超时配置
 
-#### 14.1.2 设备池数据结构
+为保证测试的稳定性，应从配置文件中获取超时设置：
 
 ```python
-# src/mobile/common/device_pool.py
-class DeviceInfo:
-    """设备信息类"""
-    def __init__(self, device_id, platform, version, model, status=DeviceStatus.AVAILABLE):
-        self.device_id = device_id        # 设备唯一标识
-        self.platform = platform          # 平台(android/ios)
-        self.version = version            # 系统版本
-        self.model = model                # 设备型号
-        self.status = status              # 设备状态
-        self.capabilities = {}            # 设备能力属性
-        self.last_used = None             # 最后使用时间
-        self.current_session = None       # 当前会话ID
-        self.health_status = None         # 健康状态
-        
-    def is_available(self):
-        """检查设备是否可用"""
-        return self.status == DeviceStatus.AVAILABLE
+# 从配置中获取超时时间，提供默认值
+timeout = config.get('airtest', {}).get('timeouts', {}).get('default', 20)
 
-class DevicePool:
-    """设备池管理类"""
-    def __init__(self):
-        self.devices = {}                 # 设备字典
-        self.lock = threading.RLock()     # 线程锁
-        self._init_devices()              # 初始化设备
-        
-    def get_device(self, requirements=None):
-        """获取符合要求的设备
-        
-        Args:
-            requirements: 设备要求字典，如:
-                {
-                    "platform": "android",
-                    "min_version": "11.0",
-                    "model": "Pixel.*"
-                }
-        
-        Returns:
-            device_id: 分配的设备ID
-        """
-        with self.lock:
-            # 筛选符合要求的可用设备
-            matching_devices = self._filter_devices(requirements)
-            
-            if not matching_devices:
-                raise NoAvailableDeviceError(
-                    f"No device matching requirements: {requirements}"
-                )
-            
-            # 优先选择最近最少使用的设备
-            device = self._select_best_device(matching_devices)
-            
-            # 更新设备状态
-            self._allocate_device(device.device_id)
-            
-            return device.device_id
-            
-    def release_device(self, device_id):
-        """释放设备资源"""
-        with self.lock:
-            if device_id not in self.devices:
-                logger.warning(f"Device {device_id} not found in pool")
-                return
-                
-            device = self.devices[device_id]
-            device.status = DeviceStatus.AVAILABLE
-            device.current_session = None
-            device.last_used = datetime.now()
-            
-            # 触发设备释放后清理
-            self._cleanup_device(device_id)
+# 在Airtest操作中使用统一的超时设置
+wait(template_image, timeout=timeout)
+
+# 在Poco操作中使用统一的超时设置
+poco(text="登录按钮").wait_for_appearance(timeout=timeout)
 ```
 
-### 14.2 跨平台统一抽象
+### 14.2 共享组件复用策略
 
-框架提供统一的移动元素和操作抽象，屏蔽平台差异：
+项目应使用共享组件来复用测试逻辑，提高代码复用性，简化测试维护：
 
 ```python
-# src/mobile/common/element.py
-class MobileElement(BaseElement):
-    """移动元素基类"""
+# src/common/components/monthly_card_flow.py
+class MonthlyCardWebViewFlow:
+    """月卡WebView流程共享组件
     
-    def __init__(self, driver, locator):
-        super().__init__(driver, locator)
-        self.platform = driver.platform
+    此组件封装了多个测试场景共用的月卡操作流程，
+    可被微信小程序、公众号和App测试复用
+    """
+    
+    def __init__(self, device, poco, config):
+        self.device = device
+        self.poco = poco
+        self.config = config
+        self.timeout = config.get('airtest', {}).get('timeouts', {}).get('default', 20)
+        self.logger = logging.getLogger(self.__class__.__name__)
         
-    def tap(self, duration=None):
-        """点击元素"""
-        element = self._find()
-        if self.platform == "android":
-            # Android实现
-            element.click()
-        else:
-            # iOS实现
-            element.tap(duration=duration or 0)
+    def execute_renewal_up_to_confirm_pay(self):
+        """执行从月卡入口到确认支付前的共享流程"""
+        self.logger.info("开始执行共享月卡续费流程")
         
-        return self
-        
-    def swipe(self, direction, distance=0.5):
-        """在元素上滑动
-        
-        Args:
-            direction: 方向，'up', 'down', 'left', 'right'
-            distance: 滑动距离，0-1之间的百分比
-        """
-        element = self._find()
-        rect = element.rect
-        
-        start_x, start_y = rect['x'] + rect['width'] / 2, rect['y'] + rect['height'] / 2
-        
-        # 根据方向计算终点
-        if direction == 'up':
-            end_x, end_y = start_x, start_y - (rect['height'] * distance)
-        elif direction == 'down':
-            end_x, end_y = start_x, start_y + (rect['height'] * distance)
-        elif direction == 'left':
-            end_x, end_y = start_x - (rect['width'] * distance), start_y
-        elif direction == 'right':
-            end_x, end_y = start_x + (rect['width'] * distance), start_y
-        else:
-            raise ValueError(f"Invalid swipe direction: {direction}")
+        try:
+            # 1. 点击月卡图标
+            self.logger.debug(f"点击月卡图标 (超时: {self.timeout}s)")
+            wait(MONTH_CARD_IMAGE, timeout=self.timeout)
+            touch(MONTH_CARD_IMAGE)
             
-        # 执行滑动操作
-        if self.platform == "android":
-            # Android实现
-            self.driver.swipe(start_x, start_y, end_x, end_y)
-        else:
-            # iOS实现
-            self.driver.execute_script('mobile: swipe', {
-                'direction': direction,
-                'element': element.id
-            })
+            # 2. 点击查费
+            self.logger.debug(f"点击查费图标 (超时: {self.timeout}s)")
+            wait(CHECK_FEE_IMAGE, timeout=self.timeout)
+            touch(CHECK_FEE_IMAGE)
             
-        return self
+            # 3. 点击续费
+            self.logger.debug(f"点击续费图标 (超时: {self.timeout}s)")
+            wait(RENEW_IMAGE, timeout=self.timeout)
+            touch(RENEW_IMAGE)
+            
+            # 4. 勾选协议
+            self.logger.debug(f"点击协议同意 (超时: {self.timeout}s)")
+            wait(AGREEMENT_IMAGE, timeout=self.timeout)
+            touch(AGREEMENT_IMAGE)
+            
+            # 5. 点击确认支付
+            self.logger.debug(f"点击确认支付 (超时: {self.timeout}s)")
+            wait(CONFIRM_PAY_IMAGE, timeout=self.timeout)
+            touch(CONFIRM_PAY_IMAGE)
+            
+            self.logger.info("共享月卡续费流程执行完毕")
+            return True
+        except Exception as e:
+            self.logger.error(f"执行共享月卡续费流程时发生错误: {e}", exc_info=True)
+            # 失败时截图
+            snapshot(msg=f"月卡续费流程失败_{time.time()}.png")
+            raise
 ```
 
-### 14.3 能力配置与平台适配
+这种共享组件复用模式具有以下优势：
+1. **提高代码复用性**：相同流程只需实现一次，多个测试场景共用
+2. **简化维护**：流程变化时只需修改一处代码
+3. **统一行为**：确保不同入口的相同流程表现一致
+4. **提高测试开发效率**：新测试场景可快速集成已有流程
 
-为各个平台提供智能配置管理和专用适配器，统一处理系统特性差异：
+### 14.3 WebView 与原生界面混合测试策略
 
-#### 14.3.1 能力配置管理
+针对包含 WebView 的混合应用，应采用以下策略：
+
+1. **优先策略**：尽量让WebView开启调试模式，这样可以通过Poco直接操作WebView元素
+2. **备选策略**：使用Airtest图像识别技术定位和操作WebView元素
+3. **坐标策略**：只在其他方法都失败时使用坐标定位（最不稳定）
 
 ```python
-# src/mobile/common/capabilities.py
-class CapabilitiesFactory:
-    """设备能力配置工厂"""
+# WebView元素处理策略示例
+def handle_webview_elements(device, poco, webview_context=None):
+    """处理WebView元素的策略方法"""
+    # 策略1: 尝试使用Poco直接定位WebView元素
+    try:
+        if webview_context:
+            # 如果有特定的WebView上下文，尝试切换
+            poco.switch_context(webview_context)
+            
+        # 尝试通过Poco定位WebView元素
+        element = poco("webview_element_id")  # 使用实际ID
+        if element.exists():
+            return {"method": "poco", "element": element}
+    except Exception as e:
+        logger.debug(f"无法通过Poco定位WebView元素: {e}")
     
-    @staticmethod
-    def create_capabilities(platform, version, device_type, app_info=None):
-        """创建设备能力配置
-        
-        Args:
-            platform: 平台(android/ios)
-            version: 系统版本
-            device_type: 设备类型(真机/模拟器)
-            app_info: 应用信息
-            
-        Returns:
-            capabilities: 能力配置字典
-        """
-        # 基础配置
-        caps = {
-            'platformName': platform,
-            'platformVersion': version,
-            'newCommandTimeout': 300,
-            'noReset': False
-        }
-        
-        # 根据平台处理
-        if platform.lower() == 'android':
-            caps.update(CapabilitiesFactory._android_capabilities(version, device_type))
-        else:
-            caps.update(CapabilitiesFactory._ios_capabilities(version, device_type))
-            
-        # 应用配置
-        if app_info:
-            if platform.lower() == 'android':
-                caps['appPackage'] = app_info.get('package')
-                caps['appActivity'] = app_info.get('activity')
-            else:
-                caps['bundleId'] = app_info.get('bundle_id')
-                
-            # 安装应用
-            if app_info.get('path'):
-                caps['app'] = app_info.get('path')
-                
-        return caps
-        
-    @staticmethod
-    def _android_capabilities(version, device_type):
-        """Android平台特定配置"""
-        caps = {
-            'automationName': 'UiAutomator2',
-            'autoGrantPermissions': True,
-            'skipUnlock': True,
-            'disableWindowAnimation': True
-        }
-        
-        # 版本特定配置
-        version_num = float(version.split('.')[0])
-        if version_num >= 11.0:
-            # Android 11+需要额外设置
-            caps['skipServerInstallation'] = False
-            caps['enforceAppInstall'] = True
-            
-        # 设备类型特定配置
-        if device_type == DeviceType.ANDROID_EMULATOR:
-            caps['avd'] = 'Pixel_API_' + version.split('.')[0]
-            caps['avdLaunchTimeout'] = 180000
-            
-        return caps
-        
-    @staticmethod
-    def _ios_capabilities(version, device_type):
-        """iOS平台特定配置"""
-        caps = {
-            'automationName': 'XCUITest',
-            'autoAcceptAlerts': True,
-            'clearSystemFiles': True
-        }
-        
-        # 版本特定配置
-        version_num = float(version.split('.')[0])
-        if version_num >= 15.0:
-            # iOS 15+需要额外设置
-            caps['useNewWDA'] = False
-            caps['webviewConnectTimeout'] = 10000
-            
-        # 设备类型特定配置
-        if device_type == DeviceType.IOS_SIMULATOR:
-            caps['connectHardwareKeyboard'] = True
-            
-        return caps
+    # 策略2: 使用Airtest图像识别
+    try:
+        # 使用图像识别定位WebView元素
+        template = Template("path/to/webview_element.png")
+        pos = device.try_find_image(template)
+        if pos:
+            return {"method": "image", "position": pos, "template": template}
+    except Exception as e:
+        logger.debug(f"无法通过图像识别定位WebView元素: {e}")
+    
+    # 策略3: 基于坐标的操作（最后尝试，稳定性较差）
+    # 这是不得已的方法，依赖于UI布局稳定性
+    return {"method": "coordinates", "x": 0.5, "y": 0.6}  # 相对坐标
 ```
 
-#### 14.3.2 Android适配器
+针对WebView测试的最佳实践：
 
-```python
-# src/mobile/android/driver.py
-class AndroidDriver(MobileDriver):
-    """Android驱动适配器"""
-    
-    def __init__(self, device_id=None, app_path=None, **kwargs):
-        super().__init__(platform="android", **kwargs)
-        self.device_id = device_id
-        self.app_path = app_path
-        self.adb = AdbTools(device_id)
-        
-    def start(self):
-        """启动Android驱动"""
-        caps = self._prepare_capabilities()
-        
-        if self.device_id:
-            caps['udid'] = self.device_id
-            
-        if self.app_path:
-            caps['app'] = self.app_path
-        
-        self.driver = webdriver.Remote(
-            command_executor=self.appium_url,
-            desired_capabilities=caps
-        )
-        
-        return self
-        
-    def get_notification(self):
-        """获取通知栏内容(Android特有功能)"""
-        return self.driver.open_notifications()
-        
-    def back(self):
-        """返回上一页"""
-        self.driver.press_keycode(4)  # Android back key
-        
-    def home(self):
-        """回到主页"""
-        self.driver.press_keycode(3)  # Android home key
-        
-    def toggle_airplane_mode(self):
-        """切换飞行模式(Android特有)"""
-        self.adb.shell("cmd connectivity airplane-mode toggle")
-```
-
-#### 14.3.3 iOS适配器
-
-```python
-# src/mobile/ios/driver.py
-class IOSDriver(MobileDriver):
-    """iOS驱动适配器"""
-    
-    def __init__(self, device_id=None, bundle_id=None, **kwargs):
-        super().__init__(platform="ios", **kwargs)
-        self.device_id = device_id
-        self.bundle_id = bundle_id
-        self.xcrun = XCRunTools()
-        
-    def start(self):
-        """启动iOS驱动"""
-        caps = self._prepare_capabilities()
-        
-        if self.device_id:
-            caps['udid'] = self.device_id
-            
-        if self.bundle_id:
-            caps['bundleId'] = self.bundle_id
-        
-        self.driver = webdriver.Remote(
-            command_executor=self.appium_url,
-            desired_capabilities=caps
-        )
-        
-        return self
-        
-    def shake(self):
-        """摇动设备(iOS特有)"""
-        self.driver.shake()
-        
-    def back(self):
-        """返回上一页(导航栏返回)"""
-        self.driver.execute_script('mobile: pressButton', {'name': 'back'})
-        
-    def home(self):
-        """回到主页"""
-        self.driver.execute_script('mobile: pressButton', {'name': 'home'})
-        
-    def use_biometric(self, match=True):
-        """生物识别(iOS特有)"""
-        self.driver.execute_script('mobile: biometric', {'match': match})
-```
+1. **优先策略**：尽量让WebView开启调试模式，这样可以通过Poco直接操作WebView元素
+2. **备选策略**：使用Airtest图像识别技术定位和操作WebView元素
+3. **坐标策略**：只在其他方法都失败时使用坐标定位（最不稳定）
+4. **测试数据隔离**：确保测试环境中的数据状态可控，避免因数据变化导致UI变化
+5. **WebView交互封装**：将复杂的WebView交互封装为可重用组件
 
 ### 14.4 测试固件集成
 
-在Pytest中集成设备管理与平台适配：
+测试固件应该从配置中获取设备信息和超时设置：
 
 ```python
-# tests/mobile/conftest.py
-@pytest.fixture(scope="session")
-def mobile_device_pool():
-    """提供移动设备池"""
-    pool = DevicePool()
-    yield pool
-    # 会话结束时释放所有设备
-    pool.release_all_devices()
-
-@pytest.fixture
-def android_driver(mobile_device_pool, request):
-    """提供Android驱动固件"""
-    # 获取设备要求
-    platform_version = request.config.getoption("--android-version", default=None)
-    requirements = {"platform": "android"}
-    if platform_version:
-        requirements["min_version"] = platform_version
+@pytest.fixture(scope="function")
+def mobile_device_poco_session(config):
+    """提供移动设备、Poco实例和超时设置"""
+    # 从配置获取设备URI
+    device_uri = config.get('app', {}).get('jiyu', {}).get('device_uri', 'Android:///')
     
-    # 分配设备
-    device_id = mobile_device_pool.get_device(requirements)
+    # 从配置获取超时设置
+    timeout = config.get('airtest', {}).get('timeouts', {}).get('default', 20)
     
-    # 应用信息
-    app_info = {
-        "package": "com.example.app",
-        "activity": ".MainActivity"
-    }
+    logger.info(f"连接到设备: {device_uri}")
     
-    # 创建并启动驱动
-    driver = AndroidDriver(
-        device_id=device_id,
-        app_info=app_info
-    ).start()
-    
-    # 提供驱动
-    yield driver
-    
-    # 测试结束释放资源
-    driver.stop()
-    mobile_device_pool.release_device(device_id)
-
-@pytest.fixture
-def ios_driver(mobile_device_pool, request):
-    """提供iOS驱动固件"""
-    # 获取设备要求
-    platform_version = request.config.getoption("--ios-version", default=None)
-    requirements = {"platform": "ios"}
-    if platform_version:
-        requirements["min_version"] = platform_version
-    
-    # 分配设备
-    device_id = mobile_device_pool.get_device(requirements)
-    
-    # 应用信息
-    app_info = {
-        "bundle_id": "com.example.app"
-    }
-    
-    # 创建并启动驱动
-    driver = IOSDriver(
-        device_id=device_id,
-        app_info=app_info
-    ).start()
-    
-    # 提供驱动
-    yield driver
-    
-    # 测试结束释放资源
-    driver.stop()
-    mobile_device_pool.release_device(device_id)
-
-@pytest.fixture
-def mobile_driver(request):
-    """智能选择移动平台驱动"""
-    platform = request.config.getoption("--platform", default="android")
-    
-    if platform.lower() == "android":
-        driver = request.getfixturevalue("android_driver")
-    else:
-        driver = request.getfixturevalue("ios_driver")
+    try:
+        # 连接设备
+        device = connect_device(device_uri)
         
-    return driver
+        # 初始化Poco
+        if "android" in device_uri.lower():
+            poco = AndroidUiautomationPoco(device, use_airtest_input=True)
+            platform = "android"
+        elif "ios" in device_uri.lower():
+            poco = IosUiautomationPoco(device)
+            platform = "ios"
+        else:
+            poco = StdPoco()
+            platform = "unknown"
+            
+        logger.info(f"成功初始化 {platform.upper()} 设备和Poco")
+        
+        # 返回设备、Poco和超时设置
+        yield device, poco, timeout
+        
+        # 测试完成后清理
+        logger.info("测试完成，断开设备连接")
+        
+    except Exception as e:
+        logger.error(f"设备连接或Poco初始化失败: {e}", exc_info=True)
+        pytest.skip(f"测试环境准备失败: {e}")
 ```
 
-### 14.5 设备交互健壮性策略
+### 14.5 错误处理与日志记录最佳实践
 
-针对移动设备测试中常见的稳定性问题，提供解决方案：
+为确保测试稳定性和可调试性，框架实现了完善的错误处理和日志记录机制：
 
 ```python
-# src/mobile/common/stability.py
-class DeviceInteractionStrategy:
-    """设备交互策略类"""
+# src/mobile/common/error_handler.py
+class MobileTestErrorHandler:
+    """移动测试错误处理类"""
     
     @staticmethod
-    def with_retry(func, max_attempts=3, retry_interval=1):
-        """带重试的设备操作装饰器"""
+    def handle_test_error(func):
+        """测试错误处理装饰器"""
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            last_error = None
-            for attempt in range(max_attempts):
-                try:
-                    return func(*args, **kwargs)
-                except (StaleElementReferenceException, 
-                        ElementNotVisibleException,
-                        WebDriverException) as e:
-                    last_error = e
-                    logger.warning(
-                        f"Attempt {attempt+1}/{max_attempts} failed: {str(e)}"
-                    )
-                    time.sleep(retry_interval)
+            logger = logging.getLogger(func.__name__)
+            logger.info(f"开始执行测试: {func.__name__}")
             
-            # 所有重试都失败
-            raise last_error
-        return wrapper
-    
-    @staticmethod
-    def handle_permission_dialog(driver):
-        """处理权限对话框"""
-        try:
-            if driver.platform == "android":
-                # Android权限对话框处理
-                allow_btn = driver.find_element_by_id("com.android.packageinstaller:id/permission_allow_button")
-                if allow_btn:
-                    allow_btn.click()
-            else:
-                # iOS权限对话框处理
-                allow_btn = driver.find_element_by_accessibility_id("Allow")
-                if allow_btn:
-                    allow_btn.click()
-            return True
-        except Exception:
-            return False
-    
-    @staticmethod
-    def ensure_app_state(driver, state="foreground"):
-        """确保应用处于指定状态"""
-        if driver.platform == "android":
-            # Android应用状态处理
-            if state == "foreground":
-                current_package = driver.current_package
-                if current_package != driver.desired_capabilities.get("appPackage"):
-                    driver.launch_app()
-            elif state == "background":
-                driver.background_app(0)
-        else:
-            # iOS应用状态处理
-            bundle_id = driver.desired_capabilities.get("bundleId")
-            if state == "foreground":
-                driver.activate_app(bundle_id)
-            elif state == "background":
-                driver.terminate_app(bundle_id)
-```
-
-### 14.6 平台特定功能封装
-
-针对不同平台的特有功能，提供专用接口：
-
-```python
-# src/mobile/android/tools.py
-class AndroidTools:
-    """Android特有工具"""
-    
-    def __init__(self, driver):
-        self.driver = driver
-        
-    def get_toast_message(self, timeout=5):
-        """获取toast信息"""
-        try:
-            toast = WebDriverWait(self.driver, timeout).until(
-                EC.presence_of_element_located((
-                    MobileBy.XPATH, "//*[@class='android.widget.Toast']"
-                ))
-            )
-            return toast.text
-        except TimeoutException:
-            return None
-            
-    def toggle_wifi(self, enable=True):
-        """切换WiFi状态"""
-        self.driver.set_network_connection(
-            {
-                "wifi": enable,
-                "data": self.driver.network_connection["data"],
-                "airplane": self.driver.network_connection["airplane"]
-            }
-        )
-
-# src/mobile/ios/tools.py
-class IOSTools:
-    """iOS特有工具"""
-    
-    def __init__(self, driver):
-        self.driver = driver
-        
-    def start_recording_screen(self, timeLimit=180):
-        """开始录制屏幕"""
-        return self.driver.start_recording_screen(
-            videoType='libx264', 
-            timeLimit=timeLimit
-        )
-        
-    def stop_recording_screen(self, filename=None):
-        """停止录制屏幕"""
-        video_data = self.driver.stop_recording_screen()
-        
-        if filename:
-            with open(filename, "wb") as f:
-                f.write(base64.b64decode(video_data))
+            try:
+                # 执行测试
+                return func(*args, **kwargs)
+            except ElementNotFoundError as e:
+                # 元素未找到错误
+                logger.error(f"元素未找到错误: {e}", exc_info=True)
+                # 截图记录错误现场
+                snapshot(filename=f"error_{func.__name__}_element_not_found.png")
+                # 转换为具体的测试失败异常
+                pytest.fail(f"测试失败: 未找到元素 - {e}")
+            except AssertionError as e:
+                # 断言错误
+                logger.error(f"断言失败: {e}", exc_info=True)
+                # 截图记录错误现场
+                snapshot(filename=f"error_{func.__name__}_assertion_failed.png")
+                # 重新抛出断言错误
+                raise
+            except Exception as e:
+                # 其他未预期的错误
+                logger.error(f"测试发生意外错误: {e}", exc_info=True)
+                # 截图记录错误现场
+                snapshot(filename=f"error_{func.__name__}_unexpected.png")
+                # 转换为具体的测试失败异常
+                pytest.fail(f"测试发生意外错误: {e}")
+            finally:
+                logger.info(f"测试执行完成: {func.__name__}")
                 
-        return video_data
-        
-    def set_clipboard(self, content):
-        """设置剪贴板内容"""
-        self.driver.set_clipboard(content)
+        return wrapper
 ```
 
-### 14.7 跨平台元素定位策略
+日志记录最佳实践：
+1. **统一日志格式**：使用一致的日志格式，包含时间戳、日志级别和来源
+2. **分级日志**：正确使用INFO、DEBUG、WARNING、ERROR级别
+3. **关键操作日志**：每个重要操作前后都记录日志
+4. **错误详情记录**：错误日志包含详细的异常栈信息
+5. **上下文信息**：日志中包含足够的上下文信息，便于定位问题
 
-为处理不同平台的元素定位差异，提供统一定位策略：
+### 14.6 移动测试常见问题与故障排除
 
+移动自动化测试中经常遇到的问题及解决方案：
+
+1. **设备连接问题**
+
+   **症状**: 无法连接到模拟器或真机
+   
+   **解决方案**:
+   ```bash
+   # 1. 检查设备连接
+   adb devices
+   
+   # 2. 重启ADB服务
+   adb kill-server
+   adb start-server
+   
+   # 3. 在Python代码中处理
+   try:
+       device = airtest.core.api.connect_device("Android:///")
+   except ConnectionError:
+       # 重启ADB并重试
+       subprocess.run(["adb", "kill-server"])
+       subprocess.run(["adb", "start-server"])
+       device = airtest.core.api.connect_device("Android:///")
+   ```
+
+2. **元素识别问题**
+
+   **症状**: 无法找到移动应用中的元素
+   
+   **解决方案**:
 ```python
-# src/mobile/common/locator.py
-class MobileBy:
-    """移动元素定位类"""
-    
-    @staticmethod
-    def adaptive(android_locator, ios_locator):
-        """平台自适应定位器
-        
-        Args:
-            android_locator: (locator_type, locator_value) Android定位信息
-            ios_locator: (locator_type, locator_value) iOS定位信息
-            
-        Returns:
-            dynamic_locator: 动态定位函数
-        """
-        def locator(driver):
-            if driver.platform == "android":
-                return android_locator
-            else:
-                return ios_locator
-        return locator
-    
-    @staticmethod
-    def text(text):
-        """根据文本内容定位
-        
-        兼容Android和iOS的文本查找
-        """
-        return MobileBy.adaptive(
-            # Android使用text属性
-            (MobileBy.XPATH, f"//*[@text='{text}']"),
-            # iOS使用name或label属性
-            (MobileBy.XPATH, f"//*[@name='{text}' or @label='{text}']")
-        )
-    
-    @staticmethod
-    def content_desc(desc):
-        """根据内容描述定位
-        
-        兼容Android和iOS的辅助功能标识
-        """
-        return MobileBy.adaptive(
-            # Android使用content-desc属性
-            (MobileBy.ACCESSIBILITY_ID, desc),
-            # iOS使用accessibility标识
-            (MobileBy.ACCESSIBILITY_ID, desc)
-        )
-```
+   # 1. 使用Airtest IDE查看Poco UI树，检查元素属性
+   
+   # 2. 尝试多种定位策略
+   try:
+       # 首先尝试通过name/id定位
+       element = poco(name="login_button")
+       if not element.exists():
+           raise Exception("Element not found")
+   except Exception:
+       try:
+           # 尝试通过文本定位
+           element = poco(text="登录")
+        except Exception:
+           # 最后尝试图像识别定位
+           from airtest.core.api import Template
+           login_btn_tpl = Template("path/to/login_button.png")
+           touch(login_btn_tpl)
+   
+   # 3. 使用Poco的智能等待
+   poco(text="登录").wait_for_appearance(timeout=20)
+   # 或者对于图像识别
+   from airtest.core.api import wait
+   wait(Template("path/to/element.png"), timeout=20)
+   ```
 
-### 14.8 本章小结
+3. **iOS特定问题**
+
+   **症状**: iOS设备连接或WDA问题
+   
+   **解决方案**:
+```python
+   # 1. 确保WDA正确启动
+   # 检查tidevice列表
+   import subprocess
+   subprocess.run(["tidevice", "list"])
+   
+   # 2. 使用特定端口启动WDA代理
+   # tidevice wdaproxy -B com.facebook.WebDriverAgentRunner.xctrunner -p 8100
+   
+   # 3. 连接iOS设备
+   from airtest.core.api import connect_device
+   from poco.drivers.ios import iosPoco
+   
+   device = connect_device("iOS:///127.0.0.1:8100")
+   poco = iosPoco(device)
+   ```
+
+4. **WebView内元素无法识别**
+
+   **症状**: 在应用内WebView中无法定位元素
+   
+   **解决方案**:
+   ```python
+   # 1. 首先尝试使用Poco直接定位
+   # 如果应用启用了WebView调试或已集成Poco SDK，可能能够直接识别
+   webview_element = poco(name="webview_element_id")
+   
+   # 2. 如果WebView无法被Poco识别，可使用Airtest图像识别
+   from airtest.core.api import Template, touch
+   
+   web_btn_tpl = Template("path/to/web_button.png")
+   touch(web_btn_tpl)
+   
+   # 3. 对于需要频繁交互的WebView，建议与开发沟通集成Poco SDK
+   ```
+
+### 14.7 本章小结
 
 本章详细介绍了移动测试适配方案，解决了移动测试中设备多样性和操作系统差异的关键挑战。方案通过以下几个核心设计实现了高效、稳定的跨平台测试体验：
 
-1. **设备池管理**：实现智能的资源分配与状态监控，提高设备利用率
-2. **统一抽象层**：屏蔽平台差异，提供一致的测试接口
-3. **动态能力配置**：根据设备类型和系统版本智能调整配置参数
-4. **平台特定适配器**：封装各平台特性，统一对外接口
-5. **测试固件集成**：与Pytest无缝集成，简化测试编写
-6. **健壮性策略**：提供重试机制和异常处理，增强测试稳定性
-7. **平台功能封装**：专门封装平台特有功能，方便调用
-8. **跨平台定位策略**：解决元素定位差异问题，提高脚本兼容性
+1. **配置驱动设计**：从配置文件获取设备URI和超时设置，避免硬编码值
+2. **共享组件复用**：使用如 `MonthlyCardWebViewFlow` 等共享组件提高代码复用性
+3. **混合应用测试策略**：提供WebView元素交互的多层次备选策略
+4. **平台特定适配器**：为Android和iOS提供专用适配器，统一处理平台差异
+5. **健壮的错误处理**：完善的日志记录和错误处理机制，提高测试可调试性
+6. **智能等待策略**：从配置中获取统一的超时设置，实现智能等待
+7. **测试固件集成**：与Pytest无缝集成，简化测试编写
 
-通过这些设计，框架能够有效解决移动测试中的设备管理和操作系统差异问题，为测试人员提供统一、稳定的跨平台测试体验。测试人员可以专注于业务逻辑测试，而不必过多关注底层平台差异，大大提高了测试效率和代码复用性。 
+通过这些设计，框架能够有效解决移动测试中的设备管理和操作系统差异问题，为测试人员提供统一、稳定的跨平台测试体验。测试人员可以专注于业务逻辑测试，而不必过多关注底层平台差异，大大提高了测试效率和代码复用性。
+
+### 14.8 移动测试与整体框架的集成
+
+移动测试与框架其他部分保持一致的设计理念，同时尊重Airtest/PocoUI技术栈的原生使用模式：
+
+```python
+# 移动测试遵循Airtest/PocoUI原生设计模式
+def test_mobile_login(mobile_device_poco_session, config):
+    # 从fixture获取设备、Poco和超时时间
+    device, poco, timeout = mobile_device_poco_session
+    
+    # 直接使用poco和config创建屏幕对象，符合Airtest/PocoUI设计理念
+    login_screen = LoginScreen(poco, config)
+    
+    # 执行测试逻辑
+    login_screen.perform_login("test_user", "password")
+    
+    # 验证登录结果
+    home_screen = HomeScreen(poco, config)
+    assert home_screen.is_displayed(), "登录后未跳转到主屏幕"
+```
+
+这种方式尊重了移动测试技术栈的原生设计理念，同时保持了框架内业务对象创建的一致性。移动测试Screen对象与Web测试的Page对象在结构上保持相似 - 都接收必要的技术栈对象和配置，但不强制通过统一的Context对象传递。
+
+如果测试中确实需要在不同平台间共享数据或状态，可以使用专门的数据共享对象或Pytest fixture，而不必将底层技术栈对象封装到统一的Context中。

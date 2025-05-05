@@ -27,7 +27,7 @@ log:
     backup_count: 5
   console:
     enabled: ${env:LOG_CONSOLE_ENABLED:-true}
-    color: true
+    color: false
   # 新增：为特定 logger 设置级别，以减少冗余日志输出
   loggers:
     src.utils.signature:
@@ -48,3 +48,27 @@ browser:
 screenshot:
   output_dir: ${env:SCREENSHOT_DIR:-output/screenshots}
   report_dir: ${env:REPORT_SCREENSHOT_DIR:-output/reports/screenshots}
+
+# ================================ 
+# App & WeChat Testing Configuration 
+# ================================ 
+airtest:
+  timeouts:
+    default: ${env:AIRTEST_DEFAULT_TIMEOUT:-20} # Airtest/Poco 操作默认超时时间 (秒)
+
+app:
+  # 设备 URI (如果所有平台用同一个设备)
+  # device_uri: ${env:MOBILE_DEVICE_URI:-Android:///} # 这个保持注释或移除
+  jiyu:
+    package_name: ${env:JIYU_APP_PACKAGE_NAME:-com.example.jiyuapp} # 提供一个示例默认值
+    # 如果 Jiyu 需要独立设备 URI
+    device_uri: ${env:JIYU_DEVICE_URI:-Android:///} # <-- 取消注释并引用 JIYU_DEVICE_URI, 提供默认值
+  wechat:
+    package_name: ${env:WECHAT_PACKAGE_NAME:-com.tencent.mm} # 微信包名通常固定
+    targets:
+      mini_program: ${env:WECHAT_MINI_PROGRAM_TARGET:-CMpark智慧停车}
+      official_account: ${env:WECHAT_OFFICIAL_ACCOUNT_TARGET:-CMpark招商享停车}
+    # 如果微信需要独立设备 URI
+    device_uri: ${env:WECHAT_DEVICE_URI:-Android:///} # <-- 取消注释并引用 WECHAT_DEVICE_URI, 提供默认值
+  payment:
+    activity_suffix: ${env:EXPECTED_PAYMENT_ACTIVITY_SUFFIX:-.framework.app.UIPageFragmentActivity}

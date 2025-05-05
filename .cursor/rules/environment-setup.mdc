@@ -1,42 +1,62 @@
 ---
 description: 确保环境配置统一，遵循项目标准
-globs: ["**/*.py", "pyproject.toml", ".env*"]
+globs: ["config/**/*.yaml", ".env*", "pyproject.toml", "docs/enhanced_architecture.md"]
 alwaysApply: true
 priority: 40
 ---
 # 环境配置标准化
 
 ## 支持的环境
-- Windows: Python 3.11+, 遵循docs/enhanced_architecture.md#Windows环境
-- MacOS: Python 3.11+, 遵循docs/enhanced_architecture.md#MacOS环境
-- Linux: Python 3.11+, 遵循docs/enhanced_architecture.md#Linux环境
+- Windows: Python 3.11+, 遵循 docs/enhanced_architecture.md 相关环境设置章节
+- MacOS: Python 3.11+, 遵循 docs/enhanced_architecture.md 相关环境设置章节 (iOS 测试需要 Xcode 和 WDA 配置)
+- Linux: Python 3.11+, 遵循 docs/enhanced_architecture.md 相关环境设置章节
 - Docker: 使用项目根目录的Dockerfile
 
 ## 依赖管理规范
-- 所有Python依赖必须在pyproject.toml的[tool.poetry.dependencies]部分管理
-- 开发环境依赖必须在[tool.poetry.group.dev.dependencies]部分管理
-- 禁止直接使用pip install安装未在pyproject.toml中声明的包
-- 版本更新必须经过测试验证后才能提交
-- 使用poetry命令管理依赖，而非直接修改pyproject.toml
+- 所有 Python 依赖必须在 `pyproject.toml` 的 `[tool.poetry.dependencies]` 部分管理。
+- **核心依赖**:
+    - **Web**: 确保包含 `playwright`。
+    - **API**: 确保包含 `httpx` (或项目使用的 HTTP 客户端)。
+    - **移动/微信**: 确保包含 `airtest` 和 `pocoui`。根据需要可能包含 `pocoui[ios]` 或其他特定引擎的 Poco 插件。
+- 开发环境依赖必须在 `[tool.poetry.group.dev.dependencies]` 部分管理。
+- 禁止直接使用 `pip install` 安装未在 `pyproject.toml` 中声明的包。
+- 版本更新必须经过测试验证后才能提交。
+- 使用 `poetry` 命令管理依赖，而非直接修改 `pyproject.toml`。
 
 ## 环境变量规范
-- 敏感配置必须通过环境变量提供，不得硬编码
-- 环境变量必须在.env.example中提供示例（不含实际值）
-- 本地开发环境变量存放在.env文件（不提交到版本控制）
-- CI/CD环境变量通过CI系统安全机制提供
+- 敏感配置必须通过环境变量提供，不得硬编码。
+- 环境变量必须在 `.env.example` 中提供示例（不含实际值）。
+- 本地开发环境变量存放在 `.env` 文件（不提交到版本控制）。
+- CI/CD 环境变量通过 CI 系统安全机制提供。
 
 ## 各平台特定配置
-- Web测试: 必须支持Chrome, Firefox, Edge三种浏览器
-- 移动测试: 必须支持Android真机、模拟器和iOS模拟器
-- 微信测试: 必须配置wxauto环境，详见docs/wxauto_setup.md
+- **Web 测试**:
+    - 必须支持 Chrome, Firefox, Edge 三种浏览器。
+    - Playwright 浏览器驱动需要通过 `poetry run playwright install` 安装。
+- **API 测试**:
+    - 确保相关的 API `base_url` 已在 `config/` 目录下的配置文件或 `.env` 文件中正确配置。
+    - API 认证所需的信息（如 API Key, Secret, Token 等）必须通过环境变量提供，并遵循 `环境变量规范` 和 `secure-data-handling` 规则。
+    - 检查是否有网络访问限制（如防火墙、代理）需要配置才能访问目标 API。
+- **移动/微信测试**:
+    - **Android**:
+        - 必须安装 Android SDK 并配置好 `adb`。
+        - 测试设备必须开启 USB 调试模式并授权。
+        - 确保设备通过 `adb devices` 可见。
+    - **iOS**:
+        - 必须使用 macOS 环境和 Xcode。
+        - 必须安装 `tidevice` (`pip install -U tidevice`)。
+        - WebDriverAgent (WDA) 必须正确编译、签名并部署到测试设备。
+        - WDA 代理服务必须正常运行 (例如通过 `tidevice wdaproxy`)。
+    - 配置中应通过 `device_uri` 指定目标设备（参考 `config/settings.yaml` 和 `.env`）。
 
 ## 工具配置规范
-- Black: 代码格式化工具，配置在pyproject.toml的[tool.black]部分
-- Pylint: 代码静态分析工具，配置在pyproject.toml的[tool.pylint]部分
-- MyPy: 类型检查工具，配置在pyproject.toml的[tool.mypy]部分
-- Pytest: 测试框架，配置在pyproject.toml的[tool.pytest.ini_options]部分
+- Black: 代码格式化工具，配置在 `pyproject.toml` 的 `[tool.black]` 部分。
+- Pylint: 代码静态分析工具，配置在 `pyproject.toml` 的 `[tool.pylint]` 部分。
+- MyPy: 类型检查工具，配置在 `pyproject.toml` 的 `[tool.mypy]` 部分。
+- Pytest: 测试框架，配置在 `pyproject.toml` 的 `[tool.pytest.ini_options]` 部分。
 
 ## 文档参考
 - @docs/enhanced_architecture.md
+- @docs/微信&APP自动化测试开发指南.md
 - @pyproject.toml
 - @.env.example

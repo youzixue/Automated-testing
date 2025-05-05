@@ -1,45 +1,46 @@
 ---
 description: 各测试平台的特定实现标准
-globs: ["src/**/*.py", "tests/**/*.py"]
+globs: ["src/**/*.py", "tests/**/*.py", "docs/**/*.md"]
 alwaysApply: true
 priority: 70
 ---
 # 平台测试标准
 
-## Web测试规范
-- 使用Playwright作为自动化引擎
-- 页面对象必须放在src/web/pages/目录
-- 测试用例必须放在tests/web/目录
-- 必须使用智能等待策略，禁止使用固定等待
-- 必须支持Chrome、Firefox、Edge浏览器
+## Web 测试规范
+- 使用 **Playwright** 作为自动化引擎。
+- 页面对象必须放在 `src/web/pages/` 目录。
+- 测试用例必须放在 `tests/web/` 目录。
+- 必须使用智能等待策略，禁止使用固定等待。
+- 必须支持 Chrome、Firefox、Edge 浏览器。
 
-## API测试规范
-- 使用httpx库作为请求客户端 
-- 服务对象必须放在src/api/services/目录
-- 测试用例必须放在tests/api/目录
-- API响应必须进行结构化验证
-- 必须处理各种状态码和错误情况
+## API 测试规范
+- 使用 **httpx** 库作为请求客户端。
+- 服务对象必须放在 `src/api/services/` 目录。
+- 测试用例必须放在 `tests/api/` 目录。
+- API 响应必须进行结构化验证。
+- 必须处理各种状态码和错误情况。
 
 ## 移动测试规范
-- 使用Appium作为自动化引擎
-- 屏幕对象必须放在src/mobile/screens/目录
-- 测试用例必须放在tests/mobile/目录
-- 必须处理设备间差异和权限请求
-- 支持Android和iOS平台
+- 使用 **Airtest/PocoUI** 作为自动化引擎。
+- **屏幕对象 (Screen Objects)** 必须放在 `src/mobile/screens/` 目录。
+- 测试用例必须放在 `tests/mobile/` 目录。
+- 必须处理设备间差异（如不同分辨率下的图像识别）和权限请求弹窗（可通过 Poco 或图像识别处理）。
+- 支持 Android 和 iOS 平台（需按要求配置环境）。
 
 ## 微信测试规范
-- 使用Playwright(网页版/小程序)和Appium(移动端)组合作为自动化引擎
-- 组件必须放在src/wechat/components/目录
-- 测试用例必须放在tests/wechat/目录
-- 必须处理微信特有交互模式
-- 支持网页版、小程序和移动端微信应用
+- 使用 **Airtest/PocoUI** 作为主要的自动化引擎（用于小程序、公众号内部交互）。
+- (可选) 如果涉及网页版微信或特定 H5 场景，可结合 **Playwright**。
+- **页面/组件对象** 必须放在 `src/wechat/components/` 或 `src/wechat/screens/` 目录。
+- 测试用例必须放在 `tests/wechat/` 目录。
+- 必须处理微信特有交互模式（如搜索启动流程、原生控件与 H5 混合）。
+- 支持微信 App (Android/iOS) 内的小程序和公众号测试。
 
 ## 安全测试规范
-- 使用OWASP ZAP作为安全测试工具
-- 安全测试脚本必须放在src/security/目录
-- 测试用例必须放在tests/security/目录
-- 必须包含SQL注入、XSS等常见漏洞测试
-- 敏感数据必须脱敏处理
+- 使用 OWASP ZAP 或类似工具作为安全测试工具。
+- 安全测试脚本必须放在 `src/security/` 目录。
+- 测试用例必须放在 `tests/security/` 目录。
+- 必须包含 SQL 注入、XSS 等常见漏洞测试。
+- 敏感数据必须脱敏处理。
 
 ## 文件参考
 - @src/web/
@@ -48,3 +49,4 @@ priority: 70
 - @src/wechat/
 - @src/security/
 - @tests/
+- @docs/微信&APP自动化测试开发指南.md

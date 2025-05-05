@@ -1,32 +1,72 @@
 ---
 description: 确保所有UI交互通过页面对象模式封装，提高测试可维护性和可读性
-globs: ["src/web/pages/**/*.py", "src/mobile/screens/**/*.py", "tests/**/*.py"]
+globs: ["src/web/pages/**/*.py", "src/mobile/screens/**/*.py", "src/wechat/**/*.py", "tests/**/*.py"]
 alwaysApply: true
-priority: 60
+priority: 90
 ---
-# 页面对象模式
+# 页面/屏幕对象模式 (Page/Screen Object Pattern)
 
-所有UI交互必须通过页面对象模式封装，直接将UI元素和操作封装在专门的Page类中。
+所有 UI 交互必须通过页面对象（Page Object - Web）或屏幕对象（Screen Object - Mobile/WeChat）模式封装，将 UI 元素和操作封装在专门的类中。
 
 ## 关键实践
-- 每个页面/界面创建一个专门的Page类
-- Page类负责封装元素定位和页面操作
-- 测试用例只通过Page类与UI交互
-- Page方法应返回操作结果或新的Page对象
-- 直接实现业务功能代码，不提供示范性质的示例代码
+- 每个页面/屏幕/可复用组件创建一个专门的类。
+- **元素定位**:
+    - Web: 使用 Playwright 选择器 (`page.locator(...)`)。
+    - Mobile/WeChat: 优先使用 **Poco 选择器** (`poco(...)`) 基于元素属性 (name, text, type 等) 和层级关系定位。当 Poco 无法定位时，使用 **Airtest 图像模板** (`Template(...)`) 作为补充。
+- **交互封装**: 类的方法封装用户与该页面/屏幕的交互操作（如 `login()`, `search()`, `click_button()`）。
+- 测试用例只通过 Page/Screen 对象与 UI 交互，不直接调用底层驱动 API。
+- 方法应返回操作结果（如数据）或新的 Page/Screen 对象（表示导航）。
+- 直接实现业务功能代码，不提供示范性质的示例代码。
 
 ## 业务代码实现规范
-- 实现具体的业务页面对象，不要提供通用示例
-- 使用项目中真实存在的选择器和元素
-- 确保方法名准确描述实际业务操作
-- 直接返回下一个页面对象或实际业务结果
+- 实现具体的业务页面/屏幕对象，不要提供通用示例。
+- 使用项目中真实存在的 Poco 选择器、Airtest 图像模板或 Playwright 选择器。
+- 确保方法名准确描述实际业务操作。
+- 直接返回下一个 Page/Screen 对象或实际业务结果。
 
-## 组件化Page Object
-- 将页面拆分为可重用的组件(Component)
-- 组件应代表页面的功能区域(导航栏、表单等)
-- 页面对象通过组合复用这些组件
-- 组件应具有明确的职责边界
+## 组件化
+- 将页面/屏幕拆分为可重用的组件 (Component)，代表页面的功能区域 (导航栏、表单等)。
+- Page/Screen 对象通过组合复用这些组件。
+- 组件应具有明确的职责边界。
+
+## 示例 (Mobile/WeChat - Screen Object)
+
+```python
+# src/mobile/screens/login_screen.py
+from poco.proxy import UIObjectProxy
+from airtest.core.api import Template, touch, text # 导入 Airtest API
+from typing import Dict, Any
+
+class LoginScreen:
+    def __init__(self, poco: UIObjectProxy, config: Dict[str, Any]):
+        self.poco = poco
+        self.config = config
+        # Airtest 图像模板 (假设 data/mobile/images/ 目录下有对应图片)
+        self.logo_image = Template(r"data/mobile/images/login_logo.png")
+
+    def enter_username(self, username: str):
+        # 使用 Poco 定位输入框
+        username_field = self.poco(name="username_input_field") # 假设 name 是 resource-id 或 accessibility_id
+        username_field.set_text(username)
+
+    def click_login_with_image(self):
+        # 当按钮无法用 Poco 定位时，使用 Airtest 图像识别
+        login_button_tpl = Template(r"data/mobile/images/login_button.png")
+        touch(login_button_tpl)
+
+    def perform_login(self, username, password):
+        self.enter_username(username)
+        # ... 输入密码 ...
+        # 可能使用 Poco 或 Airtest 点击登录按钮
+        login_button = self.poco(text="登录") # 优先 Poco
+        if login_button.exists():
+            login_button.click()
+        else:
+            self.click_login_with_image() # 回退到图像识别
+```
 
 ## 文件参考
-- @tests/pages/
 - @src/web/pages/
+- @src/mobile/screens/
+- @src/wechat/components/ 或 @src/wechat/screens/
+- @docs/微信&APP自动化测试开发指南.md
