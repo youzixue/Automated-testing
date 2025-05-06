@@ -47,6 +47,6 @@ log:
   console:
     enabled: true # <-- Correct format: Set enabled explicitly
   file:
-    path: "logs/test" # (覆盖默认值)
+    path: "${env:LOG_FILE_PATH}" # (覆盖默认值，使用环境变量)
     max_size: 20 # (覆盖默认值: 20MB)
     # 文件日志其他配置继承 settings.yaml 

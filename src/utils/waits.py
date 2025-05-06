@@ -48,7 +48,7 @@ def wait_for_activity(device: 'Device', expected_activity_suffix: str,
 
     if not activity_found:
         logger.warning(f"超时 {timeout} 秒未检测到 Activity (包含 '{expected_activity_suffix}')")
-        snapshot(msg=f"Activity_{expected_activity_suffix}_未出现截图")
+        # snapshot(msg=f"Activity_{expected_activity_suffix}_未出现截图") # Snapshot call removed
         return False
     else:
         return True 

@@ -2,10 +2,6 @@ import pytest
 import allure
 from typing import Dict, Any, Callable, Tuple
 
-# 导入 Fixtures
-# from tests.wechat.conftest import wechat_navigator, monthly_card_webview_flow_wechat
-# from tests.conftest import config
-
 # 导入类型提示
 from src.common.components.monthly_card_flow import MonthlyCardWebViewFlow
 
@@ -19,6 +15,7 @@ logger = get_logger(__name__)
 @allure.feature("微信小程序")
 @allure.story("月卡续费")
 class TestWechatMiniProgramMonthlyCard:
+    """测试微信小程序内的月卡续费支付流程。"""
 
     @allure.title("微信小程序月卡续费支付流程")
     @allure.description("测试通过微信小程序入口，完成月卡续费直至拉起支付页面的流程")
@@ -56,15 +53,6 @@ class TestWechatMiniProgramMonthlyCard:
             # 3. 断言支付 Activity (小程序在确认支付后直接拉起)
             with allure.step("断言支付Activity是否拉起"):
                 expected_activity_suffix = config.get('app', {}).get('payment', {}).get('activity_suffix', '.framework.app.UIPageFragmentActivity')
-                # --- 移除 timeout 获取和转换逻辑 --- 
-                # timeout_from_config = config.get('airtest', {}).get('timeouts', {}).get('default', 20)
-                # try:
-                #     # ... (转换代码) ...
-                # except (ValueError, TypeError):
-                #     # ... (警告和默认值) ...
-                #     timeout_assert = 20
-                # --- timeout 处理结束 ---
-                
                 logger.info(f"开始检查支付 Activity (应包含: '{expected_activity_suffix}', 超时: {timeout}s)...")
                 assert wait_for_activity(device, expected_activity_suffix, timeout), (
                        f"支付 Activity (含 {expected_activity_suffix}) 未在 {timeout} 秒内出现"

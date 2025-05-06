@@ -1,3 +1,7 @@
+"""
+Mobile (Airtest/Poco) 测试专用的 pytest fixtures 配置。
+提供 Mobile 测试所需的设备连接、Poco 实例、屏幕对象和截图功能。
+"""
 import pytest
 from typing import Dict, Any, Tuple, Union, Optional
 import time
@@ -38,11 +42,11 @@ logger = get_logger(__name__)
 # Mobile 平台特定的设备和 Poco 管理
 # 使用 session scope 以优化设备连接次数，但注意会话期间设备状态可能变化
 # 如果需要每个测试函数独占设备，改为 function scope
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def mobile_device_poco_session(config: Dict[str, Any]) -> Tuple[Optional[Device], Optional[Any], int]:
-    """Mobile 设备/Poco 会话 Fixture (Session Scope)，使用全局辅助函数。"""
-    platform_logger = get_logger("mobile_conftest")
-    # 定义用于查找配置的键路径
+    """Mobile 设备/Poco 会话 Fixture (Function Scope)，使用全局辅助函数。"""
+    platform_logger = get_logger("mobile_device_setup") # 使用项目统一的 logger
+    # 定义用于查找配置的键路径 (优先查找 Jiyu 特定 URI)
     device_uri_keys = ['app.jiyu.device_uri', 'app.device_uri']
     timeout_keys = ['airtest.timeouts.default']
     
@@ -58,13 +62,22 @@ def mobile_device_poco_session(config: Dict[str, Any]) -> Tuple[Optional[Device]
     # 清理逻辑 (主要是日志)
     # 实际的设备断开和 G 变量清理应该由辅助函数或 Airtest 本身处理（如果需要）
     # 但为了保持日志一致性，可以添加清理日志
-    platform_logger.info("[Mobile] Cleaning up mobile_device_poco_session (Session Scope)...")
+    platform_logger.info("[Mobile] Cleaning up mobile_device_poco_session (Function Scope)...")
     # 可选: 如果需要强制清理 G 变量
     # if G:
     #     if hasattr(G, 'DEVICE') and G.DEVICE == device:
     #         G.DEVICE = None
     #     if hasattr(G, 'POCO') and G.POCO == poco:
     #         G.POCO = None
+    # 尝试断开设备连接，如果 device 对象存在且有 stop 方法
+    if device and hasattr(device, 'stop'):
+        try:
+            platform_logger.info(f"[Mobile] Attempting to stop/disconnect device: {device}")
+            device.stop()
+            platform_logger.info(f"[Mobile] Device stop/disconnect successful.")
+        except Exception as e:
+            platform_logger.warning(f"[Mobile] Error stopping/disconnecting device: {e}", exc_info=True)
+            
     time.sleep(0.5) # 确保日志写入
     platform_logger.info("[Mobile] Fixture cleanup finished.")
 

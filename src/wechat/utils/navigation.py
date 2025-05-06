@@ -67,6 +67,8 @@ def launch_target_in_wechat(device: 'Device', config: Dict[str, Any],
         logger.debug("搜索图标已出现，点击搜索图标...")
         touch(SEARCH_ICON_TEMPLATE)
 
+        # --- Removed search box clearing logic --- 
+            
         # 3. 输入目标名称
         logger.debug(f"输入目标名称: {target_name}")
         text(target_name)

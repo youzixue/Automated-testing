@@ -547,12 +547,27 @@ def launch_target_in_wechat(device, poco: UIObjectProxy, config: Dict[str, Any],
 
 使用 `pytest` 命令：
 
-*   **执行所有测试**: `poetry run pytest`
+*   **执行所有测试**: `poetry run pytest` ( **注意**: 见下方关于并行执行的说明)
 *   **仅执行移动 App 测试**: `poetry run pytest -m mobile`
 *   **仅执行微信测试**: `poetry run pytest -m wechat`
 *   **执行特定文件**: `poetry run pytest tests/mobile/test_login.py`
 *   **生成 Allure 报告数据**: `poetry run pytest --alluredir=output/allure-results`
-*   **并行执行**: `poetry run pytest -n <workers>` (例如 `-n 2` 同时跑两个测试)
+*   **并行执行**: `poetry run pytest -n <workers>` (例如 `-n 2` 同时跑两个测试。**重要**: 见下文)
+
+**重要注意事项：关于 App 和 WeChat 测试的并行执行**
+
+*   **问题描述**: 尝试使用 `pytest -n auto` 或 `pytest -n X` (X > 1) 同时并行执行多个 App (Mobile) 或 WeChat 测试用例**通常会导致测试冲突和失败**。
+*   **根本原因**: 这些测试通常需要与**单个物理设备**或**同一个微信应用实例**进行交互。当多个测试并行运行时，它们会争抢设备控制权或干扰彼此的应用状态（例如，一个测试正在尝试登录，而另一个测试可能正在导航到其他页面或执行清理操作），导致不可预测的行为和断言失败。
+*   **`xdist_group` 的局限性**: 虽然 `pytest-xdist` 提供了 `@pytest.mark.xdist_group` 标记试图将特定测试绑定到同一 worker，但在 `-n auto` 或 worker 数量较多的情况下，并**不能保证**这些测试被严格地、完全串行地执行。调度复杂性可能导致分组约束失效或不同 worker 处理同一分组的不同测试，依然引发冲突。
+*   **最佳实践**: 为了确保 App 和 WeChat 测试的稳定性和可靠性，**强烈建议使用 `-n 1` 参数来串行执行这些测试**：
+    *   执行 App 测试: `poetry run pytest -n 1 tests/mobile/`
+    *   执行 WeChat 测试: `poetry run pytest -n 1 tests/wechat/`
+*   **混合并行策略**: 如果你需要同时运行 Web/API 测试（可以并行）和 App/WeChat 测试（需要串行），请**不要**依赖单一的 `pytest -n auto` 命令和复杂的 `conftest.py` 钩子。**最佳实践是采用多阶段执行**，例如使用脚本：
+    1.  先用 `pytest -n auto tests/web/ tests/api/` 执行 Web/API 测试。
+    2.  再用 `pytest -n 1 tests/mobile/ --allure-no-capture` 执行 App 测试。
+    3.  最后用 `pytest -n 1 tests/wechat/ --allure-no-capture` 执行 WeChat 测试。
+    (详细脚本示例请参考相关讨论或项目中的 `run_tests.sh` 示例)
+*   **提高 App/WeChat 测试效率**: 如果你需要提高 App 或 WeChat 测试的整体执行效率，唯一的可靠方法是**使用多台物理设备并行执行测试集**。例如，你可以将一部分测试用例分配给设备 A，另一部分分配给设备 B。关键在于，**在每一台设备上，测试用例仍需使用 `-n 1` 串行执行**，以避免单台设备上的状态冲突。这通常需要更复杂的测试分发和设备管理机制，可能需要借助 CI/CD 平台或专门的设备管理平台来实现。
 
 ### 6.2 查看 Allure 报告
 
@@ -607,6 +622,14 @@ def launch_target_in_wechat(device, poco: UIObjectProxy, config: Dict[str, Any],
 
 (与之前文档内容类似，保持详细)
 
+*   **测试失败且行为混乱 (尤其在并行运行时):**
+    *   **症状**: App 或 WeChat 测试在单独运行时通过，但在使用 `pytest -n auto` 或 `pytest -n X` (X>1) 并行运行时，出现随机失败、状态相互干扰（如一个测试登录时另一个在退出）、断言失败、设备无响应等不可预测行为。
+    *   **原因**: 这是因为多个测试用例试图同时控制**同一个物理设备**或**同一个微信应用实例**。`pytest-xdist` 的并行机制（即使结合 `@pytest.mark.xdist_group`）在 `-n auto` 或 worker 数量较多时，无法保证对共享物理资源的严格串行访问，导致冲突。
+    *   **解决方案**: **不要**尝试通过复杂的 `conftest.py` 钩子解决此问题。**必须串行执行 App 和 WeChat 测试**。
+        *   使用 `pytest -n 1 tests/mobile/` 执行 App 测试。
+        *   使用 `pytest -n 1 tests/wechat/` 执行 WeChat 测试。
+        *   对于混合执行场景（如 Web/API 并行 + App/WeChat 串行），请使用**多阶段脚本**（参见第 6.1 节）。
+        *   **提高效率**: 如果你需要加速 App/WeChat 测试，不能依赖在单台设备上并行运行。正确的方法是**增加物理测试设备**，并将测试负载分散到多台设备上。在每台设备上，测试仍然必须使用 `-n 1` 串行执行。
 *   **元素找不到 (Poco):**
     *   在 Airtest IDE 中检查 Poco UI 树，确认元素层级和属性。
     *   选择器是否准确？尝试不同的属性组合或相对定位（参考选择器最佳实践）。

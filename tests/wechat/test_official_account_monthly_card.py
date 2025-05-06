@@ -1,11 +1,7 @@
 import pytest
 import allure
 from typing import Dict, Any, Callable, Tuple
-
-# 导入 Fixtures
-# from tests.wechat.conftest import (wechat_navigator, official_account_entry_screen,
-#                                   monthly_card_webview_flow_wechat, wechat_device_poco_session)
-# from tests.conftest import config
+# import time # Remove time import
 
 # 导入类型提示
 from src.wechat.screens.official_account_entry import OfficialAccountEntryScreen

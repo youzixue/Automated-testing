@@ -46,7 +46,7 @@ log:
     color: false # (覆盖默认值: false)
     # 控制台其他配置继承 settings.yaml
   file:
-    path: "logs/prod" # (覆盖默认值)
+    path: "${env:LOG_FILE_PATH}" # (覆盖默认值，使用环境变量)
     max_size: 50 # (覆盖默认值: 50MB)
     backup_count: 10 # (覆盖默认值: 10个)
     # 文件日志其他配置继承 settings.yaml

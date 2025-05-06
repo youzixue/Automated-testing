@@ -18,6 +18,7 @@ from airtest.core.device import Device # 导入 Device 类型
 
 logger = get_logger(__name__)
 
+@pytest.mark.xdist_group(name="MOBILE_DEVICE") # Mobile 测试组，独占手机A
 @pytest.mark.mobile # 标记为 mobile 测试
 @allure.feature("积余服务App") # Allure 功能分类
 @allure.story("月卡续费") # Allure 用户故事
@@ -69,11 +70,12 @@ class TestJiyuMonthlyCard:
                 logger.info(f"开始检查支付 Activity (应包含: '{expected_activity_suffix}', 超时: {timeout}s)...")
                 activity_found = wait_for_activity(device, expected_activity_suffix, timeout)
                 if not activity_found:
-                    # 如果断言失败，尝试截图
-                    try:
-                        snapshot(msg=f"支付Activity_{expected_activity_suffix}_未出现截图")
-                    except Exception as snap_err:
-                        logger.warning(f"断言失败后尝试截图也失败: {snap_err}")
+                    # 如果断言失败，尝试截图 - Snapshot call removed
+                    # try:
+                    #     snapshot(msg=f"支付Activity_{expected_activity_suffix}_未出现截图")
+                    # except Exception as snap_err:
+                    #     logger.warning(f"断言失败后尝试截图也失败: {snap_err}")
+                    pass # No action needed here if snapshot is removed, assert will handle failure
                 assert activity_found, \
                        f"支付 Activity (含 {expected_activity_suffix}) 未在 {timeout} 秒内出现"
                 logger.info("测试通过: 积余 App 月卡续费成功拉起支付页面。")
