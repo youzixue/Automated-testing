@@ -71,16 +71,6 @@ def pytest_sessionstart(session):
     logger.info(f"Pytest 版本: {pytest.__version__}")
     logger.debug(f"会话配置已加载: {session_config_global}")
 
-    if AIRTEST_AVAILABLE and set_logdir:
-        log_dir = session_config_global.get('log', {}).get('file', {}).get('path', 'output/logs/dev')
-        airtest_log_dir = os.path.join(Path(log_dir).parent, 'airtest_logs')
-        os.makedirs(airtest_log_dir, exist_ok=True)
-        try:
-            set_logdir(airtest_log_dir)
-            logger.info(f"Airtest 日志目录设置为: {airtest_log_dir}")
-        except Exception as e:
-            logger.warning(f"设置 Airtest 日志目录失败: {e}")
-
 def pytest_sessionfinish(session):
     """在测试会话结束时执行。"""
     logger = get_logger("global_session_finish")
@@ -153,19 +143,10 @@ def _setup_device_poco_session(config: Dict[str, Any],
     platform_logger.info(f"尝试连接设备: {device_uri}...")
     try:
         device = connect_device(device_uri)
-        platform_logger.info(f"设备连接成功: {device} (类型: {type(device)})") 
+        platform_logger.info(f"设备连接成功: {device} (类型: {type(device)})" ) 
         
-        airtest_log_dir = config.get('log', {}).get('file', {}).get('path', 'output/logs/airtest')
-        os.makedirs(airtest_log_dir, exist_ok=True)
-        try:
-            if set_logdir:
-                AirtestSettings.LOG_DIR = airtest_log_dir
-                platform_logger.info(f"Airtest 日志目录已设置为: {airtest_log_dir}")
-        except Exception as logdir_err:
-            platform_logger.warning(f"设置 Airtest 日志目录失败: {logdir_err}")
-
         if G:
-            G.DEVICE = device 
+            G.DEVICE = device
 
         if isinstance(device, Android):
             platform_logger.info("检测到 Android 平台，初始化 AndroidUiautomationPoco...")

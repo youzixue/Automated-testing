@@ -6,7 +6,6 @@ Web测试专用的pytest固件配置。
 import os
 import asyncio
 from pathlib import Path
-from dotenv import load_dotenv
 import pytest
 import pytest_asyncio
 import yaml
@@ -18,34 +17,35 @@ from src.utils.screenshot import save_screenshot, gen_screenshot_filename
 from src.utils.config.manager import get_config
 from src.utils.log.manager import get_logger
 
-logger = get_logger(__name__) 
+logger = get_logger(__name__)
 
-# --- .env 加载逻辑到 Web Conftest --- 
-project_root = Path(__file__).parents[2]
-env_path = project_root / '.env'
-if env_path.is_file():
-    # 使用 override=True 确保 .env 优先
-    load_dotenv(dotenv_path=env_path, override=True) 
-    logger.info(f"[Web Conftest] Loaded environment variables from: {env_path}")
-else:
-    logger.warning(f"[Web Conftest] .env file not found at: {env_path}")
-# -------------------------------------------
+# --- .env loading logic removed as it is handled globally in tests/conftest.py --- 
 
 
 @pytest_asyncio.fixture(scope="function")
 async def browser() -> Browser:
-    """浏览器实例 (Function Scope)，恢复旧版实现。"""
-    # 直接从环境变量获取 headless
+    """浏览器实例 (Function Scope)，根据配置启动浏览器。"""
+    # 直接从环境变量获取 headless 和 browser type
     headless_env = os.environ.get("HEADLESS", "true").lower()
     headless = headless_env in ("1", "true", "yes")
-    logger.info(f"[Web Conftest] Launching browser (Function Scope, Old Style): Hardcoding Chromium, headless={headless} (from env)")
+    browser_type = os.environ.get("BROWSER", "chromium").lower()
+    
+    logger.info(f"[Web Conftest] Launching browser (Function Scope): Type={browser_type}, headless={headless} (from env)")
     
     # 在 fixture 内部创建 playwright 上下文
     async with async_playwright() as p:
-        # 硬编码启动 chromium, 只传递 headless
-        browser_instance = await p.chromium.launch(headless=headless)
+        # 根据 browser_type 启动对应的浏览器
+        if browser_type == "firefox":
+            browser_instance = await p.firefox.launch(headless=headless)
+        elif browser_type == "webkit":
+            browser_instance = await p.webkit.launch(headless=headless)
+        else: # 默认或无效时回退到 chromium
+            if browser_type != "chromium":
+                 logger.warning(f"Unsupported browser type '{browser_type}' specified in env, defaulting to chromium.")
+            browser_instance = await p.chromium.launch(headless=headless)
+            
         yield browser_instance
-        logger.info("[Web Conftest] Closing browser (Function Scope, Old Style).")
+        logger.info(f"[Web Conftest] Closing browser (Function Scope, Type={browser_type}).")
         await browser_instance.close()
 
 
@@ -60,8 +60,8 @@ async def page(browser: Browser) -> Page:
 
 
 @pytest.fixture(scope="function")
-def test_users() -> Dict[str, Any]:
-    """加载并合成 Web 登录测试用户数据（接近旧版），修正数据文件路径。"""
+def test_users(config: Dict[str, Any]) -> Dict[str, Any]:
+    """加载并合成 Web 登录测试用户数据（接近旧版），修正数据文件路径，使用注入的配置。"""
     # 修正路径：使用 parents[2] 回退到项目根目录
     data_file = Path(__file__).parents[2] / "data" / "web" / "login" / "login_data.yaml"
     logger.debug(f"[Web Conftest] Loading user data from: {data_file}")
@@ -73,8 +73,7 @@ def test_users() -> Dict[str, Any]:
             login_data = yaml.safe_load(f)
         users = login_data.get("users", {}).copy()
         
-        # 在 fixture 内部调用 get_config 来填充 valid 用户
-        config = get_config()
+        # 使用传入的 config
         default_creds = config.get('credentials', {}).get('default', {})
         if 'valid' in users and default_creds.get('username') and default_creds.get('password'):
             users['valid']['username'] = default_creds['username']
@@ -87,10 +86,9 @@ def test_users() -> Dict[str, Any]:
 
 
 @pytest.fixture(scope="function")
-def login_url() -> str:
+def login_url(config: Dict[str, Any]) -> str:
     """获取 OMP 登录 URL，优先使用 omp_login_url，若未配置则回退到 base_url。"""
-    # 在 fixture 内部调用 get_config
-    config = get_config()
+    # 使用传入的 config
     web_config = config.get('web', {})
     
     # 1. 优先尝试获取 omp_login_url
@@ -130,36 +128,48 @@ async def captcha_config() -> Dict[str, Any]:
 
 @pytest.hookimpl(tryfirst=True, hookwrapper=True)
 def pytest_runtest_makereport(item, call):
-    """用例失败自动截图并集成Allure报告（同步hookwrapper，兼容pytest机制）"""
+    """用例失败自动截图并集成Allure报告（同步hookwrapper，兼容pytest机制） - 简化事件循环处理"""
     outcome = yield
     rep = outcome.get_result()
+
+    # 只在测试调用失败时截图
     if rep.when == "call" and rep.failed:
-        page = item.funcargs.get("page")
-        if page:
-            safe_test_name = item.name.replace("[", "-").replace("]", "")
-            file_name = gen_screenshot_filename(safe_test_name) 
-            
-            try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-            
-            file_path = None
-            try:
-                logger.info(f"[Web Conftest] Test failed, attempting Playwright screenshot: {file_name}")
-                file_path = loop.run_until_complete(save_screenshot(page, file_name, report=True))
-            except Exception as e:
-                 logger.error(f"[Web Conftest] Failed to save screenshot: {e}", exc_info=True)
-            
-            if file_path and allure and os.path.exists(file_path):
-                try:
-                    with open(file_path, "rb") as f:
-                        allure.attach(f.read(), name=file_name, attachment_type=allure.attachment_type.PNG)
-                    logger.info(f"[Web Conftest] Screenshot attached to Allure: {file_name}")
-                except Exception as attach_err:
-                    logger.error(f"[Web Conftest] Failed to attach screenshot to Allure: {attach_err}")
-            elif file_path:
-                 logger.warning(f"[Web Conftest] Screenshot file not found, cannot attach: {file_path}")
-        else:
+        page = item.funcargs.get("page") # 从 item.funcargs 获取 page fixture
+        if not page:
             logger.warning("[Web Conftest] 'page' fixture not found in failed test, skipping screenshot.")
+            return # 如果没有 page 对象，直接返回
+
+        # 生成截图文件名
+        safe_test_name = item.name.replace("[", "-").replace("]", "")
+        file_name = gen_screenshot_filename(safe_test_name)
+        file_path = None
+
+        try:
+            # 尝试获取当前事件循环并执行异步截图
+            loop = asyncio.get_event_loop()
+            logger.info(f"[Web Conftest] Test failed, attempting Playwright screenshot: {file_name}")
+            # 简化：总是尝试用 run_until_complete 执行异步截图
+            # 这依赖于 pytest-asyncio 的事件循环管理方式，可能在某些边缘情况不稳定
+            # 但比之前检查 is_running() 更简洁
+            file_path = loop.run_until_complete(save_screenshot(page, file_name, report=True))
+            logger.info(f"[Web Conftest] Screenshot saved to: {file_path}")
+
+        except RuntimeError as loop_err:
+            # 捕获 run_until_complete 可能在错误状态下（如嵌套调用、循环关闭）抛出的 RuntimeError
+            logger.error(f"[Web Conftest] Failed to run async screenshot due to event loop issue: {loop_err}", exc_info=True)
+        except Exception as e:
+            # 捕获截图或保存过程中的其他异常
+            logger.error(f"[Web Conftest] Failed to save screenshot: {e}", exc_info=True)
+
+        # 尝试将截图附加到 Allure 报告
+        if file_path and allure and os.path.exists(file_path):
+            try:
+                with open(file_path, "rb") as f:
+                    allure.attach(f.read(), name=file_name, attachment_type=allure.attachment_type.PNG)
+                logger.info(f"[Web Conftest] Screenshot attached to Allure: {file_name}")
+            except Exception as attach_err:
+                logger.error(f"[Web Conftest] Failed to attach screenshot to Allure: {attach_err}")
+        elif file_path:
+            # 如果文件路径存在但文件不存在（截图失败但未抛异常？）
+            logger.warning(f"[Web Conftest] Screenshot file path generated, but file not found, cannot attach: {file_path}")
+        # 如果 file_path 为 None (截图过程中异常)，则不尝试附加

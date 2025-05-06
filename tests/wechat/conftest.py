@@ -30,10 +30,11 @@ logger = get_logger(__name__)
 
 # --- WeChat Fixtures --- 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def wechat_device_poco_session(config: Dict[str, Any]) -> Tuple[Optional[Device], Optional[Any], int]:
-    """WeChat 设备/Poco 会话 Fixture (Session Scope)，使用全局辅助函数。"""
-    platform_logger = get_logger("wechat_conftest")
+    """WeChat 设备/Poco 会话 Fixture (Function Scope)，使用全局辅助函数。"""
+    platform_logger = get_logger("wechat_device_setup")
+    # 定义用于查找配置的键路径 (优先查找 WeChat 特定 URI)
     device_uri_keys = ['app.wechat.device_uri', 'app.device_uri']
     timeout_keys = ['airtest.timeouts.default']
     
@@ -45,7 +46,16 @@ def wechat_device_poco_session(config: Dict[str, Any]) -> Tuple[Optional[Device]
     yield device, poco, timeout
     
     # 清理日志
-    platform_logger.info("[WeChat] Cleaning up wechat_device_poco_session (Session Scope)...")
+    platform_logger.info("[WeChat] Cleaning up wechat_device_poco_session (Function Scope)...")
+    # 尝试断开设备连接，如果 device 对象存在且有 stop 方法
+    if device and hasattr(device, 'stop'):
+        try:
+            platform_logger.info(f"[WeChat] Attempting to stop/disconnect device: {device}")
+            device.stop()
+            platform_logger.info(f"[WeChat] Device stop/disconnect successful.")
+        except Exception as e:
+            platform_logger.warning(f"[WeChat] Error stopping/disconnecting device: {e}", exc_info=True)
+            
     time.sleep(0.5)
     platform_logger.info("[WeChat] Fixture cleanup finished.")
 

@@ -211,7 +211,7 @@ class OmpLoginPage:
             self.logger.warning(f"登录后未跳转到预期页面: {e}")
             # 检查登录错误提示
             try:
-                if await self.driver.has_element('.login-error', timeout=2):
+                if await self.driver.has_element('.login-error'): 
                     self.logger.info("检测到登录错误提示，登录失败")
                     return False
             except Exception as err:
