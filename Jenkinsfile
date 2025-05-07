@@ -1,18 +1,26 @@
 pipeline {
-    agent any // 或者指定 Docker Agent
+    agent any 
 
     parameters {
         choice(name: 'APP_ENV', choices: ['test', 'prod'], description: '选择测试环境')
         booleanParam(name: 'RUN_WEB_TESTS', defaultValue: true, description: '运行Web测试')
         booleanParam(name: 'RUN_API_TESTS', defaultValue: true, description: '运行API测试')
-        booleanParam(name: 'RUN_WECHAT_TESTS', defaultValue: false, description: '运行微信公众号&小程序测试')
-        booleanParam(name: 'RUN_APP_TESTS', defaultValue: false, description: '运行App测试')
+        booleanParam(name: 'RUN_APP_RELATED_TESTS', defaultValue: false, description: '运行App相关测试 (Mobile 和/或 WeChat)')
+
+        string(name: 'PRIMARY_APP_DEVICE_SERIAL', 
+               defaultValue: '20a2da8d', 
+               description: '主App测试设备ID (序列号)。如果只用一台设备，请只配置这个。', 
+               trim: true)
+        string(name: 'SECONDARY_APP_DEVICE_SERIAL', 
+               defaultValue: '', 
+               description: '可选的第二台App测试设备ID。如果留空或与主设备相同，则App/WeChat测试会在主设备上串行。否则Mobile在主设备，WeChat在次设备并行。', 
+               trim: true)
+
         choice(name: 'TEST_SUITE', choices: ['全部', '冒烟测试', '回归测试'], description: '选择测试套件')
         booleanParam(name: 'SEND_EMAIL', defaultValue: true, description: '是否发送邮件通知')
     }
 
     environment {
-        // --- 基础凭据 ID ---
         GIT_CREDENTIALS_ID = 'git-credentials'
         GIT_REPO_URL_CREDENTIAL_ID = 'git-repo-url'
         TEST_ENV_CREDENTIALS_ID = 'test-env-credentials'
@@ -22,7 +30,6 @@ pipeline {
         PROD_WEB_URL_CREDENTIAL_ID = 'prod-web-url'
         PROD_API_URL_CREDENTIAL_ID = 'prod-api-url'
 
-        // --- 支付相关凭据 ID ---
         TEST_PAYMENT_API_KEY_CREDENTIAL_ID = 'test-payment-api-key'
         TEST_PAYMENT_MCH_ID_CREDENTIAL_ID = 'test-payment-mch-id'
         TEST_PAYMENT_DEVICE_INFO_CREDENTIAL_ID = 'test-payment-device-info'
@@ -30,7 +37,6 @@ pipeline {
         PROD_PAYMENT_MCH_ID_CREDENTIAL_ID = 'prod-payment-mch-id'
         PROD_PAYMENT_DEVICE_INFO_CREDENTIAL_ID = 'prod-payment-device-info'
 
-        // --- 邮件相关凭据 ID ---
         EMAIL_PASSWORD_CREDENTIALS_ID = 'email-password-credential'
         EMAIL_SMTP_SERVER_CREDENTIAL_ID = 'email-smtp-server'
         EMAIL_SMTP_PORT_CREDENTIAL_ID = 'email-smtp-port'
@@ -38,16 +44,13 @@ pipeline {
         EMAIL_RECIPIENTS_CREDENTIAL_ID = 'email-recipients'
         EMAIL_USE_SSL_CREDENTIAL_ID = 'email-use-ssl'
 
-        // --- Docker Agent & 宿主机路径映射 (关键) ---
-        // !!! 重要：根据你的实际 Docker 卷配置修改 HOST_JENKINS_HOME_ON_HOST !!!
-        HOST_JENKINS_HOME_ON_HOST = '/var/lib/docker/volumes/jenkins_home/_data' // <-- !!! 示例路径，请务必检查并修改 !!!
-        HOST_WORKSPACE_PATH = "${HOST_JENKINS_HOME_ON_HOST}/workspace/${env.JOB_NAME}" // 宿主机上的 Jenkins 工作区路径
-        HOST_ALLURE_RESULTS_PATH = "${HOST_WORKSPACE_PATH}/output/allure-results" // 宿主机上的 Allure 结果路径
-        HOST_ALLURE_REPORT_PATH = "${HOST_WORKSPACE_PATH}/output/reports/temp-allure-report-for-summary" // 宿主机上的临时报告路径 (用于获取 summary.json)
+        HOST_JENKINS_HOME_ON_HOST = '/var/lib/docker/volumes/jenkins_home/_data' 
+        HOST_WORKSPACE_PATH = "${HOST_JENKINS_HOME_ON_HOST}/workspace/${env.JOB_NAME}" 
+        HOST_ALLURE_RESULTS_PATH = "${HOST_WORKSPACE_PATH}/output/allure-results" 
+        HOST_ALLURE_REPORT_PATH = "${HOST_WORKSPACE_PATH}/output/reports/temp-allure-report-for-summary"
 
-        // --- 测试相关 ---
         TEST_SUITE_VALUE = "${params.TEST_SUITE == '全部' ? 'all' : (params.TEST_SUITE == '冒烟测试' ? 'smoke' : 'regression')}"
-        DOCKER_IMAGE = "automated-testing:dev" // 测试执行 Docker 镜像
+        DOCKER_IMAGE = "automated-testing:dev" 
     }
 
     stages {
@@ -61,7 +64,7 @@ pipeline {
                     cleanWs()
                     checkout([
                         $class: 'GitSCM',
-                        branches: [[name: '*/main']], // 或开发分支
+                        branches: [[name: '*/main']], 
                         userRemoteConfigs: [[
                             url: INJECTED_GIT_REPO_URL,
                             credentialsId: env.GIT_CREDENTIALS_ID
@@ -75,7 +78,7 @@ pipeline {
         }
 
         stage('准备环境 (Agent)') {
-            steps {
+             steps {
                 echo "准备测试环境和目录 (在 Agent ${WORKSPACE} 上)..."
                 sh """
                 mkdir -p ${WORKSPACE}/output/allure-results
@@ -97,31 +100,27 @@ pipeline {
             }
         }
 
-        stage('并行执行测试') {
+        stage('执行测试') {
              steps {
                 script {
                     def accountCredentialsId = (params.APP_ENV == 'prod') ? env.PROD_ENV_CREDENTIALS_ID : env.TEST_ENV_CREDENTIALS_ID
                     def webUrlCredentialId = (params.APP_ENV == 'prod') ? env.PROD_WEB_URL_CREDENTIAL_ID : env.TEST_WEB_URL_CREDENTIAL_ID
                     def apiUrlCredentialId = (params.APP_ENV == 'prod') ? env.PROD_API_URL_CREDENTIAL_ID : env.TEST_API_URL_CREDENTIAL_ID
-                    echo "选择凭据 ID: 账户=${accountCredentialsId}, WebURL=${webUrlCredentialId}, APIURL=${apiUrlCredentialId}"
-
                     def paymentApiKeyCredentialId = (params.APP_ENV == 'prod') ? env.PROD_PAYMENT_API_KEY_CREDENTIAL_ID : env.TEST_PAYMENT_API_KEY_CREDENTIAL_ID
                     def paymentMchIdCredentialId = (params.APP_ENV == 'prod') ? env.PROD_PAYMENT_MCH_ID_CREDENTIAL_ID : env.TEST_PAYMENT_MCH_ID_CREDENTIAL_ID
                     def paymentDeviceInfoCredentialId = (params.APP_ENV == 'prod') ? env.PROD_PAYMENT_DEVICE_INFO_CREDENTIAL_ID : env.TEST_PAYMENT_DEVICE_INFO_CREDENTIAL_ID
-                    echo "选择支付凭据 ID: API Key=${paymentApiKeyCredentialId}, MCH ID=${paymentMchIdCredentialId}, Device Info=${paymentDeviceInfoCredentialId ?: '未使用'}"
 
                     try {
-                        // --- 外层 withCredentials 获取通用账户和 URL ---
                         withCredentials([
                             usernamePassword(credentialsId: accountCredentialsId, usernameVariable: 'ACCOUNT_USERNAME', passwordVariable: 'ACCOUNT_PASSWORD'),
                             string(credentialsId: webUrlCredentialId, variable: 'INJECTED_WEB_URL'),
                             string(credentialsId: apiUrlCredentialId, variable: 'INJECTED_API_URL')
                         ]) {
-                            def testsToRun = [:]
+                            def parallelWebAndApiTests = [:] // For Web and API tests
 
-                            // --- Web 测试 ---
+                            // --- Web 测试 (保持并行) ---
                             if (params.RUN_WEB_TESTS) {
-                                testsToRun['Web测试'] = {
+                                parallelWebAndApiTests['Web测试'] = {
                                     echo "执行Web测试 (并发: auto, 重试: 2)"
                                     sh """
                                     docker run --rm --name pytest-web-${BUILD_NUMBER} \
@@ -143,23 +142,20 @@ pipeline {
                                 }
                             } else { echo "跳过Web测试" }
 
-                            // --- API 测试 (包含支付凭据注入) ---
+                            // --- API 测试 (保持并行，包含支付凭据注入) ---
                             if (params.RUN_API_TESTS) {
-                                testsToRun['API测试'] = {
+                                parallelWebAndApiTests['API测试'] = {
                                     echo "执行API测试 (并发: auto, 重试: 2)"
-                                    // --- 内层 withCredentials 获取支付凭据 ---
-                                    withCredentials([
+                                    withCredentials([ // Inner withCredentials for payment
                                         string(credentialsId: paymentApiKeyCredentialId, variable: 'INJECTED_PAYMENT_API_KEY'),
                                         string(credentialsId: paymentMchIdCredentialId, variable: 'INJECTED_PAYMENT_MCH_ID'),
                                         string(credentialsId: paymentDeviceInfoCredentialId, variable: 'INJECTED_PAYMENT_DEVICE_INFO')
                                     ]) {
-                                        // 构造支付环境变量注入字符串 (需与 config/env/*.yaml 匹配)
                                         def paymentEnvVars = "-e ${params.APP_ENV == 'prod' ? 'PROD_PAYMENT_API_KEY' : 'PAYMENT_API_KEY'}='${INJECTED_PAYMENT_API_KEY}' " +
                                                              "-e ${params.APP_ENV == 'prod' ? 'PROD_MCH_ID' : 'PAYMENT_MCH_ID'}='${INJECTED_PAYMENT_MCH_ID}' "
-                                        if (paymentDeviceInfoCredentialId) {
+                                        if (paymentDeviceInfoCredentialId) { // Check if credentialId is non-empty
                                            paymentEnvVars += "-e ${params.APP_ENV == 'prod' ? 'PROD_DEVICE_INFO' : 'PAYMENT_DEVICE_INFO'}='${INJECTED_PAYMENT_DEVICE_INFO}' "
                                         }
-
                                         sh """
                                         docker run --rm --name pytest-api-${BUILD_NUMBER} \
                                           -e APP_ENV=${params.APP_ENV} \
@@ -182,71 +178,124 @@ pipeline {
                                 }
                             } else { echo "跳过API测试" }
 
-                            // --- 微信测试 ---
-                            if (params.RUN_WECHAT_TESTS) {
-                               testsToRun['微信公众号测试'] = {
-                                    echo "执行微信公众号测试 (并发: auto, 重试: 2)"
-                                    sh """
-                                    docker run --rm --name pytest-wechat-${BUILD_NUMBER} \
-                                      -e APP_ENV=${params.APP_ENV} \
-                                      -e TEST_PLATFORM="wechat" \
-                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \
-                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \
-                                      -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \
-                                      -e TZ="Asia/Shanghai" \
-                                      -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \
-                                      -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \
-                                      --workdir /workspace \
-                                      -v /etc/localtime:/etc/localtime:ro \
-                                      --network host \
-                                      ${env.DOCKER_IMAGE} \
-                                      pytest tests/wechat -n auto --reruns 2 -v --alluredir=/results_out
-                                    """
-                               }
-                            } else { echo "跳过微信公众号测试" }
-
-                            // --- App 测试 ---
-                            if (params.RUN_APP_TESTS) {
-                                testsToRun['App测试'] = {
-                                    echo "执行App测试 (并发: auto, 重试: 2)"
-                                    sh """
-                                    docker run --rm --name pytest-app-${BUILD_NUMBER} \
-                                      -e APP_ENV=${params.APP_ENV} \
-                                      -e TEST_PLATFORM="app" \
-                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \
-                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \
-                                      -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \
-                                      -e TZ="Asia/Shanghai" \
-                                      -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \
-                                      -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \
-                                      --workdir /workspace \
-                                      -v /etc/localtime:/etc/localtime:ro \
-                                      --network host \
-                                      ${env.DOCKER_IMAGE} \
-                                      pytest tests/app -n auto --reruns 2 -v --alluredir=/results_out
-                                    """
-                                }
-                            } else { echo "跳过App测试" }
-
-                            // --- 执行并行测试 ---
-                            if (!testsToRun.isEmpty()) {
-                                 echo "开始并行执行选定的测试 (结果写入宿主机 ${env.HOST_ALLURE_RESULTS_PATH})..."
-                                 parallel testsToRun
+                            // --- 执行并行的Web和API测试 ---
+                            if (!parallelWebAndApiTests.isEmpty()) {
+                                 echo "开始并行执行Web和API测试..."
+                                 parallel parallelWebAndApiTests
                             } else {
-                                 echo "没有选择任何测试平台，跳过测试执行。"
-                                 sh "mkdir -p ${WORKSPACE}/output/allure-results" // 确保目录存在
+                                 echo "Web和API测试均未选择。"
                             }
-                        }
+
+                            // --- App (Mobile 和 WeChat) 测试逻辑 ---
+                            if (params.RUN_APP_RELATED_TESTS) {
+                                def primaryDeviceSerial = params.PRIMARY_APP_DEVICE_SERIAL.trim()
+                                def secondaryDeviceSerial = params.SECONDARY_APP_DEVICE_SERIAL.trim()
+                                def primaryDeviceUri = "Android:///${primaryDeviceSerial}"
+                                def secondaryDeviceUri = secondaryDeviceSerial ? "Android:///${secondaryDeviceSerial}" : ""
+
+                                boolean useTwoDevices = false
+                                if (primaryDeviceSerial && !primaryDeviceSerial.isEmpty() && 
+                                    secondaryDeviceSerial && !secondaryDeviceSerial.isEmpty() && 
+                                    primaryDeviceSerial != secondaryDeviceSerial) {
+                                    useTwoDevices = true
+                                    echo "检测到两台不同设备，Mobile测试将在主设备(${primaryDeviceSerial})运行，WeChat测试将在次设备(${secondaryDeviceSerial})运行，两者并行。"
+                                } else if (primaryDeviceSerial && !primaryDeviceSerial.isEmpty()) {
+                                    echo "只使用一台主设备 (${primaryDeviceSerial})。Mobile和WeChat测试将在此设备上串行执行。"
+                                    // 如果 secondaryDeviceSerial 为空或与 primaryDeviceSerial 相同，则确保只用主设备进行串行
+                                    secondaryDeviceSerial = primaryDeviceSerial 
+                                    secondaryDeviceUri = primaryDeviceUri
+                                } else {
+                                    echo "[警告]：未指定主App测试设备 (PRIMARY_APP_DEVICE_SERIAL 为空)。跳过App相关测试。"
+                                    // Optionally, fail the build: currentBuild.result = 'FAILURE'; error("主App测试设备未指定")
+                                    // For now, just skipping
+                                }
+                                
+                                if (primaryDeviceSerial && !primaryDeviceSerial.isEmpty()) { // Proceed only if a primary device is set
+                                    // --- 设备检查 (分别检查将要用到的设备) ---
+                                    sh """
+                                    echo "检查设备 ${primaryDeviceSerial} 在宿主机上的状态..."
+                                    adb devices | grep "${primaryDeviceSerial}" || (echo "错误: 主设备 ${primaryDeviceSerial} 未连接或未授权!" && exit 1)
+                                    echo "主设备 ${primaryDeviceSerial} 存在，尝试在容器内检查..."
+                                    docker run --rm --name adb-check-primary-${BUILD_NUMBER} \
+                                      --network host -e ANDROID_SERIAL="${primaryDeviceSerial}" \
+                                      ${env.DOCKER_IMAGE} adb devices | grep "${primaryDeviceSerial}" || (echo "错误: 容器内无法访问主设备 ${primaryDeviceSerial}!" && exit 1)
+                                    """
+                                    if (useTwoDevices) { 
+                                         sh """
+                                        echo "检查次设备 ${secondaryDeviceSerial} 在宿主机上的状态..."
+                                        adb devices | grep "${secondaryDeviceSerial}" || (echo "错误: 次设备 ${secondaryDeviceSerial} 未连接或未授权!" && exit 1)
+                                        echo "次设备 ${secondaryDeviceSerial} 存在，尝试在容器内检查..."
+                                        docker run --rm --name adb-check-secondary-${BUILD_NUMBER} \
+                                          --network host -e ANDROID_SERIAL="${secondaryDeviceSerial}" \
+                                          ${env.DOCKER_IMAGE} adb devices | grep "${secondaryDeviceSerial}" || (echo "错误: 容器内无法访问次设备 ${secondaryDeviceSerial}!" && exit 1)
+                                        """
+                                    }
+
+                                    // --- 定义 Mobile 和 WeChat 的测试执行闭包 ---
+                                    def runMobileTests = { deviceSerialForMobile, deviceUriForMobile ->
+                                        echo "在设备 ${deviceSerialForMobile} 上执行 tests/mobile"
+                                        sh """
+                                        docker run --rm --name pytest-mobile-${BUILD_NUMBER}-${deviceSerialForMobile.replaceAll('[:.]', '-')} \
+                                          -e APP_ENV=${params.APP_ENV} -e TEST_PLATFORM="mobile" \
+                                          -e ANDROID_SERIAL="${deviceSerialForMobile}" -e MOBILE_DEVICE_URI="${deviceUriForMobile}" \
+                                          -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \
+                                          -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \
+                                          -e TEST_SUITE="${env.TEST_SUITE_VALUE}" -e TZ="Asia/Shanghai" \
+                                          -e JIYU_APP_PACKAGE_NAME="\$(grep '^JIYU_APP_PACKAGE_NAME=' .env | cut -d '=' -f2- || echo 'com.zsck.yq')" \
+                                          -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \
+                                          --workdir /workspace -v /etc/localtime:/etc/localtime:ro --network host \
+                                          ${env.DOCKER_IMAGE} \
+                                          pytest tests/mobile -n auto --reruns 2 -v --alluredir=/results_out
+                                        """
+                                    }
+                                    def runWechatTests = { deviceSerialForWechat, deviceUriForWechat ->
+                                        echo "在设备 ${deviceSerialForWechat} 上执行 tests/wechat"
+                                        sh """
+                                        docker run --rm --name pytest-wechat-${BUILD_NUMBER}-${deviceSerialForWechat.replaceAll('[:.]', '-')} \
+                                          -e APP_ENV=${params.APP_ENV} -e TEST_PLATFORM="wechat" \
+                                          -e ANDROID_SERIAL="${deviceSerialForWechat}" -e MOBILE_DEVICE_URI="${deviceUriForWechat}" \
+                                          -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \
+                                          -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \
+                                          -e TEST_SUITE="${env.TEST_SUITE_VALUE}" -e TZ="Asia/Shanghai" \
+                                          -e WECHAT_PACKAGE_NAME="\$(grep '^WECHAT_PACKAGE_NAME=' .env | cut -d '=' -f2- || echo 'com.tencent.mm')" \
+                                          -e WECHAT_MINI_PROGRAM_TARGET="\$(grep '^WECHAT_MINI_PROGRAM_TARGET=' .env | cut -d '=' -f2- || echo 'CMpark智慧停车')" \
+                                          -e EXPECTED_PAYMENT_ACTIVITY_SUFFIX="\$(grep '^EXPECTED_PAYMENT_ACTIVITY_SUFFIX=' .env | cut -d '=' -f2- || echo '.framework.app.UIPageFragmentActivity')" \
+                                          -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \
+                                          --workdir /workspace -v /etc/localtime:/etc/localtime:ro --network host \
+                                          ${env.DOCKER_IMAGE} \
+                                          pytest tests/wechat -n auto --reruns 2 -v --alluredir=/results_out
+                                        """
+                                    }
+
+                                    // --- 根据设备数量决定执行方式 ---
+                                    if (useTwoDevices) {
+                                        def appTestsInParallel = [:]
+                                        appTestsInParallel['Mobile测试 (主设备)'] = { runMobileTests(primaryDeviceSerial, primaryDeviceUri) }
+                                        appTestsInParallel['WeChat测试 (次设备)'] = { runWechatTests(secondaryDeviceSerial, secondaryDeviceUri) }
+                                        echo "使用两台设备并行执行 Mobile 和 WeChat 测试..."
+                                        parallel appTestsInParallel
+                                    } else { 
+                                        echo "使用一台设备 (${primaryDeviceSerial}) 串行执行 Mobile 和 WeChat 测试..."
+                                        runMobileTests(primaryDeviceSerial, primaryDeviceUri)
+                                        runWechatTests(primaryDeviceSerial, primaryDeviceUri) 
+                                    }
+                                } // end if (primaryDeviceSerial && !primaryDeviceSerial.isEmpty())
+                            } else { 
+                                echo "跳过App相关测试 (Mobile 和 WeChat)"
+                                if (parallelWebAndApiTests.isEmpty()) { 
+                                     sh "mkdir -p ${WORKSPACE}/output/allure-results" 
+                                }
+                            }
+                        } // end of withCredentials for account & urls
                     } catch (err) {
-                        echo "测试阶段出现错误: ${err}. 将继续执行报告生成和通知。"
+                        echo "测试阶段出现错误: ${err}."
                         currentBuild.result = 'UNSTABLE'
                     }
-                }
-            }
-        }
-    }
+                } // end of script
+            } // end of steps
+        } // end of stage '执行测试'
+    } // end of stages
 
-    // --- Post Build Actions ---
     post {
         always {
             echo "Pipeline 完成. 开始执行报告生成和通知步骤..."
@@ -256,7 +305,6 @@ pipeline {
                 def tempReportGenSuccess = false
 
                 try {
-                    // --- 获取邮件凭据 ---
                     withCredentials([
                         string(credentialsId: env.EMAIL_PASSWORD_CREDENTIALS_ID, variable: 'INJECTED_EMAIL_PASSWORD'),
                         string(credentialsId: env.EMAIL_SMTP_SERVER_CREDENTIAL_ID, variable: 'INJECTED_EMAIL_SMTP_SERVER'),
@@ -266,7 +314,6 @@ pipeline {
                         string(credentialsId: env.EMAIL_USE_SSL_CREDENTIAL_ID, variable: 'INJECTED_EMAIL_USE_SSL')
                     ]) {
 
-                        // --- 1. 写入 Allure 元数据 ---
                         echo "写入 Allure 元数据文件到 ${env.HOST_ALLURE_RESULTS_PATH} (在宿主机上)..."
                         def jenkinsAllureReportUrl = "${env.BUILD_URL}allure/"
                         sh """
@@ -285,7 +332,6 @@ pipeline {
                         """
                         echo "Allure 元数据写入完成。"
 
-                        // --- 2. 修正 allure-results 目录权限 ---
                         echo "修正宿主机目录 ${env.HOST_ALLURE_RESULTS_PATH} 的权限 (使用 Docker)..."
                         sh """
                         docker run --rm --name chown-chmod-results-${BUILD_NUMBER} \
@@ -296,14 +342,13 @@ pipeline {
                         """
                         echo "权限修正尝试完成。"
 
-                        // --- 3. 使用 Allure Jenkins 插件生成和归档报告 ---
                         echo "使用 Allure Jenkins 插件处理 ${WORKSPACE}/output/allure-results 中的结果..."
                         try {
                             allure([
                                 properties: [],
                                 reportBuildPolicy: 'ALWAYS',
                                 results: [
-                                    [path: 'output/allure-results'] // 相对于 WORKSPACE 的路径
+                                    [path: 'output/allure-results'] 
                                 ]
                             ])
                             allureStepSuccess = true
@@ -315,7 +360,6 @@ pipeline {
                             allureReportUrl = "(Allure 插件报告生成失败)"
                         }
 
-                        // --- 4. 手动生成报告到临时目录 (获取 summary.json) ---
                         echo "生成临时报告到 ${env.HOST_ALLURE_REPORT_PATH} 以获取 summary.json..."
                         echo "确保宿主机目录 ${env.HOST_ALLURE_REPORT_PATH}/widgets 存在 (使用 Docker)..."
                         sh """
@@ -333,7 +377,6 @@ pipeline {
                           ${env.DOCKER_IMAGE} \
                           sh -c 'allure generate /results_in --clean -o /report_out && echo "Temporary report generated to /report_out" || echo "Failed to generate temporary report!"'
                         """
-                        // 检查 summary.json 是否成功生成
                         def summaryCheckExitCode = sh script: "docker run --rm -v ${env.HOST_ALLURE_REPORT_PATH}:/report_check:ro ${env.DOCKER_IMAGE} test -f /report_check/widgets/summary.json", returnStatus: true
                         if (summaryCheckExitCode == 0) {
                             tempReportGenSuccess = true
@@ -343,7 +386,6 @@ pipeline {
                             echo "[警告] 未能在 ${env.HOST_ALLURE_REPORT_PATH}/widgets/ 中找到 summary.json。邮件可能缺少统计信息。"
                         }
 
-                        // --- 5. 发送邮件通知 ---
                         if (params.SEND_EMAIL) {
                             echo "发送邮件通知 (尝试读取 ${env.HOST_ALLURE_REPORT_PATH}/widgets/summary.json)..."
                             sh """
@@ -352,7 +394,7 @@ pipeline {
                               -e CI=true \
                               -e APP_ENV=${params.APP_ENV} \
                               -e EMAIL_ENABLED=${params.SEND_EMAIL} \
-                              -e EMAIL_PASSWORD='${INJECTED_EMAIL_PASSWORD}' \
+                              -e EMAIL_PASSWORD='${INjected_EMAIL_PASSWORD}' \
                               -e EMAIL_SMTP_SERVER="${INJECTED_EMAIL_SMTP_SERVER}" \
                               -e EMAIL_SMTP_PORT=${INJECTED_EMAIL_SMTP_PORT} \
                               -e EMAIL_SENDER="${INJECTED_EMAIL_SENDER}" \
@@ -376,7 +418,7 @@ pipeline {
                             echo "邮件通知已禁用 (SEND_EMAIL=false)。"
                         }
 
-                    }
+                    } 
                 } catch (err) {
                     echo "Post-build 阶段出现严重错误: ${err}"
                     if (!allureStepSuccess && !tempReportGenSuccess) {
@@ -387,12 +429,20 @@ pipeline {
                         }
                     }
                 } finally {
-                    // --- 6. 设置构建描述 ---
                     def testTypes = []
                     if (params.RUN_WEB_TESTS) testTypes.add("Web")
                     if (params.RUN_API_TESTS) testTypes.add("API")
-                    if (params.RUN_WECHAT_TESTS) testTypes.add("微信")
-                    if (params.RUN_APP_TESTS) testTypes.add("App")
+                    if (params.RUN_APP_RELATED_TESTS) {
+                        def primaryDesc = params.PRIMARY_APP_DEVICE_SERIAL.trim()
+                        def secondaryDesc = params.SECONDARY_APP_DEVICE_SERIAL.trim()
+                        if (secondaryDesc && secondaryDesc != primaryDesc) {
+                            testTypes.add("App (Mobile on ${primaryDesc}, WeChat on ${secondaryDesc})")
+                        } else if (primaryDesc) {
+                            testTypes.add("App (Mobile & WeChat on ${primaryDesc})")
+                        } else {
+                            testTypes.add("App (未指定设备)")
+                        }
+                    }
                     if (testTypes.isEmpty()) testTypes.add("未选择")
 
                     def finalStatus = currentBuild.result ?: 'SUCCESS'
@@ -400,7 +450,6 @@ pipeline {
 
                     currentBuild.description = "${params.APP_ENV.toUpperCase()} 环境 [${testTypes.join(', ')}] - ${finalStatus} - ${reportLink}"
 
-                    // --- 7. 清理工作空间和临时报告目录 ---
                     echo "清理 Agent 工作空间 ${WORKSPACE} 和临时报告目录 ${env.HOST_ALLURE_REPORT_PATH} (在宿主机上)..."
                     sh """
                     docker run --rm --name cleanup-temp-report-${BUILD_NUMBER} \
