@@ -62,7 +62,7 @@ ENV POETRY_REQUESTS_TIMEOUT=300
 # 而代码经常变动，将 poetry install 放在 Dockerfile 靠后的位置，
 # 或者在 Jenkinsfile 中执行，可以避免每次代码变动都重新安装所有依赖。
 # 如果您希望在镜像中直接包含所有依赖，可以取消下面一行的注释：
-# RUN poetry install --no-root
+RUN poetry install --no-root
 
 # playwright浏览器下载加速（可选）
 ENV PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright
