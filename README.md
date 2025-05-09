@@ -75,12 +75,28 @@
 6.  **移动测试环境 (Airtest/PocoUI)**:
     - **Android**: 确保已安装 Android SDK 并配置好 `adb`。设备开启 USB 调试模式并授权。
     - **iOS**: 需要 macOS 环境、Xcode 和 WebDriverAgent 配置，详见 `docs/微信&APP自动化测试开发指南.md`。
-    - **macOS 用户特别说明**: 由于 airtest 和 pocoui 包在 macOS 上可能尝试安装 pywin32 导致失败，项目已将这些依赖放入单独的分组。安装依赖时请使用:
+    - **macOS 和 Linux 用户特别说明**:
+      当使用 Poetry 管理依赖时（即通过 `pyproject.toml`），直接安装 `airtest` 和 `pocoui` 可能会因为它们间接依赖 Windows 特有的 `pywin32` 包而在 macOS 和 Linux 系统上引发错误。
+      为避免此问题，建议在 Poetry 完成其他依赖的安装后，针对这两个库采用以下方式单独安装：
       ```bash
-      # 先安装除 airtest-group 外的所有依赖
-      poetry install --without airtest-group
-      # 然后根据需要手动安装 airtest 和 pocoui
-      pip install airtest pocoui
+      # 1. 首先，确保 Poetry 已安装项目的大部分依赖。
+      #    (重要: airtest 和 pocoui 不应由 Poetry 直接管理以避免此问题。
+      #     如果它们之前曾被定义在 pyproject.toml 的主依赖区域 [tool.poetry.dependencies] 并导致问题，
+      #     请确保它们已从该区域移除，或使用 poetry remove 将其移除。)
+      poetry install 
+
+      # 2. 然后，在 Poetry 管理的虚拟环境中使用 pip 单独安装 airtest 和 pocoui。
+      #    如果直接运行 "poetry run pip install airtest pocoui" 时遇到网络或SSL错误 (无法连接 pypi.org)，
+      #    请尝试指定国内镜像源进行安装，例如华为云：
+      poetry run pip install --index-url https://repo.huaweicloud.com/repository/pypi/simple/ airtest pocoui
+      #    或者尝试阿里云镜像：
+      #    poetry run pip install --index-url https://mirrors.aliyun.com/pypi/simple/ airtest pocoui
+      ```
+      这种方式会将 `airtest` 和 `pocoui` 安装到 Poetry 的虚拟环境中，但它们不会被 `pyproject.toml` 或 `poetry.lock` 以标准方式追踪。请确保团队成员知晓此额外步骤。
+      如果这两个包曾被定义在 `pyproject.toml` 的一个特定可选组中（例如 `airtest-group`）并希望通过这种方式排除 Poetry 的管理，可以先不安装该组：
+      ```bash
+      # poetry install --without airtest-group # 示例：假设 airtest 和 pocoui 在 airtest-group 组内
+      # poetry run pip install --index-url https://repo.huaweicloud.com/repository/pypi/simple/ airtest pocoui
       ```
 
 详细的环境搭建步骤请参见 `docs/环境依赖安装&CICD集成.md`。
