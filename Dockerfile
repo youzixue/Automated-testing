@@ -62,7 +62,17 @@ ENV POETRY_REQUESTS_TIMEOUT=300
 # 而代码经常变动，将 poetry install 放在 Dockerfile 靠后的位置，
 # 或者在 Jenkinsfile 中执行，可以避免每次代码变动都重新安装所有依赖。
 # 如果您希望在镜像中直接包含所有依赖，可以取消下面一行的注释：
-RUN poetry install --no-root
+RUN poetry install --no-root \
+    # 如果 airtest 和 pocoui 被定义在一个可选组（例如 'airtest-group'）中，
+    # 并且你不想让 poetry 尝试安装它们，可以使用 --without airtest-group
+    # 例如: poetry install --no-root --without airtest-group
+
+# 单独使用 pip 安装 airtest 和 pocoui，以避免 pywin32 依赖问题
+# 注意：这假设 poetry install 没有尝试安装它们，或者已经通过 --without 排除了它们
+# 使用多源兜底确保安装成功
+RUN pip install airtest pocoui -i https://mirrors.aliyun.com/pypi/simple/ \
+    || pip install airtest pocoui -i https://pypi.tuna.tsinghua.edu.cn/simple \
+    || pip install airtest pocoui # 最后尝试默认源
 
 # playwright浏览器下载加速（可选）
 ENV PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright

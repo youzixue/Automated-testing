@@ -119,6 +119,45 @@
 
 ---
 
+### **针对 macOS 和 Linux 用户的特别说明：`airtest` 和 `pocoui` 安装**
+
+在 macOS 和 Linux 系统上，当通过 Poetry（即 `poetry install` 命令，它会解析 `pyproject.toml`）尝试安装 `airtest` 和 `pocoui` 时，你可能会遇到与 `pywin32`（一个 Windows 特有的依赖）相关的错误。这是因为 Poetry 在解析复杂的依赖树时，可能未能完全忽略这个间接的、平台不兼容的依赖。
+
+**推荐的解决方案：**
+
+1.  **确保 `airtest` 和 `pocoui` 不在 `pyproject.toml` 的主依赖区段 `[tool.poetry.dependencies]` 中。**
+    *   如果它们之前被错误地添加到了主依赖，请先使用 `poetry remove airtest` 和 `poetry remove pocoui` 将其移除。
+    *   理想情况下，这两个库不应由 Poetry 直接管理以避免此问题。
+
+2.  **首先，使用 Poetry 安装项目中的其他所有依赖：**
+    ```bash
+    poetry install
+    ```
+    此命令将根据 `pyproject.toml` 和 `poetry.lock` 安装除了 `airtest` 和 `pocoui`（假设它们已从主依赖移除）之外的所有库。
+
+3.  **然后，在 Poetry 创建的虚拟环境中使用 `pip` 单独安装 `airtest` 和 `pocoui`：**
+    ```bash
+    # 尝试直接安装
+    poetry run pip install airtest pocoui
+    # 如果上述命令因网络或SSL问题（例如无法连接 pypi.org）失败，
+    # 请尝试使用国内的镜像源进行安装，例如华为云：
+    # poetry run pip install --index-url https://repo.huaweicloud.com/repository/pypi/simple/ airtest pocoui
+    # 或者尝试阿里云镜像：
+    # poetry run pip install --index-url https://mirrors.aliyun.com/pypi/simple/ airtest pocoui
+    ```
+    你也可以在指定镜像源的同时指定版本号，例如 `poetry run pip install --index-url <镜像URL> airtest==1.3.5 pocoui==1.0.85`。
+
+**重要提示：**
+
+*   通过这种方式安装的 `airtest` 和 `pocoui` 将存在于 Poetry 管理的虚拟环境中，使得你可以在项目中使用它们。
+*   然而，这两个包**不会被 `pyproject.toml` 或 `poetry.lock` 文件以标准方式追踪**。
+*   这意味着，如果团队其他成员或 CI/CD 环境需要搭建此项目，他们也需要被告知并执行上述第 3 步的 `poetry run pip install ...` 命令。请务必在团队内部沟通清楚此额外步骤，或在项目的 `README.md` 及相关 CI 配置文件中做好记录。
+*   对于 Docker 环境，请确保 `Dockerfile` 中也采用了类似的处理方式（即在 `poetry install` 之后单独用 `pip install` 安装这两个库），具体可参考项目根目录的 `Dockerfile`。
+
+这种方法是在遇到平台特定依赖解析问题时的一种有效应对策略，确保移动端自动化测试所需的核心库能够被成功安装。
+
+---
+
 ## 5. 配置环境变量与测试数据分离
 - 本地开发：
   ```bash
@@ -892,9 +931,9 @@ pipeline {
 ## 15. 常见问题FAQ
 
 *   **Q: 没有Dockerfile怎么办？**
-    *   A: 请在项目根目录新建Dockerfile，内容见本手册第11节。确保 `allure-2.27.0.zip` 文件存在。
+    *   A: 请在项目根目录新建Dockerfile，内容见本手册第11节。
 *   **Q: 如何保证本地和CI环境一致？**
-    *   A: 所有成员和CI都用同一个Dockerfile构建或拉取同一个镜像标签。
+    *   A: 所有成员和CI都用同一个Dockerfile和镜像，避免本地依赖污染。
 *   **Q: 环境变量优先级如何？**
     *   A: `docker run -e` > 容器内.env文件。CI 中优先使用 `-e` 注入 Jenkins 凭据。
 *   **Q: Jenkins Allure 报告无法访问或内容不正确？**
