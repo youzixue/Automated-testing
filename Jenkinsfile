@@ -48,8 +48,9 @@ pipeline {
         // ***** MODIFIED/ADDED FOR ADB *****
         // !! 重要: 请将下面的路径替换为你宿主机上实际存放 ADB 密钥的 .android 目录的绝对路径 !!
         //    例如: '/home/your_minipc_username/my_device_adb_keys/.android'
+        //    或者 如果你的密钥在宿主机的标准用户目录下: '/home/宿主机用户名/.android'
         //    确保这个目录及其中的 adbkey 和 adbkey.pub 文件存在且已通过设备授权。
-        HOST_ADB_KEYS_ANDROID_DIR = '/home/YOUR_MINIPC_USER/my_device_adb_keys/.android' // <--- ****** REPLACE THIS ******
+        HOST_ADB_KEYS_ANDROID_DIR = '/home/minipc/my_device_adb_keys/.android' // <--- ****** 必须替换此路径 ******
 
         HOST_JENKINS_HOME_ON_HOST = '/var/lib/docker/volumes/jenkins_home/_data' 
         HOST_WORKSPACE_PATH = "${HOST_JENKINS_HOME_ON_HOST}/workspace/${env.JOB_NAME}" 
@@ -211,7 +212,7 @@ pipeline {
                                 }
                                 
                                 if (primaryDeviceSerial && !primaryDeviceSerial.isEmpty()) {
-                                    // ***** MODIFIED FOR DETAILED LOGGING *****
+                                    // ***** DEVICE CHECK WITH DETAILED LOGGING *****
                                     sh """
                                     echo "在容器内检查主设备 ${primaryDeviceSerial} ..."
                                     docker run --rm --name adb-check-primary-${BUILD_NUMBER} \
@@ -253,7 +254,6 @@ pipeline {
 
                                     def runMobileTests = { deviceSerialForMobile, deviceUriForMobile ->
                                         echo "在设备 ${deviceSerialForMobile} 上执行 tests/mobile"
-                                        // ***** MODIFIED/ADDED FOR ADB *****
                                         sh """
                                         docker run --rm --name pytest-mobile-${BUILD_NUMBER}-${deviceSerialForMobile.replaceAll('[:.]', '-')} \
                                           -e APP_ENV=${params.APP_ENV} -e TEST_PLATFORM="mobile" \
@@ -275,7 +275,6 @@ pipeline {
                                     }
                                     def runWechatTests = { deviceSerialForWechat, deviceUriForWechat ->
                                         echo "在设备 ${deviceSerialForWechat} 上执行 tests/wechat"
-                                        // ***** MODIFIED/ADDED FOR ADB *****
                                         sh """
                                         docker run --rm --name pytest-wechat-${BUILD_NUMBER}-${deviceSerialForWechat.replaceAll('[:.]', '-')} \
                                           -e APP_ENV=${params.APP_ENV} -e TEST_PLATFORM="wechat" \
