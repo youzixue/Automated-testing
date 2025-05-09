@@ -82,12 +82,12 @@ RUN echo "Starting Poetry core dependencies installation (pytest, pyyaml, playwr
     && echo "Poetry core dependencies installation step completed."
 
 # 2. 验证核心依赖是否已通过 Poetry 成功安装
-RUN echo "Verifying core dependencies installed by Poetry..." && \
-    poetry run pytest --version && \
+RUN echo "Verifying core dependencies installed by Poetry (attempting direct calls)..." && \
+    pytest --version && \
     python -c "import yaml; print('PyYAML imported successfully by Poetry.')" && \
-    poetry run playwright --version && \
-    echo "Core dependencies (pytest, PyYAML, Playwright lib) verified successfully." \
-    || (echo "CRITICAL ERROR: One or more core dependencies (pytest, PyYAML, Playwright lib) NOT found after poetry install! Check poetry install logs." && exit 1)
+    playwright --version && \
+    echo "Core dependencies (pytest, PyYAML, Playwright lib) verified successfully via direct calls." \
+    || (echo "CRITICAL ERROR: One or more core dependencies (pytest, PyYAML, Playwright lib) NOT found or not executable directly after poetry install! Check poetry install logs and PATH." && exit 1)
 
 # 3. 单独使用 pip 安装 airtest 和 pocoui (使用国内镜像源)
 RUN echo "Attempting to install airtest and pocoui via pip..." && \
