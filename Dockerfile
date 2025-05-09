@@ -48,6 +48,9 @@ RUN pip install --upgrade pip \
     && pip install "poetry>=1.5.0" \
     && echo "Poetry installed."
 
+# 确保 poetry (以及其他 pip 安装的脚本) 的路径在 PATH 中
+ENV PATH="/root/.local/bin:/usr/local/bin:${PATH}"
+
 # 配置poetry多源兜底（阿里云+清华）
 RUN poetry config repositories.aliyun https://mirrors.aliyun.com/pypi/simple/ \
     && poetry config repositories.tuna https://pypi.tuna.tsinghua.edu.cn/simple
@@ -92,7 +95,7 @@ RUN echo "Installing Playwright browsers..." && \
     && echo "Playwright browsers installation step completed."
 
 # 复制本地下载的Allure CLI安装包到镜像
-# !!! 请确保 allure-2.27.0.zip 与 Dockerfile 在同一目录 !!!
+# 请确保 allure-2.27.0.zip 与 Dockerfile 在同一目录
 COPY allure-2.27.0.zip /tmp/
 
 RUN unzip /tmp/allure-2.27.0.zip -d /opt/ \
