@@ -32,7 +32,8 @@ COPY platform-tools-latest-linux.zip /tmp/platform-tools.zip
 # 解压 platform-tools 并设置环境变量
 RUN unzip /tmp/platform-tools.zip -d /opt && \
     rm /tmp/platform-tools.zip && \
-    mv /opt/platform-tools /opt/android-sdk-platform-tools # 重命名为更清晰的路径
+    mv /opt/platform-tools /opt/android-sdk-platform-tools && \
+    echo "Android SDK Platform Tools installed."
 ENV PATH="/opt/android-sdk-platform-tools:$PATH"
 
 # 配置pip多源兜底（阿里云+清华）
@@ -44,7 +45,8 @@ RUN mkdir -p /root/.pip && \
 
 # 升级pip并安装poetry
 RUN pip install --upgrade pip \
-    && pip install "poetry>=1.5.0"
+    && pip install "poetry>=1.5.0" \
+    && echo "Poetry installed."
 
 # 配置poetry多源兜底（阿里云+清华）
 RUN poetry config repositories.aliyun https://mirrors.aliyun.com/pypi/simple/ \
@@ -56,34 +58,38 @@ ENV POETRY_VIRTUALENVS_CREATE=false
 # 增加 Poetry 的网络超时时间（单位：秒）
 ENV POETRY_REQUESTS_TIMEOUT=300
 
-# 安装项目依赖（--no-root表示只安装依赖，不安装当前项目）
-# 这里我们先不运行 poetry install，因为通常会在 Jenkinsfile 的一个单独阶段进行，
-# 以便更好地利用 Docker 层缓存。如果您的 pyproject.toml 和 poetry.lock 不经常变动，
-# 而代码经常变动，将 poetry install 放在 Dockerfile 靠后的位置，
-# 或者在 Jenkinsfile 中执行，可以避免每次代码变动都重新安装所有依赖。
-# 如果您希望在镜像中直接包含所有依赖，可以取消下面一行的注释：
-RUN poetry install --no-root \
-    # 如果 airtest 和 pocoui 被定义在一个可选组（例如 'airtest-group'）中，
-    # 并且你不想让 poetry 尝试安装它们，可以使用 --without airtest-group
-    # 例如: poetry install --no-root --without airtest-group
+# 清理 Poetry 缓存，以防旧缓存导致问题
+RUN poetry cache clear . --all || echo "Poetry cache clear failed or no cache to clear, continuing..."
 
-# 单独使用 pip 安装 airtest 和 pocoui，以避免 pywin32 依赖问题
-# 注意：这假设 poetry install 没有尝试安装它们，或者已经通过 --without 排除了它们
-# 使用多源兜底确保安装成功
-RUN pip install airtest pocoui -i https://mirrors.aliyun.com/pypi/simple/ \
+# 1. 安装主项目依赖（不包括 airtest 和 pocoui，它们应已从主依赖移除或通过 --without 排除）
+#    使用 --sync 确保环境与 lock 文件一致
+RUN echo "Starting Poetry core dependencies installation..." && \
+    poetry install --no-root --sync \
+    # 如果 airtest 和 pocoui 被定义在一个可选组（例如 'mobile-tools'）中,
+    # 并且你不想让 poetry 尝试安装它们, 请取消下面一行的注释并修改组名:
+    # --without mobile-tools \
+    && echo "Poetry core dependencies installation step completed."
+
+# 2. 验证核心依赖是否已成功安装
+RUN echo "Verifying core dependencies..." && \
+    poetry run pytest --version && \
+    python -c "import yaml; print('PyYAML imported successfully by Poetry.')" && \
+    poetry run playwright --version && \
+    echo "Core dependencies verified successfully." \
+    || (echo "CRITICAL ERROR: pytest, PyYAML, or Playwright library not found after poetry install!" && exit 1)
+
+# 3. 单独使用 pip 安装 airtest 和 pocoui (使用国内镜像源)
+RUN echo "Attempting to install airtest and pocoui via pip..." && \
+    pip install airtest pocoui -i https://mirrors.aliyun.com/pypi/simple/ \
     || pip install airtest pocoui -i https://pypi.tuna.tsinghua.edu.cn/simple \
-    || pip install airtest pocoui # 最后尝试默认源
+    || pip install airtest pocoui \
+    && echo "Airtest and Pocoui pip installation step completed."
 
-# playwright浏览器下载加速（可选）
+# 4. 安装 Playwright 浏览器驱动 (playwright 库本身应已由 poetry install 安装)
 ENV PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright
-
-# 安装playwright及其浏览器（多源兜底）
-# 注意：如果 poetry install 已经安装了 playwright，这里的 pip install playwright 可能会冗余，
-# 但 playwright install (浏览器驱动) 仍然是需要的。
-# 为确保 playwright 命令可用，这里保留。
-RUN pip install playwright -i https://mirrors.aliyun.com/pypi/simple/ \
-    || pip install playwright -i https://pypi.tuna.tsinghua.edu.cn/simple \
-    && playwright install
+RUN echo "Installing Playwright browsers..." && \
+    playwright install \
+    && echo "Playwright browsers installation step completed."
 
 # 复制本地下载的Allure CLI安装包到镜像
 # !!! 请确保 allure-2.27.0.zip 与 Dockerfile 在同一目录 !!!
@@ -91,7 +97,8 @@ COPY allure-2.27.0.zip /tmp/
 
 RUN unzip /tmp/allure-2.27.0.zip -d /opt/ \
     && ln -s /opt/allure-2.27.0/bin/allure /usr/bin/allure \
-    && rm /tmp/allure-2.27.0.zip
+    && rm /tmp/allure-2.27.0.zip \
+    && echo "Allure CLI installed."
 
-# 可以添加一个CMD或ENTRYPOINT，但通常Jenkinsfile中docker run会覆盖它
+# 通常 Jenkinsfile 中的 docker run 命令会覆盖 CMD 或 ENTRYPOINT
 # CMD ["python"]
