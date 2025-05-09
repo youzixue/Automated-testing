@@ -24,6 +24,7 @@ RUN echo "Installing system dependencies..." && \
     libxcb1 libxkbcommon0 libpango-1.0-0 libcairo2 libasound2 libatspi2.0-0 \
     fonts-liberation fonts-noto-cjk \
     libappindicator3-1 lsb-release \
+    libgl1-mesa-glx \
     && apt-get clean && rm -rf /var/lib/apt/lists/* \
     && echo "System dependencies installed."
 
