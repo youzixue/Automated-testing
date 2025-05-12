@@ -22,32 +22,41 @@ def wait_for_activity(device: 'Device', expected_activity_suffix: str,
     Returns:
         bool: 如果在超时时间内找到匹配的 Activity 则返回 True, 否则返回 False.
     """
-    logger.debug(f"开始等待 Activity (包含 '{expected_activity_suffix}', 超时 {timeout}s)...")
+    logger.debug(f"[{time.time():.3f}] 开始等待 Activity (包含 '{expected_activity_suffix}', 超时 {timeout}s, 间隔 {check_interval}s)...")
     start_time = time.time()
     activity_found = False
+    last_logged_activity = None # 用于避免重复记录相同的Activity
 
     while time.time() - start_time < timeout:
         current_activity_info = None # 初始化
         try:
-            # G.DEVICE 在多设备场景可能不准确，优先使用传入的 device
             current_activity_info = device.get_top_activity()
             if current_activity_info:
-                # get_top_activity() 返回 (package, activity)
-                current_activity_name = current_activity_info[1]
-                logger.debug(f"当前 Activity: {current_activity_name}")
+                current_package_name, current_activity_name = current_activity_info
+                # 只有当Activity名称变化时才记录，或者首次记录
+                if current_activity_name != last_logged_activity:
+                    logger.info(f"[{time.time():.3f}] 当前顶层 Activity: {current_package_name}/{current_activity_name}")
+                    last_logged_activity = current_activity_name
+
                 if expected_activity_suffix in current_activity_name:
                     activity_found = True
-                    logger.info(f"成功检测到目标 Activity: {current_activity_name}")
+                    logger.info(f"[{time.time():.3f}] 成功检测到目标 Activity: {current_package_name}/{current_activity_name}")
                     break
             else:
-                logger.debug("未能获取到当前 Activity 信息，稍后重试...")
+                # 只有当获取失败的状态变化时才记录
+                if last_logged_activity != "FAILED_TO_GET_ACTIVITY":
+                    logger.info(f"[{time.time():.3f}] 未能获取到当前 Activity 信息，稍后重试...")
+                    last_logged_activity = "FAILED_TO_GET_ACTIVITY"
         except Exception as e:
-            # 捕捉获取 Activity 时可能发生的任何异常
-            logger.warning(f"获取 Activity 时出错: {e}", exc_info=False) # 用 warning，避免过多 error 日志
+            # 只有当错误信息变化时才记录
+            error_message = f"获取 Activity 时出错: {e}"
+            if last_logged_activity != error_message:
+                 logger.warning(f"[{time.time():.3f}] {error_message}", exc_info=False)
+                 last_logged_activity = error_message
         time.sleep(check_interval)
 
     if not activity_found:
-        logger.warning(f"超时 {timeout} 秒未检测到 Activity (包含 '{expected_activity_suffix}')")
+        logger.warning(f"[{time.time():.3f}] 超时 {timeout} 秒未检测到 Activity (包含 '{expected_activity_suffix}')")
         # snapshot(msg=f"Activity_{expected_activity_suffix}_未出现截图") # Snapshot call removed
         return False
     else:
