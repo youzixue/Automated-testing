@@ -25,19 +25,14 @@ pipeline {
                description: '微信App的包名', 
                trim: true)
 
+        // ++ 新增的参数 ++
         string(name: 'CFG_WECHAT_MINI_PROGRAM_TARGET', defaultValue: 'CMpark智慧停车', description: '微信小程序目标名称 (Jenkins Parameter)', trim: true)
         string(name: 'CFG_WECHAT_OFFICIAL_ACCOUNT_TARGET', defaultValue: 'CMpark招商享停车', description: '微信公众号目标名称 (Jenkins Parameter)', trim: true)
         string(name: 'CFG_EXPECTED_PAYMENT_ACTIVITY_SUFFIX', defaultValue: '.framework.app.UIPageFragmentActivity', description: '期望的支付Activity后缀 (Jenkins Parameter)', trim: true)
-        string(name: 'CFG_WECHAT_EXPECTED_PAYMENT_ACTIVITY_SUFFIX', defaultValue: '.web.WebActivity', description: '微信支付期望的Activity后缀 (与Mobile可能不同)', trim: true)
+        // -- 结束新增的参数 --
 
         choice(name: 'TEST_SUITE', choices: ['全部', '冒烟测试', '回归测试'], description: '选择测试套件')
         booleanParam(name: 'SEND_EMAIL', defaultValue: true, description: '是否发送邮件通知')
-        
-        // 添加设备解锁相关参数
-        string(name: 'DEVICE_UNLOCK_PIN', 
-               defaultValue: '', 
-               description: '设备解锁PIN码，如果为空则不尝试输入密码解锁', 
-               trim: true)
     }
 
     environment {
@@ -73,10 +68,6 @@ pipeline {
 
         TEST_SUITE_VALUE = "${params.TEST_SUITE == '全部' ? 'all' : (params.TEST_SUITE == '冒烟测试' ? 'smoke' : 'regression')}"
         DOCKER_IMAGE = "automated-testing:dev" 
-        
-        // 持久化ADB服务相关环境变量
-        ADB_SERVER_CONTAINER_NAME = "persistent-adb-server-${BUILD_NUMBER}"
-        ADB_SERVER_PORT = "5037"
     }
 
     stages {
@@ -108,54 +99,6 @@ pipeline {
                 echo "INFO: First few lines of Jenkinsfile in workspace:"
                 sh "head -n 15 ${WORKSPACE}/Jenkinsfile"
                 // -- 结束新增的日志打印 --
-            }
-        }
-        
-        stage('启动持久化ADB服务') {
-            when {
-                expression { params.RUN_APP_RELATED_TESTS }
-            }
-            steps {
-                echo "启动持久化ADB服务容器，供所有测试共享使用..."
-                
-                // 如果上一次构建失败，可能ADB容器没有被正确清理，先尝试移除
-                sh """
-                    docker ps -a | grep ${env.ADB_SERVER_CONTAINER_NAME} && docker rm -f ${env.ADB_SERVER_CONTAINER_NAME} || echo "没有发现旧的ADB服务容器"
-                """
-                
-                // 启动持久化ADB服务容器
-                sh """
-                    docker run -d --name ${env.ADB_SERVER_CONTAINER_NAME} \
-                    -v "${env.HOST_ADB_KEYS_ANDROID_DIR}":/root/.android \
-                    -v "${env.HOST_WORKSPACE_PATH}":/workspace:ro \
-                    -v /dev/bus/usb:/dev/bus/usb \
-                    --privileged \
-                    --network host \
-                    ${env.DOCKER_IMAGE} \
-                    sh -c 'adb start-server && echo "持久化ADB服务已启动，监听端口: ${env.ADB_SERVER_PORT}" && tail -f /dev/null'
-                """
-                
-                echo "持久化ADB服务已启动，等待3秒确保服务稳定..."
-                sh "sleep 3"
-                
-                // 检查和解锁主设备
-                echo "检查并解锁主设备 ${params.PRIMARY_APP_DEVICE_SERIAL}..."
-                sh """
-                    docker exec ${env.ADB_SERVER_CONTAINER_NAME} sh -c "cd /workspace && bash ci/scripts/check_device.sh '${params.PRIMARY_APP_DEVICE_SERIAL}' '${params.DEVICE_UNLOCK_PIN}'"
-                """
-                
-                // 如果有次设备且不同于主设备，也检查和解锁
-                script {
-                    if (params.SECONDARY_APP_DEVICE_SERIAL && params.SECONDARY_APP_DEVICE_SERIAL.trim() != "" && 
-                        params.SECONDARY_APP_DEVICE_SERIAL.trim() != params.PRIMARY_APP_DEVICE_SERIAL.trim()) {
-                        echo "检查并解锁次设备 ${params.SECONDARY_APP_DEVICE_SERIAL}..."
-                        sh """
-                            docker exec ${env.ADB_SERVER_CONTAINER_NAME} sh -c "cd /workspace && bash ci/scripts/check_device.sh '${params.SECONDARY_APP_DEVICE_SERIAL}' '${params.DEVICE_UNLOCK_PIN}'"
-                        """
-                    }
-                }
-                
-                echo "持久化ADB服务和设备准备完成"
             }
         }
 
@@ -283,20 +226,48 @@ pipeline {
                                 }
                                 
                                 if (primaryDeviceSerial && !primaryDeviceSerial.isEmpty()) {
-                                    // 设备检查已经在 '启动持久化ADB服务' 阶段完成
-                                    // 所有设备的连接状态和解锁状态已经验证
-                                    
+                                    // 设备检查仍然保留，以确保在运行实际测试前设备仍然可见
+                                    def checkScriptPathInWs = "ci/scripts/check_device.sh"
+                                    def checkScriptPathInContainer = "/tmp/check_device.sh"
+
+                                    // 主设备检查
+                                    // 使用双引号确保 Groovy 变量插值
+                                    def mainDeviceCheckCommand = [
+                                        "echo \"在容器内通过脚本 ${checkScriptPathInContainer} 检查主设备 ${primaryDeviceSerial} ...\";",
+                                        "docker run --rm --name adb-check-main-${BUILD_NUMBER}",
+                                        "-v \"${env.HOST_ADB_KEYS_ANDROID_DIR}\":/root/.android",
+                                        "-v /dev/bus/usb:/dev/bus/usb",
+                                        "-v \"${env.HOST_WORKSPACE_PATH}/${checkScriptPathInWs}\":\"${checkScriptPathInContainer}\":ro",
+                                        "--privileged",
+                                        "--network host",
+                                        "${env.DOCKER_IMAGE} sh \"${checkScriptPathInContainer}\" \"${primaryDeviceSerial}\"",
+                                        "|| (echo \"错误: 容器内检查主设备 ${primaryDeviceSerial} 的脚本执行失败!\" && exit 1);",
+                                        "echo \"容器内主设备 ${primaryDeviceSerial} 检查通过.\""
+                                    ].join(' ')
+                                    sh(mainDeviceCheckCommand)
+
+                                    if (useTwoDevices) {
+                                        // 次设备检查
+                                        def secondaryDeviceCheckCommand = [
+                                            "echo \"在容器内通过脚本 ${checkScriptPathInContainer} 检查次设备 ${secondaryDeviceSerial} ...\";",
+                                            "docker run --rm --name adb-check-sec-${BUILD_NUMBER}",
+                                            "-v \"${env.HOST_ADB_KEYS_ANDROID_DIR}\":/root/.android",
+                                            "-v /dev/bus/usb:/dev/bus/usb",
+                                            "-v \"${env.HOST_WORKSPACE_PATH}/${checkScriptPathInWs}\":\"${checkScriptPathInContainer}\":ro",
+                                            "--privileged",
+                                            "--network host",
+                                            "${env.DOCKER_IMAGE} sh \"${checkScriptPathInContainer}\" \"${secondaryDeviceSerial}\"",
+                                            "|| (echo \"错误: 容器内检查次设备 ${secondaryDeviceSerial} 的脚本执行失败!\" && exit 1);",
+                                            "echo \"容器内次设备 ${secondaryDeviceSerial} 检查通过.\""
+                                        ].join(' ')
+                                        sh(secondaryDeviceCheckCommand)
+                                    }
+
                                     // 开始实际测试执行
                                     def runMobileTests = { String deviceSerial -> // 明确参数类型
                                         def safeDeviceSerialForName = deviceSerial.replaceAll(":", "-").replaceAll("\\.", "-")
                                         echo "在设备 ${deviceSerial} 上执行 tests/mobile (容器名将使用: pytest-mobile-${BUILD_NUMBER}-${safeDeviceSerialForName})"
                                         try {
-                                            // 在测试开始前，通过持久化ADB服务再次确保设备解锁
-                                            sh """
-                                            docker exec ${env.ADB_SERVER_CONTAINER_NAME} sh -c "cd /workspace && bash ci/scripts/check_device.sh '${deviceSerial}' '${params.DEVICE_UNLOCK_PIN}'"
-                                            """
-                                            
-                                            // 使用持久化ADB服务
                                             sh """
                                             docker run --rm --name pytest-mobile-${BUILD_NUMBER}-${safeDeviceSerialForName} \
                                               -e APP_ENV=${params.APP_ENV} \
@@ -309,10 +280,11 @@ pipeline {
                                               -e JIYU_APP_PACKAGE_NAME="${params.JIYU_APP_PACKAGE}" \
                                               -e TZ="Asia/Shanghai" \
                                               -e PYTEST_EXPECTED_PAYMENT_ACTIVITY_SUFFIX="${params.CFG_EXPECTED_PAYMENT_ACTIVITY_SUFFIX}" \
-                                              -e ADB_SERVER_HOST="127.0.0.1" \
-                                              -e ADB_SERVER_PORT="${env.ADB_SERVER_PORT}" \
                                               -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \
                                               -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \
+                                              -v "${env.HOST_ADB_KEYS_ANDROID_DIR}":/root/.android \
+                                              -v /dev/bus/usb:/dev/bus/usb \
+                                              --privileged \
                                               --network host \
                                               --workdir /workspace \
                                               -v /etc/localtime:/etc/localtime:ro \
@@ -333,12 +305,6 @@ pipeline {
                                         def safeDeviceSerialForName = deviceSerial.replaceAll(":", "-").replaceAll("\\.", "-")
                                         echo "在设备 ${deviceSerial} 上执行 tests/wechat (容器名将使用: pytest-wechat-${BUILD_NUMBER}-${safeDeviceSerialForName})"
                                         try {
-                                            // 在测试开始前，通过持久化ADB服务再次确保设备解锁
-                                            sh """
-                                            docker exec ${env.ADB_SERVER_CONTAINER_NAME} sh -c "cd /workspace && bash ci/scripts/check_device.sh '${deviceSerial}' '${params.DEVICE_UNLOCK_PIN}'"
-                                            """
-                                            
-                                            // 使用持久化ADB服务
                                             sh """
                                             docker run --rm --name pytest-wechat-${BUILD_NUMBER}-${safeDeviceSerialForName} \
                                               -e APP_ENV=${params.APP_ENV} \
@@ -352,9 +318,7 @@ pipeline {
                                               -e TZ="Asia/Shanghai" \
                                               -e PYTEST_WECHAT_MINI_PROGRAM_TARGET="${params.CFG_WECHAT_MINI_PROGRAM_TARGET}" \
                                               -e PYTEST_WECHAT_OFFICIAL_ACCOUNT_TARGET="${params.CFG_WECHAT_OFFICIAL_ACCOUNT_TARGET}" \
-                                              -e PYTEST_EXPECTED_PAYMENT_ACTIVITY_SUFFIX="${params.CFG_WECHAT_EXPECTED_PAYMENT_ACTIVITY_SUFFIX}" \
-                                              -e ADB_SERVER_HOST="127.0.0.1" \
-                                              -e ADB_SERVER_PORT="${env.ADB_SERVER_PORT}" \
+                                              -e PYTEST_EXPECTED_PAYMENT_ACTIVITY_SUFFIX="${params.CFG_EXPECTED_PAYMENT_ACTIVITY_SUFFIX}" \
                                               -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \
                                               -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \
                                               -v "${env.HOST_ADB_KEYS_ANDROID_DIR}":/root/.android \
@@ -567,13 +531,6 @@ pipeline {
                       ${env.DOCKER_IMAGE} \\
                       sh -c 'rm -rf /host_workspace/output/reports/temp-allure-report-for-summary && echo "Host temporary report directory removed."'
                     """
-                    
-                    // 清理持久化ADB服务容器
-                    echo "清理持久化ADB服务容器..."
-                    sh """
-                    docker ps -a | grep ${env.ADB_SERVER_CONTAINER_NAME} && docker rm -f ${env.ADB_SERVER_CONTAINER_NAME} || echo "没有找到ADB服务容器，无需清理"
-                    """
-                    
                     cleanWs()
                     echo "Agent 工作空间和临时报告目录已清理。"
                 }
