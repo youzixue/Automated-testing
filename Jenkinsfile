@@ -239,8 +239,8 @@ pipeline {
                                       ${env.DOCKER_IMAGE} sh -c " \
                                         echo '--- Attempting ADB connect (primary) ---'; \
                                         adb connect ${primaryDeviceSerial}; \
-                                        connect_status=$?; \
-                                        if [ $connect_status -ne 0 ]; then \
+                                        connect_status=\$?; \
+                                        if [ \$connect_status -ne 0 ]; then \
                                             echo 'ADB connect command FAILED (primary). Exiting...'; \
                                             exit 1; \
                                         fi; \
@@ -265,8 +265,8 @@ pipeline {
                                           ${env.DOCKER_IMAGE} sh -c " \
                                             echo '--- Attempting ADB connect (secondary) ---'; \
                                             adb connect ${secondaryDeviceSerial}; \
-                                            connect_status=$?; \
-                                            if [ $connect_status -ne 0 ]; then \
+                                            connect_status=\$?; \
+                                            if [ \$connect_status -ne 0 ]; then \
                                                 echo 'ADB connect command FAILED (secondary). Exiting...'; \
                                                 exit 1; \
                                             fi; \
