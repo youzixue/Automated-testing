@@ -265,60 +265,83 @@ pipeline {
 
                                     // 开始实际测试执行
                                     def runMobileTests = { String deviceSerial -> // 明确参数类型
-                                        def safeDeviceSerialForName = deviceSerial.replaceAll(":", "-").replaceAll("\\.", "-")
+                                        def safeDeviceSerialForName = deviceSerial.replaceAll(":", "-").replaceAll("\\\\.", "-")
                                         echo "在设备 ${deviceSerial} 上执行 tests/mobile (容器名将使用: pytest-mobile-${BUILD_NUMBER}-${safeDeviceSerialForName})"
-                                        sh """
-                                        docker run --rm --name pytest-mobile-${BUILD_NUMBER}-${safeDeviceSerialForName} \\
-                                          -e APP_ENV=${params.APP_ENV} \\
-                                          -e TEST_PLATFORM="mobile" \\
-                                          -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \\
-                                          -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
-                                          -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
-                                          -e ANDROID_SERIAL="${deviceSerial}" \\
-                                          -e DEVICE_URI="Android:///" \\
-                                          -e JIYU_APP_PACKAGE_NAME="${params.JIYU_APP_PACKAGE}" \\
-                                          -e TZ="Asia/Shanghai" \\
-                                          -e PYTEST_EXPECTED_PAYMENT_ACTIVITY_SUFFIX="${params.CFG_EXPECTED_PAYMENT_ACTIVITY_SUFFIX}" \\
-                                          -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
-                                          -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
-                                          -v "${env.HOST_ADB_KEYS_ANDROID_DIR}":/root/.android \\
-                                          -v /dev/bus/usb:/dev/bus/usb \\
-                                          --privileged \\
-                                          --network host \\
-                                          --workdir /workspace \\
-                                          -v /etc/localtime:/etc/localtime:ro \\
-                                          ${env.DOCKER_IMAGE} \\
-                                          pytest tests/mobile -v --alluredir=/results_out
-                                        """
+                                        try {
+                                            withCredentials([string(credentialsId: 'ACCOUNT_PASSWORD', variable: 'ACCOUNT_PASSWORD')]) {
+                                                sh """
+                                                docker run --rm --name pytest-mobile-${BUILD_NUMBER}-${safeDeviceSerialForName} \\
+                                                  -e APP_ENV=${params.APP_ENV} \\
+                                                  -e TEST_PLATFORM="mobile" \\
+                                                  -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \\
+                                                  -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
+                                                  -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
+                                                  -e ANDROID_SERIAL="${deviceSerial}" \\
+                                                  -e DEVICE_URI="Android:///" \\
+                                                  -e JIYU_APP_PACKAGE_NAME="${params.JIYU_APP_PACKAGE}" \\
+                                                  -e TZ="Asia/Shanghai" \\
+                                                  -e PYTEST_EXPECTED_PAYMENT_ACTIVITY_SUFFIX="${params.CFG_EXPECTED_PAYMENT_ACTIVITY_SUFFIX}" \\
+                                                  -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
+                                                  -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
+                                                  -v "${env.HOST_ADB_KEYS_ANDROID_DIR}":/root/.android \\
+                                                  -v /dev/bus/usb:/dev/bus/usb \\
+                                                  --privileged \\
+                                                  --network host \\
+                                                  --workdir /workspace \\
+                                                  -v /etc/localtime:/etc/localtime:ro \\
+                                                  ${env.DOCKER_IMAGE} \\
+                                                  pytest tests/mobile -v --alluredir=/results_out
+                                                """
+                                            }
+                                            echo "Mobile 测试在设备 ${deviceSerial} 上看起来已完成（注意：sh命令成功不代表所有测试用例通过）。"
+                                        } catch (hudson.AbortException he) {
+                                            echo "Mobile 测试脚本在设备 ${deviceSerial} 上执行失败 (sh命令返回非零退出码)。错误: ${he.getMessage()}"
+                                            currentBuild.result = 'UNSTABLE'
+                                        } catch (Exception e) {
+                                            echo "执行 Mobile 测试 (设备 ${deviceSerial}) 时发生预料之外的错误: ${e.toString()}"
+                                            currentBuild.result = 'UNSTABLE'
+                                        }
                                     }
+
                                     def runWechatTests = { String deviceSerial -> // 明确参数类型
-                                        def safeDeviceSerialForName = deviceSerial.replaceAll(":", "-").replaceAll("\\.", "-")
+                                        def safeDeviceSerialForName = deviceSerial.replaceAll(":", "-").replaceAll("\\\\.", "-")
                                         echo "在设备 ${deviceSerial} 上执行 tests/wechat (容器名将使用: pytest-wechat-${BUILD_NUMBER}-${safeDeviceSerialForName})"
-                                        sh """
-                                        docker run --rm --name pytest-wechat-${BUILD_NUMBER}-${safeDeviceSerialForName} \\
-                                          -e APP_ENV=${params.APP_ENV} \\
-                                          -e TEST_PLATFORM="wechat" \\
-                                          -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \\
-                                          -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
-                                          -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
-                                          -e ANDROID_SERIAL="${deviceSerial}" \\
-                                          -e DEVICE_URI="Android:///" \\
-                                          -e WECHAT_PACKAGE_NAME="${params.WECHAT_APP_PACKAGE}" \\
-                                          -e TZ="Asia/Shanghai" \\
-                                          -e PYTEST_WECHAT_MINI_PROGRAM_TARGET="${params.CFG_WECHAT_MINI_PROGRAM_TARGET}" \\
-                                          -e PYTEST_WECHAT_OFFICIAL_ACCOUNT_TARGET="${params.CFG_WECHAT_OFFICIAL_ACCOUNT_TARGET}" \\
-                                          -e PYTEST_EXPECTED_PAYMENT_ACTIVITY_SUFFIX="${params.CFG_EXPECTED_PAYMENT_ACTIVITY_SUFFIX}" \\
-                                          -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
-                                          -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
-                                          -v "${env.HOST_ADB_KEYS_ANDROID_DIR}":/root/.android \\
-                                          -v /dev/bus/usb:/dev/bus/usb \\
-                                          --privileged \\
-                                          --network host \\
-                                          --workdir /workspace \\
-                                          -v /etc/localtime:/etc/localtime:ro \\
-                                          ${env.DOCKER_IMAGE} \\
-                                          pytest tests/wechat -v --alluredir=/results_out
-                                        """
+                                        try {
+                                            withCredentials([string(credentialsId: 'ACCOUNT_PASSWORD', variable: 'ACCOUNT_PASSWORD')]) {
+                                                sh """
+                                                docker run --rm --name pytest-wechat-${BUILD_NUMBER}-${safeDeviceSerialForName} \\
+                                                  -e APP_ENV=${params.APP_ENV} \\
+                                                  -e TEST_PLATFORM="wechat" \\
+                                                  -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \\
+                                                  -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
+                                                  -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
+                                                  -e ANDROID_SERIAL="${deviceSerial}" \\
+                                                  -e DEVICE_URI="Android:///" \\
+                                                  -e WECHAT_PACKAGE_NAME="${params.WECHAT_APP_PACKAGE}" \\
+                                                  -e TZ="Asia/Shanghai" \\
+                                                  -e PYTEST_WECHAT_MINI_PROGRAM_TARGET="${params.CFG_WECHAT_MINI_PROGRAM_TARGET}" \\
+                                                  -e PYTEST_WECHAT_OFFICIAL_ACCOUNT_TARGET="${params.CFG_WECHAT_OFFICIAL_ACCOUNT_TARGET}" \\
+                                                  -e PYTEST_EXPECTED_PAYMENT_ACTIVITY_SUFFIX="${params.CFG_EXPECTED_PAYMENT_ACTIVITY_SUFFIX}" \\
+                                                  -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
+                                                  -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
+                                                  -v "${env.HOST_ADB_KEYS_ANDROID_DIR}":/root/.android \\
+                                                  -v /dev/bus/usb:/dev/bus/usb \\
+                                                  --privileged \\
+                                                  --network host \\
+                                                  --workdir /workspace \\
+                                                  -v /etc/localtime:/etc/localtime:ro \\
+                                                  ${env.DOCKER_IMAGE} \\
+                                                  pytest tests/wechat -v --alluredir=/results_out
+                                                """
+                                            }
+                                            echo "WeChat 测试在设备 ${deviceSerial} 上看起来已完成（注意：sh命令成功不代表所有测试用例通过）。"
+                                        } catch (hudson.AbortException he) {
+                                            echo "WeChat 测试脚本在设备 ${deviceSerial} 上执行失败 (sh命令返回非零退出码)。错误: ${he.getMessage()}"
+                                            currentBuild.result = 'UNSTABLE'
+                                        } catch (Exception e) {
+                                            echo "执行 WeChat 测试 (设备 ${deviceSerial}) 时发生预料之外的错误: ${e.toString()}"
+                                            currentBuild.result = 'UNSTABLE'
+                                        }
                                     }
 
                                     if (useTwoDevices) {
