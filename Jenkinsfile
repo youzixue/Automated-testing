@@ -227,74 +227,30 @@ pipeline {
                                 
                                 if (primaryDeviceSerial && !primaryDeviceSerial.isEmpty()) {
                                     // 设备检查仍然保留，以确保在运行实际测试前设备仍然可见
-                                    // 注意: 下面的 adb kill-server 和 start-server 是为了尝试解决一些 adb 服务不稳定的情况，
-                                    // 但如果 adb 服务本身或设备连接有问题，这可能不足以解决。
-                                    // 同时 grep 条件更改为更通用的 device|offline|unauthorized 来获取更多信息，但最终还是需要 device 状态。
+                                    def checkScriptPathInWs = "ci/scripts/check_device.sh"
+                                    def checkScriptPathInContainer = "/tmp/check_device.sh"
+
                                     sh """ \
-                                    echo "在容器内检查主设备 ${primaryDeviceSerial} ..." \
-                                    docker run --rm --name adb-recheck-main-${BUILD_NUMBER} \\ \
-                                      -v "${env.HOST_ADB_KEYS_ANDROID_DIR}":/root/.android \\ \
-                                      -v /dev/bus/usb:/dev/bus/usb \\ \
-                                      --privileged \\ \
-                                      --network host -e ANDROID_SERIAL="${primaryDeviceSerial}" \\ \
-                                      ${env.DOCKER_IMAGE} sh -c " \
-                                        set -x; \
-                                        set +u; \
-                                        echo 'Device serial is: ${primaryDeviceSerial}'; \
-                                        if echo '${primaryDeviceSerial}' | grep -q ':'; then \
-                                            echo \'--- Attempting ADB connect (likely network device) ---\'; \
-                                            adb connect ${primaryDeviceSerial}; \
-                                            connect_status=\$?; \
-                                            if [ \$connect_status -ne 0 ]; then \
-                                                echo \'ADB connect command FAILED for ${primaryDeviceSerial}. Exiting...\'; \
-                                                exit 1; \
-                                            fi; \
-                                            echo \'ADB connect command reported success or device already connected.\'; \
-                                            sleep 3; \
-                                        else \
-                                            echo \'--- Skipping ADB connect (likely USB device) ---\'; \
-                                            echo \'--- Restarting ADB server for USB device detection ---\'; \
-                                            adb kill-server; sleep 1; adb start-server; sleep 2; \
-                                        fi; \
-                                        echo \'--- ADB devices output ---\'; \
-                                        adb devices -l; \
-                                        echo \'--- Specifically grepping for device status of ${primaryDeviceSerial} ---\'; \
-                                        adb devices -l | grep '${primaryDeviceSerial}[[:space:]]\\+device' && echo \'Grep for DEVICE status SUCCESSFUL\' || (echo \'Grep for DEVICE status FAILED, exiting...\' && exit 1) \
-                                      " || (echo "错误: 容器内检查主设备 ${primaryDeviceSerial} 的脚本执行失败或设备未找到/未授权!" && exit 1) \
+                                    echo "在容器内通过脚本 ${checkScriptPathInContainer} 检查主设备 ${primaryDeviceSerial} ..." \
+                                    docker run --rm --name adb-check-main-${BUILD_NUMBER} \\
+                                      -v "${env.HOST_ADB_KEYS_ANDROID_DIR}":/root/.android \\
+                                      -v /dev/bus/usb:/dev/bus/usb \\
+                                      -v "${env.HOST_WORKSPACE_PATH}/${checkScriptPathInWs}":"${checkScriptPathInContainer}":ro \\
+                                      --privileged \\
+                                      --network host \\
+                                      ${env.DOCKER_IMAGE} sh "${checkScriptPathInContainer}" "${primaryDeviceSerial}" || (echo "错误: 容器内检查主设备 ${primaryDeviceSerial} 的脚本执行失败!" && exit 1) \
                                     echo "容器内主设备 ${primaryDeviceSerial} 检查通过." \
                                     """
                                     if (useTwoDevices) { 
                                          sh """ \
-                                        echo "在容器内检查次设备 ${secondaryDeviceSerial} ..." \
-                                        docker run --rm --name adb-recheck-sec-${BUILD_NUMBER} \\ \
-                                          -v "${env.HOST_ADB_KEYS_ANDROID_DIR}":/root/.android \\ \
-                                          -v /dev/bus/usb:/dev/bus/usb \\ \
-                                          --privileged \\ \
-                                          --network host -e ANDROID_SERIAL="${secondaryDeviceSerial}" \\ \
-                                          ${env.DOCKER_IMAGE} sh -c " \
-                                            set -x; \
-                                            set +u; \
-                                            echo 'Device serial is: ${secondaryDeviceSerial}'; \
-                                            if echo '${secondaryDeviceSerial}' | grep -q ':'; then \
-                                                echo \'--- Attempting ADB connect (likely network device) ---\'; \
-                                                adb connect ${secondaryDeviceSerial}; \
-                                                connect_status=\$?; \
-                                                if [ \$connect_status -ne 0 ]; then \
-                                                    echo \'ADB connect command FAILED for ${secondaryDeviceSerial}. Exiting...\'; \
-                                                    exit 1; \
-                                                fi; \
-                                                echo \'ADB connect command reported success or device already connected.\'; \
-                                                sleep 3; \
-                                            else \
-                                                echo \'--- Skipping ADB connect (likely USB device) ---\'; \
-                                                echo \'--- Restarting ADB server for USB device detection ---\'; \
-                                                adb kill-server; sleep 1; adb start-server; sleep 2; \
-                                            fi; \
-                                            echo \'--- ADB devices output ---\'; \
-                                            adb devices -l; \
-                                            echo \'--- Specifically grepping for device status of ${secondaryDeviceSerial} ---\'; \
-                                            adb devices -l | grep '${secondaryDeviceSerial}[[:space:]]\\+device' && echo \'Grep for DEVICE status SUCCESSFUL\' || (echo \'Grep for DEVICE status FAILED, exiting...\' && exit 1) \
-                                          " || (echo "错误: 容器内检查次设备 ${secondaryDeviceSerial} 的脚本执行失败或设备未找到/未授权!" && exit 1) \
+                                        echo "在容器内通过脚本 ${checkScriptPathInContainer} 检查次设备 ${secondaryDeviceSerial} ..." \
+                                        docker run --rm --name adb-check-sec-${BUILD_NUMBER} \\
+                                          -v "${env.HOST_ADB_KEYS_ANDROID_DIR}":/root/.android \\
+                                          -v /dev/bus/usb:/dev/bus/usb \\
+                                          -v "${env.HOST_WORKSPACE_PATH}/${checkScriptPathInWs}":"${checkScriptPathInContainer}":ro \\
+                                          --privileged \\
+                                          --network host \\
+                                          ${env.DOCKER_IMAGE} sh "${checkScriptPathInContainer}" "${secondaryDeviceSerial}" || (echo "错误: 容器内检查次设备 ${secondaryDeviceSerial} 的脚本执行失败!" && exit 1) \
                                         echo "容器内次设备 ${secondaryDeviceSerial} 检查通过." \
                                         """
                                     }
