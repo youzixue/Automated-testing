@@ -6,7 +6,7 @@ pipeline {
         choice(name: 'APP_ENV', choices: ['test', 'prod'], description: '选择测试环境')
         booleanParam(name: 'RUN_WEB_TESTS', defaultValue: true, description: '运行Web测试')
         booleanParam(name: 'RUN_API_TESTS', defaultValue: true, description: '运行API测试')
-        booleanParam(name: 'RUN_APP_RELATED_TESTS', defaultValue: true, description: '运行App相关测试 (Mobile 和/或 WeChat)')
+        booleanParam(name: 'RUN_APP_RELATED_TESTS', defaultValue: false, description: '运行App相关测试 (Mobile 和/或 WeChat)')
 
         string(name: 'PRIMARY_APP_DEVICE_SERIAL', 
                defaultValue: '20a2da8d', 
