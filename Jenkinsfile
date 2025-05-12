@@ -10,11 +10,11 @@ pipeline {
 
         string(name: 'PRIMARY_APP_DEVICE_SERIAL', 
                defaultValue: '20a2da8d', 
-               description: '主App测试设备ID (序列号)。如果只用一台设备，请只配置这个。', 
+               description: '主App测试设备ID (序列号或IP:端口)。如果只用一台设备，请只配置这个。', 
                trim: true)
         string(name: 'SECONDARY_APP_DEVICE_SERIAL', 
                defaultValue: '', 
-               description: '可选的第二台App测试设备ID。如果留空或与主设备相同，则App/WeChat测试会在主设备上串行。否则Mobile在主设备，WeChat在次设备并行。', 
+               description: '可选的第二台App测试设备ID (序列号或IP:端口)。如果留空或与主设备相同，则App/WeChat测试会在主设备上串行。否则Mobile在主设备，WeChat在次设备并行。', 
                trim: true)
         string(name: 'JIYU_APP_PACKAGE', 
                defaultValue: 'com.zsck.yq', 
@@ -133,20 +133,20 @@ pipeline {
                                 parallelWebAndApiTests['Web测试'] = {
                                     echo "执行Web测试 (并发: auto, 重试: 2)"
                                     sh """
-                                    docker run --rm --name pytest-web-${BUILD_NUMBER} \
-                                      -e APP_ENV=${params.APP_ENV} \
-                                      -e TEST_PLATFORM="web" \
-                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \
-                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \
-                                      -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \
-                                      -e WEB_BASE_URL="${INJECTED_WEB_URL}" \
-                                      -e TZ="Asia/Shanghai" \
-                                      -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \
-                                      -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \
-                                      --workdir /workspace \
-                                      -v /etc/localtime:/etc/localtime:ro \
-                                      --network host \
-                                      ${env.DOCKER_IMAGE} \
+                                    docker run --rm --name pytest-web-${BUILD_NUMBER} \\
+                                      -e APP_ENV=${params.APP_ENV} \\
+                                      -e TEST_PLATFORM="web" \\
+                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \\
+                                      -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
+                                      -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
+                                      -e WEB_BASE_URL="${INJECTED_WEB_URL}" \\
+                                      -e TZ="Asia/Shanghai" \\
+                                      -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
+                                      -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
+                                      --workdir /workspace \\
+                                      -v /etc/localtime:/etc/localtime:ro \\
+                                      --network host \\
+                                      ${env.DOCKER_IMAGE} \\
                                       pytest tests/web -n auto --reruns 2 -v --alluredir=/results_out
                                     """
                                 }
@@ -166,21 +166,21 @@ pipeline {
                                            paymentEnvVars += "-e ${params.APP_ENV == 'prod' ? 'PROD_DEVICE_INFO' : 'PAYMENT_DEVICE_INFO'}='${INJECTED_PAYMENT_DEVICE_INFO}' "
                                         }
                                         sh """
-                                        docker run --rm --name pytest-api-${BUILD_NUMBER} \
-                                          -e APP_ENV=${params.APP_ENV} \
-                                          -e TEST_PLATFORM="api" \
-                                          -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \
-                                          -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \
-                                          -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \
-                                          -e API_BASE_URL="${INJECTED_API_URL}" \
-                                          ${paymentEnvVars} \
-                                          -e TZ="Asia/Shanghai" \
-                                          -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \
-                                          -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \
-                                          --workdir /workspace \
-                                          -v /etc/localtime:/etc/localtime:ro \
-                                          --network host \
-                                          ${env.DOCKER_IMAGE} \
+                                        docker run --rm --name pytest-api-${BUILD_NUMBER} \\
+                                          -e APP_ENV=${params.APP_ENV} \\
+                                          -e TEST_PLATFORM="api" \\
+                                          -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \\
+                                          -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
+                                          -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
+                                          -e API_BASE_URL="${INJECTED_API_URL}" \\
+                                          ${paymentEnvVars} \\
+                                          -e TZ="Asia/Shanghai" \\
+                                          -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
+                                          -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
+                                          --workdir /workspace \\
+                                          -v /etc/localtime:/etc/localtime:ro \\
+                                          --network host \\
+                                          ${env.DOCKER_IMAGE} \\
                                           pytest tests/api -n auto --reruns 2 -v --alluredir=/results_out
                                         """
                                     }
@@ -214,30 +214,30 @@ pipeline {
                                     // 设备检查仍然保留，以确保在运行实际测试前设备仍然可见
                                     sh """
                                     echo "在容器内再次检查主设备 ${primaryDeviceSerial} ..."
-                                    docker run --rm --name adb-recheck-main-${BUILD_NUMBER} \
-                                      -v "${env.HOST_ADB_KEYS_ANDROID_DIR}":/root/.android \
-                                      --privileged \
-                                      --network host -e ANDROID_SERIAL="${primaryDeviceSerial}" \
-                                      ${env.DOCKER_IMAGE} sh -c " \
-                                        echo '--- ADB devices output (recheck main device) ---'; \
-                                        adb devices; \
-                                        echo '--- Grepping for ${primaryDeviceSerial}[[:space:]]device (recheck main device) ---'; \
-                                        adb devices | grep '${primaryDeviceSerial}[[:space:]]device' && echo 'Grep SUCCESSFUL (recheck main device)' || (echo 'Grep FAILED (recheck main device), exiting...' && exit 1) \
+                                    docker run --rm --name adb-recheck-main-${BUILD_NUMBER} \\
+                                      -v "${env.HOST_ADB_KEYS_ANDROID_DIR}":/root/.android \\
+                                      --privileged \\
+                                      --network host -e ANDROID_SERIAL="${primaryDeviceSerial}" \\
+                                      ${env.DOCKER_IMAGE} sh -c " \\
+                                        echo '--- ADB devices output (recheck main device) ---'; \\
+                                        adb devices; \\
+                                        echo '--- Grepping for ${primaryDeviceSerial}[[:space:]]device (recheck main device) ---'; \\
+                                        adb devices | grep '${primaryDeviceSerial}[[:space:]]device' && echo 'Grep SUCCESSFUL (recheck main device)' || (echo 'Grep FAILED (recheck main device), exiting...' && exit 1) \\
                                       " || (echo "错误: 容器内再次检查主设备 ${primaryDeviceSerial} 的脚本执行失败或设备未找到/未授权!" && exit 1)
                                     echo "容器内主设备 ${primaryDeviceSerial} 再次检查通过。"
                                     """
                                     if (useTwoDevices) { 
                                          sh """
                                         echo "在容器内再次检查次设备 ${secondaryDeviceSerial} ..."
-                                        docker run --rm --name adb-recheck-sec-${BUILD_NUMBER} \
-                                          -v "${env.HOST_ADB_KEYS_ANDROID_DIR}":/root/.android \
-                                          --privileged \
-                                          --network host -e ANDROID_SERIAL="${secondaryDeviceSerial}" \
-                                          ${env.DOCKER_IMAGE} sh -c " \
-                                            echo '--- ADB devices output (recheck secondary device) ---'; \
-                                            adb devices; \
-                                            echo '--- Grepping for ${secondaryDeviceSerial}[[:space:]]device (recheck secondary device) ---'; \
-                                            adb devices | grep '${secondaryDeviceSerial}[[:space:]]device' && echo 'Grep SUCCESSFUL (recheck secondary device)' || (echo 'Grep FAILED (recheck secondary device), exiting...' && exit 1) \
+                                        docker run --rm --name adb-recheck-sec-${BUILD_NUMBER} \\
+                                          -v "${env.HOST_ADB_KEYS_ANDROID_DIR}":/root/.android \\
+                                          --privileged \\
+                                          --network host -e ANDROID_SERIAL="${secondaryDeviceSerial}" \\
+                                          ${env.DOCKER_IMAGE} sh -c " \\
+                                            echo '--- ADB devices output (recheck secondary device) ---'; \\
+                                            adb devices; \\
+                                            echo '--- Grepping for ${secondaryDeviceSerial}[[:space:]]device (recheck secondary device) ---'; \\
+                                            adb devices | grep '${secondaryDeviceSerial}[[:space:]]device' && echo 'Grep SUCCESSFUL (recheck secondary device)' || (echo 'Grep FAILED (recheck secondary device), exiting...' && exit 1) \\
                                           " || (echo "错误: 容器内再次检查次设备 ${secondaryDeviceSerial} 的脚本执行失败或设备未找到/未授权!" && exit 1)
                                         echo "容器内次设备 ${secondaryDeviceSerial} 再次检查通过。"
                                         """
@@ -245,9 +245,10 @@ pipeline {
 
                                     // 开始实际测试执行
                                     def runMobileTests = { String deviceSerial -> // 明确参数类型
-                                        echo "在设备 ${deviceSerial} 上执行 tests/mobile"
+                                        def safeDeviceSerialForName = deviceSerial.replaceAll(":", "-").replaceAll("\\.", "-")
+                                        echo "在设备 ${deviceSerial} 上执行 tests/mobile (容器名将使用: pytest-mobile-${BUILD_NUMBER}-${safeDeviceSerialForName})"
                                         sh """
-                                        docker run --rm --name pytest-mobile-${BUILD_NUMBER}-${deviceSerial} \\
+                                        docker run --rm --name pytest-mobile-${BUILD_NUMBER}-${safeDeviceSerialForName} \\
                                           -e APP_ENV=${params.APP_ENV} \\
                                           -e TEST_PLATFORM="mobile" \\
                                           -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \\
@@ -269,9 +270,10 @@ pipeline {
                                         """
                                     }
                                     def runWechatTests = { String deviceSerial -> // 明确参数类型
-                                        echo "在设备 ${deviceSerial} 上执行 tests/wechat"
+                                        def safeDeviceSerialForName = deviceSerial.replaceAll(":", "-").replaceAll("\\.", "-")
+                                        echo "在设备 ${deviceSerial} 上执行 tests/wechat (容器名将使用: pytest-wechat-${BUILD_NUMBER}-${safeDeviceSerialForName})"
                                         sh """
-                                        docker run --rm --name pytest-wechat-${BUILD_NUMBER}-${deviceSerial} \\
+                                        docker run --rm --name pytest-wechat-${BUILD_NUMBER}-${safeDeviceSerialForName} \\
                                           -e APP_ENV=${params.APP_ENV} \\
                                           -e TEST_PLATFORM="wechat" \\
                                           -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \\
@@ -342,27 +344,27 @@ pipeline {
                         echo "写入 Allure 元数据文件到 ${env.HOST_ALLURE_RESULTS_PATH} (在宿主机上)..."
                         def jenkinsAllureReportUrl = "${env.BUILD_URL}allure/"
                         sh """
-                        docker run --rm --name write-metadata-${BUILD_NUMBER} \
-                          -e APP_ENV=${params.APP_ENV} \
-                          -e BUILD_NUMBER=${BUILD_NUMBER} \
-                          -e BUILD_URL=${env.BUILD_URL} \
-                          -e JOB_NAME=${env.JOB_NAME} \
-                          -e ALLURE_PUBLIC_URL='${jenkinsAllureReportUrl}' \
-                          -v ${env.HOST_WORKSPACE_PATH}:/workspace:ro \
-                          -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \
-                          -v /etc/localtime:/etc/localtime:ro \
-                          --user root \
-                          ${env.DOCKER_IMAGE} \
+                        docker run --rm --name write-metadata-${BUILD_NUMBER} \\
+                          -e APP_ENV=${params.APP_ENV} \\
+                          -e BUILD_NUMBER=${BUILD_NUMBER} \\
+                          -e BUILD_URL=${env.BUILD_URL} \\
+                          -e JOB_NAME=${env.JOB_NAME} \\
+                          -e ALLURE_PUBLIC_URL='${jenkinsAllureReportUrl}' \\
+                          -v ${env.HOST_WORKSPACE_PATH}:/workspace:ro \\
+                          -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
+                          -v /etc/localtime:/etc/localtime:ro \\
+                          --user root \\
+                          ${env.DOCKER_IMAGE} \\
                           python /workspace/ci/scripts/write_allure_metadata.py /results_out
                         """
                         echo "Allure 元数据写入完成。"
 
                         echo "修正宿主机目录 ${env.HOST_ALLURE_RESULTS_PATH} 的权限 (使用 Docker)..."
                         sh """
-                        docker run --rm --name chown-chmod-results-${BUILD_NUMBER} \
-                          -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_to_fix:rw \
-                          --user root \
-                          ${env.DOCKER_IMAGE} \
+                        docker run --rm --name chown-chmod-results-${BUILD_NUMBER} \\
+                          -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_to_fix:rw \\
+                          --user root \\
+                          ${env.DOCKER_IMAGE} \\
                           sh -c 'chown -R 1000:1000 /results_to_fix || echo "chown to 1000:1000 failed, continuing..."; chmod -R a+r /results_to_fix || echo "chmod failed!"'
                         """
                         echo "权限修正尝试完成。"
@@ -388,18 +390,18 @@ pipeline {
                         echo "生成临时报告到 ${env.HOST_ALLURE_REPORT_PATH} 以获取 summary.json..."
                         echo "确保宿主机目录 ${env.HOST_ALLURE_REPORT_PATH}/widgets 存在 (使用 Docker)..."
                         sh """
-                        docker run --rm --name mkdir-temp-report-${BUILD_NUMBER} \
-                          -v ${env.HOST_WORKSPACE_PATH}:/host_workspace:rw \
-                          --user root \
-                          ${env.DOCKER_IMAGE} \
+                        docker run --rm --name mkdir-temp-report-${BUILD_NUMBER} \\
+                          -v ${env.HOST_WORKSPACE_PATH}:/host_workspace:rw \\
+                          --user root \\
+                          ${env.DOCKER_IMAGE} \\
                           sh -c 'mkdir -p /host_workspace/output/reports/temp-allure-report-for-summary/widgets && echo "Host directory ensured."'
                         """
                         sh """
-                        docker run --rm --name allure-gen-temp-${BUILD_NUMBER} \
-                          -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_in:ro \
-                          -v ${env.HOST_ALLURE_REPORT_PATH}:/report_out:rw \
-                          --user root \
-                          ${env.DOCKER_IMAGE} \
+                        docker run --rm --name allure-gen-temp-${BUILD_NUMBER} \\
+                          -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_in:ro \\
+                          -v ${env.HOST_ALLURE_REPORT_PATH}:/report_out:rw \\
+                          --user root \\
+                          ${env.DOCKER_IMAGE} \\
                           sh -c 'allure generate /results_in --clean -o /report_out && echo "Temporary report generated to /report_out" || echo "Failed to generate temporary report!"'
                         """
                         def summaryCheckExitCode = sh script: "docker run --rm -v ${env.HOST_ALLURE_REPORT_PATH}:/report_check:ro ${env.DOCKER_IMAGE} test -f /report_check/widgets/summary.json", returnStatus: true
@@ -415,27 +417,27 @@ pipeline {
                             echo "发送邮件通知 (尝试读取 ${env.HOST_ALLURE_REPORT_PATH}/widgets/summary.json)..."
                             sh """
                             echo "--- Sending notification email via run_and_notify.py ---"
-                            docker run --rm --name notify-${BUILD_NUMBER} \
-                              -e CI=true \
-                              -e APP_ENV=${params.APP_ENV} \
-                              -e EMAIL_ENABLED=${params.SEND_EMAIL} \
-                              -e EMAIL_PASSWORD='${INJECTED_EMAIL_PASSWORD}' \
-                              -e EMAIL_SMTP_SERVER="${INJECTED_EMAIL_SMTP_SERVER}" \
-                              -e EMAIL_SMTP_PORT=${INJECTED_EMAIL_SMTP_PORT} \
-                              -e EMAIL_SENDER="${INJECTED_EMAIL_SENDER}" \
-                              -e EMAIL_RECIPIENTS="${INJECTED_EMAIL_RECIPIENTS}" \
-                              -e EMAIL_USE_SSL=${INJECTED_EMAIL_USE_SSL} \
-                              -e ALLURE_PUBLIC_URL="${allureReportUrl}" \
-                              -e BUILD_STATUS="${currentBuild.result ?: 'SUCCESS'}" \
-                              -e BUILD_URL="${env.BUILD_URL}" \
-                              -e JOB_NAME="${env.JOB_NAME}" \
-                              -e BUILD_NUMBER="${BUILD_NUMBER}" \
-                              -e TZ="Asia/Shanghai" \
-                              -v ${env.HOST_WORKSPACE_PATH}:/workspace:ro \
-                              -v ${env.HOST_ALLURE_REPORT_PATH}:/report:ro \
-                              -v /etc/localtime:/etc/localtime:ro \
-                              --network host \
-                              ${env.DOCKER_IMAGE} \
+                            docker run --rm --name notify-${BUILD_NUMBER} \\
+                              -e CI=true \\
+                              -e APP_ENV=${params.APP_ENV} \\
+                              -e EMAIL_ENABLED=${params.SEND_EMAIL} \\
+                              -e EMAIL_PASSWORD='${INJECTED_EMAIL_PASSWORD}' \\
+                              -e EMAIL_SMTP_SERVER="${INJECTED_EMAIL_SMTP_SERVER}" \\
+                              -e EMAIL_SMTP_PORT=${INJECTED_EMAIL_SMTP_PORT} \\
+                              -e EMAIL_SENDER="${INJECTED_EMAIL_SENDER}" \\
+                              -e EMAIL_RECIPIENTS="${INJECTED_EMAIL_RECIPIENTS}" \\
+                              -e EMAIL_USE_SSL=${INJECTED_EMAIL_USE_SSL} \\
+                              -e ALLURE_PUBLIC_URL="${allureReportUrl}" \\
+                              -e BUILD_STATUS="${currentBuild.result ?: 'SUCCESS'}" \\
+                              -e BUILD_URL="${env.BUILD_URL}" \\
+                              -e JOB_NAME="${env.JOB_NAME}" \\
+                              -e BUILD_NUMBER="${BUILD_NUMBER}" \\
+                              -e TZ="Asia/Shanghai" \\
+                              -v ${env.HOST_WORKSPACE_PATH}:/workspace:ro \\
+                              -v ${env.HOST_ALLURE_REPORT_PATH}:/report:ro \\
+                              -v /etc/localtime:/etc/localtime:ro \\
+                              --network host \\
+                              ${env.DOCKER_IMAGE} \\
                               python /workspace/ci/scripts/run_and_notify.py
                             echo "通知脚本执行完毕。"
                             """
@@ -478,10 +480,10 @@ pipeline {
 
                     echo "清理 Agent 工作空间 ${WORKSPACE} 和临时报告目录 ${env.HOST_ALLURE_REPORT_PATH} (在宿主机上)..."
                     sh """
-                    docker run --rm --name cleanup-temp-report-${BUILD_NUMBER} \
-                      -v ${env.HOST_WORKSPACE_PATH}:/host_workspace:rw \
-                      --user root \
-                      ${env.DOCKER_IMAGE} \
+                    docker run --rm --name cleanup-temp-report-${BUILD_NUMBER} \\
+                      -v ${env.HOST_WORKSPACE_PATH}:/host_workspace:rw \\
+                      --user root \\
+                      ${env.DOCKER_IMAGE} \\
                       sh -c 'rm -rf /host_workspace/output/reports/temp-allure-report-for-summary && echo "Host temporary report directory removed."'
                     """
                     cleanWs()
