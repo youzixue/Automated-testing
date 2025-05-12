@@ -243,7 +243,7 @@ pipeline {
                                             echo \'--- Attempting ADB connect (likely network device) ---\'; \\ \
                                             adb connect ${primaryDeviceSerial}; \\ \
                                             connect_status=\$?; \\ \
-                                            if [ \$connect_status -ne 0 ]; then \\ \
+                                            if [ $connect_status -ne 0 ]; then \\ \
                                                 echo \'ADB connect command FAILED for ${primaryDeviceSerial}. Exiting...\'; \\ \
                                                 exit 1; \\ \
                                             fi; \\ \
@@ -275,7 +275,7 @@ pipeline {
                                                 echo \'--- Attempting ADB connect (likely network device) ---\'; \\ \
                                                 adb connect ${secondaryDeviceSerial}; \\ \
                                                 connect_status=\$?; \\ \
-                                                if [ \$connect_status -ne 0 ]; then \\ \
+                                                if [ $connect_status -ne 0 ]; then \\ \
                                                     echo \'ADB connect command FAILED for ${secondaryDeviceSerial}. Exiting...\'; \\ \
                                                     exit 1; \\ \
                                                 fi; \\ \
