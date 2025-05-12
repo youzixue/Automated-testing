@@ -235,23 +235,23 @@ pipeline {
                                     docker run --rm --name adb-recheck-main-${BUILD_NUMBER} \\
                                       -v "${env.HOST_ADB_KEYS_ANDROID_DIR}":/root/.android \\
                                       --privileged \\
-                                      --network host -e ANDROID_SERIAL="${primaryDeviceSerial}" \\
-                                      ${env.DOCKER_IMAGE} sh -c " \\
-                                        echo '--- Attempting ADB connect (primary) ---'; \\
-                                        adb connect ${primaryDeviceSerial}; \\
-                                        sleep 3; \\
-                                        echo '--- ADB kill-server (primary) ---'; \\
-                                        adb kill-server; \\
-                                        sleep 2; \\
-                                        echo '--- ADB start-server (primary) ---'; \\
-                                        adb start-server; \\
-                                        sleep 2; \\
-                                        echo '--- ADB devices output BEFORE grep (primary) ---'; \\
-                                        adb devices -l; \\
-                                        echo '--- Grepping for ${primaryDeviceSerial} (状态可能是 device, offline, unauthorized) (primary) ---'; \\
-                                        adb devices -l | grep '${primaryDeviceSerial}'; \\
-                                        echo '--- Specifically grepping for ${primaryDeviceSerial}[[:space:]]device (primary) ---'; \\
-                                        adb devices -l | grep '${primaryDeviceSerial}[[:space:]]device' && echo 'Grep for DEVICE status SUCCESSFUL (primary)' || (echo 'Grep for DEVICE status FAILED (primary), exiting...' && exit 1) \\
+                                      --network host -e ANDROID_SERIAL="${primaryDeviceSerial}" \
+                                      ${env.DOCKER_IMAGE} sh -c " \
+                                        echo '--- Attempting ADB connect (primary) ---'; \
+                                        adb connect ${primaryDeviceSerial}; \
+                                        connect_status=$?; \
+                                        if [ $connect_status -ne 0 ]; then \
+                                            echo 'ADB connect command FAILED (primary). Exiting...'; \
+                                            exit 1; \
+                                        fi; \
+                                        echo 'ADB connect command reported success or device already connected (primary).'; \
+                                        sleep 3; \
+                                        echo '--- ADB devices output AFTER connect (primary) ---'; \
+                                        adb devices -l; \
+                                        echo '--- Grepping for ${primaryDeviceSerial} (状态可能是 device, offline, unauthorized) (primary) ---'; \
+                                        adb devices -l | grep '${primaryDeviceSerial}'; \
+                                        echo '--- Specifically grepping for ${primaryDeviceSerial}[[:space:]]device (primary) ---'; \
+                                        adb devices -l | grep '${primaryDeviceSerial}[[:space:]]device' && echo 'Grep for DEVICE status SUCCESSFUL (primary)' || (echo 'Grep for DEVICE status FAILED (primary), exiting...' && exit 1) \
                                       " || (echo "错误: 容器内再次检查主设备 ${primaryDeviceSerial} 的脚本执行失败或设备未找到/未授权!" && exit 1)
                                     echo "容器内主设备 ${primaryDeviceSerial} 再次检查通过。"
                                     """
@@ -261,23 +261,23 @@ pipeline {
                                         docker run --rm --name adb-recheck-sec-${BUILD_NUMBER} \\
                                           -v "${env.HOST_ADB_KEYS_ANDROID_DIR}":/root/.android \\
                                           --privileged \\
-                                          --network host -e ANDROID_SERIAL="${secondaryDeviceSerial}" \\
-                                          ${env.DOCKER_IMAGE} sh -c " \\
-                                            echo '--- Attempting ADB connect (secondary) ---'; \\
-                                            adb connect ${secondaryDeviceSerial}; \\
-                                            sleep 3; \\
-                                            echo '--- ADB kill-server (secondary) ---'; \\
-                                            adb kill-server; \\
-                                            sleep 2; \\
-                                            echo '--- ADB start-server (secondary) ---'; \\
-                                            adb start-server; \\
-                                            sleep 2; \\
-                                            echo '--- ADB devices output BEFORE grep (secondary) ---'; \\
-                                            adb devices -l; \\
-                                            echo '--- Grepping for ${secondaryDeviceSerial} (状态可能是 device, offline, unauthorized) (secondary) ---'; \\
-                                            adb devices -l | grep '${secondaryDeviceSerial}'; \\
-                                            echo '--- Specifically grepping for ${secondaryDeviceSerial}[[:space:]]device (secondary) ---'; \\
-                                            adb devices -l | grep '${secondaryDeviceSerial}[[:space:]]device' && echo 'Grep for DEVICE status SUCCESSFUL (secondary)' || (echo 'Grep for DEVICE status FAILED (secondary), exiting...' && exit 1) \\
+                                          --network host -e ANDROID_SERIAL="${secondaryDeviceSerial}" \
+                                          ${env.DOCKER_IMAGE} sh -c " \
+                                            echo '--- Attempting ADB connect (secondary) ---'; \
+                                            adb connect ${secondaryDeviceSerial}; \
+                                            connect_status=$?; \
+                                            if [ $connect_status -ne 0 ]; then \
+                                                echo 'ADB connect command FAILED (secondary). Exiting...'; \
+                                                exit 1; \
+                                            fi; \
+                                            echo 'ADB connect command reported success or device already connected (secondary).'; \
+                                            sleep 3; \
+                                            echo '--- ADB devices output AFTER connect (secondary) ---'; \
+                                            adb devices -l; \
+                                            echo '--- Grepping for ${secondaryDeviceSerial} (状态可能是 device, offline, unauthorized) (secondary) ---'; \
+                                            adb devices -l | grep '${secondaryDeviceSerial}'; \
+                                            echo '--- Specifically grepping for ${secondaryDeviceSerial}[[:space:]]device (secondary) ---'; \
+                                            adb devices -l | grep '${secondaryDeviceSerial}[[:space:]]device' && echo 'Grep for DEVICE status SUCCESSFUL (secondary)' || (echo 'Grep for DEVICE status FAILED (secondary), exiting...' && exit 1) \
                                           " || (echo "错误: 容器内再次检查次设备 ${secondaryDeviceSerial} 的脚本执行失败或设备未找到/未授权!" && exit 1)
                                         echo "容器内次设备 ${secondaryDeviceSerial} 再次检查通过。"
                                         """
