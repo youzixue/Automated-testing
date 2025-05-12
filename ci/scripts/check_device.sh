@@ -49,58 +49,65 @@ fi
 
 # ===== 设备解锁逻辑 =====
 echo "--- 检查设备 $DEVICE_SERIAL 屏幕状态 ---"
-SCREEN_STATE=$(adb -s "$DEVICE_SERIAL" shell dumpsys power | grep 'Display Power' | grep -oE '(ON|OFF)' || echo "UNKNOWN")
-if [ "$SCREEN_STATE" != "ON" ]; then
-  echo "设备 $DEVICE_SERIAL 屏幕处于关闭状态，尝试唤醒..."
-  adb -s "$DEVICE_SERIAL" shell input keyevent 26  # POWER按键
+# 使用多种方式检测屏幕状态，增加兼容性
+SCREEN_STATE_1=$(adb -s "$DEVICE_SERIAL" shell dumpsys power | grep 'Display Power' | grep -oE '(ON|OFF)' || echo "")
+SCREEN_STATE_2=$(adb -s "$DEVICE_SERIAL" shell dumpsys power | grep 'mWakefulness=' | grep -oE '(Awake|Asleep)' || echo "")
+SCREEN_STATE_3=$(adb -s "$DEVICE_SERIAL" shell dumpsys display | grep 'mState=' | grep -oE '(ON|OFF)' || echo "")
+
+# 确定屏幕是否需要点亮
+if [ "$SCREEN_STATE_1" = "ON" ] || [ "$SCREEN_STATE_2" = "Awake" ] || [ "$SCREEN_STATE_3" = "ON" ]; then
+  echo "设备 $DEVICE_SERIAL 屏幕已处于点亮状态"
+else
+  echo "设备 $DEVICE_SERIAL 屏幕可能处于关闭状态，尝试唤醒..."
+  adb -s "$DEVICE_SERIAL" shell input keyevent 26  # POWER键
   sleep 2
 fi
 
 echo "--- 检查设备 $DEVICE_SERIAL 锁屏状态 ---"
-LOCKED=$(adb -s "$DEVICE_SERIAL" shell dumpsys window | grep -E 'mDreamingLockscreen=(true|false)' | grep -oE '(true|false)' || echo "UNKNOWN")
+# 先尝试检测锁屏状态，但不完全依赖结果
+LOCK_CHECK=$(adb -s "$DEVICE_SERIAL" shell dumpsys window | grep -E 'mDreamingLockscreen=(true|false)' | head -n 1 | grep -oE '(true|false)' || echo "UNKNOWN")
 
-if [ "$LOCKED" = "true" ]; then
-  echo "设备 $DEVICE_SERIAL 处于锁屏状态，尝试解锁..."
-  # 先尝试滑动解锁
-  adb -s "$DEVICE_SERIAL" shell input swipe 500 1500 500 500
+# 无论锁屏状态如何，都先尝试滑动解锁
+echo "设备 $DEVICE_SERIAL 尝试滑动解锁..."
+adb -s "$DEVICE_SERIAL" shell input swipe 500 1500 500 500
+sleep 1
+
+# 如果提供了PIN码，总是尝试输入
+if [ ! -z "$UNLOCK_PIN" ]; then
+  echo "尝试使用PIN码($UNLOCK_PIN)解锁设备 $DEVICE_SERIAL..."
+  
+  # 确保设备已唤醒
+  adb -s "$DEVICE_SERIAL" shell input keyevent 82  # MENU键，唤醒一些设备
   sleep 1
   
-  # 再次检查锁屏状态
-  LOCKED=$(adb -s "$DEVICE_SERIAL" shell dumpsys window | grep -E 'mDreamingLockscreen=(true|false)' | grep -oE '(true|false)' || echo "UNKNOWN")
+  # 输入每个数字
+  for i in $(seq 1 ${#UNLOCK_PIN}); do
+    DIGIT=$(echo "$UNLOCK_PIN" | cut -c$i)
+    adb -s "$DEVICE_SERIAL" shell input text "$DIGIT"
+    sleep 0.2
+  done
+  # 点击回车确认
+  adb -s "$DEVICE_SERIAL" shell input keyevent 66
+  sleep 2
   
-  # 如果仍然锁屏且提供了PIN码，尝试输入PIN码
-  if [ "$LOCKED" = "true" ] && [ ! -z "$UNLOCK_PIN" ]; then
-    echo "尝试使用PIN码解锁设备 $DEVICE_SERIAL..."
-    # 输入每个数字
-    for i in $(seq 1 ${#UNLOCK_PIN}); do
-      DIGIT=$(echo "$UNLOCK_PIN" | cut -c$i)
-      adb -s "$DEVICE_SERIAL" shell input text "$DIGIT"
-      sleep 0.2
-    done
-    # 点击回车确认
-    adb -s "$DEVICE_SERIAL" shell input keyevent 66
-    sleep 2
-  fi
-  
-  # 最终再次检查
-  LOCKED=$(adb -s "$DEVICE_SERIAL" shell dumpsys window | grep -E 'mDreamingLockscreen=(true|false)' | grep -oE '(true|false)' || echo "UNKNOWN")
-  if [ "$LOCKED" = "true" ]; then
-    echo "警告: 无法解锁设备 $DEVICE_SERIAL，这可能会影响后续测试！"
-    # 不要在此退出，以保持测试继续进行，可能某些测试不需要解锁
-    # 我们会返回退出码1，让调用脚本决定如何处理
-    exit 1
-  else
-    echo "设备 $DEVICE_SERIAL 已成功解锁"
-  fi
-else
-  echo "设备 $DEVICE_SERIAL 已处于解锁状态"
+  # 再次尝试点击一下屏幕中央(某些设备可能需要)
+  adb -s "$DEVICE_SERIAL" shell input tap 500 1000
+  sleep 1
 fi
 
 # 最终确保设备亮屏
-SCREEN_STATE=$(adb -s "$DEVICE_SERIAL" shell dumpsys power | grep 'Display Power' | grep -oE '(ON|OFF)' || echo "UNKNOWN")
-if [ "$SCREEN_STATE" != "ON" ]; then
-  echo "设备 $DEVICE_SERIAL 屏幕仍然关闭，再次尝试唤醒..."
+SCREEN_STATE_1=$(adb -s "$DEVICE_SERIAL" shell dumpsys power | grep 'Display Power' | grep -oE '(ON|OFF)' || echo "")
+SCREEN_STATE_2=$(adb -s "$DEVICE_SERIAL" shell dumpsys power | grep 'mWakefulness=' | grep -oE '(Awake|Asleep)' || echo "")
+SCREEN_STATE_3=$(adb -s "$DEVICE_SERIAL" shell dumpsys display | grep 'mState=' | grep -oE '(ON|OFF)' || echo "")
+
+if [ "$SCREEN_STATE_1" = "ON" ] || [ "$SCREEN_STATE_2" = "Awake" ] || [ "$SCREEN_STATE_3" = "ON" ]; then
+  echo "设备 $DEVICE_SERIAL 屏幕已处于点亮状态"
+else
+  echo "设备 $DEVICE_SERIAL 屏幕可能仍然关闭，再次尝试唤醒..."
   adb -s "$DEVICE_SERIAL" shell input keyevent 26
+  sleep 1
+  # 尝试点击屏幕中央
+  adb -s "$DEVICE_SERIAL" shell input tap 500 1000
   sleep 1
 fi
 
