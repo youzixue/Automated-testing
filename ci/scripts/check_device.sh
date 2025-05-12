@@ -3,7 +3,6 @@ set -e # 如果任何命令失败，则立即退出
 set -x # 打印执行的命令
 
 DEVICE_SERIAL="$1"
-UNLOCK_PIN="$2" # 设备解锁PIN码，可选参数
 
 if [ -z "$DEVICE_SERIAL" ]; then
   echo "错误：设备序列号未提供！"
@@ -47,74 +46,4 @@ else
   exit 1
 fi
 
-# ===== 设备解锁逻辑 =====
-echo "--- 检查设备 $DEVICE_SERIAL 锁屏状态 ---"
-
-# 检查屏幕状态
-SCREEN_STATE_1=$(adb -s "$DEVICE_SERIAL" shell dumpsys power | grep 'Display Power' | grep -oE '(ON|OFF)' || echo "")
-SCREEN_STATE_2=$(adb -s "$DEVICE_SERIAL" shell dumpsys power | grep 'mWakefulness=' | grep -oE '(Awake|Asleep)' || echo "")
-SCREEN_STATE_3=$(adb -s "$DEVICE_SERIAL" shell dumpsys display | grep 'mState=' | grep -oE '(ON|OFF)' || echo "")
-
-SCREEN_ON=false
-if [ "$SCREEN_STATE_1" = "ON" ] || [ "$SCREEN_STATE_2" = "Awake" ] || [ "$SCREEN_STATE_3" = "ON" ]; then
-  SCREEN_ON=true
-  echo "设备 $DEVICE_SERIAL 屏幕已处于点亮状态"
-fi
-
-# 检查锁屏状态 - 使用多种方法
-LOCKED=true
-LOCK_CHECK_1=$(adb -s "$DEVICE_SERIAL" shell dumpsys window | grep -E 'mDreamingLockscreen=(true|false)' | head -n 1 | grep -oE '(true|false)' || echo "UNKNOWN")
-LOCK_CHECK_2=$(adb -s "$DEVICE_SERIAL" shell dumpsys window policy | grep -E 'isStatusBarKeyguard=(true|false)' | grep -oE '(true|false)' || echo "UNKNOWN")
-LOCK_CHECK_3=$(adb -s "$DEVICE_SERIAL" shell dumpsys power | grep -E 'mHoldingWakeLockSuspendBlocker=(true|false)' | grep -oE '(true|false)' || echo "UNKNOWN")
-
-if [ "$LOCK_CHECK_1" = "false" ] || [ "$LOCK_CHECK_2" = "false" ] || [ "$LOCK_CHECK_3" = "true" ]; then
-  echo "检测到设备 $DEVICE_SERIAL 可能已处于解锁状态"
-  LOCKED=false
-else
-  echo "设备 $DEVICE_SERIAL 可能处于锁屏状态，需要解锁"
-fi
-
-# 如果屏幕关闭，先唤醒屏幕
-if [ "$SCREEN_ON" = "false" ]; then
-  echo "设备 $DEVICE_SERIAL 屏幕处于关闭状态，尝试唤醒..."
-  adb -s "$DEVICE_SERIAL" shell input keyevent 26  # POWER键
-  sleep 2
-fi
-
-# 如果设备可能被锁定，尝试解锁
-if [ "$LOCKED" = "true" ]; then
-  echo "尝试解锁设备 $DEVICE_SERIAL..."
-  
-  # 先尝试滑动解锁 (对于简单的滑动锁屏)
-  adb -s "$DEVICE_SERIAL" shell input swipe 500 1500 500 500
-  sleep 1
-  
-  # 如果提供了PIN码，尝试输入
-  if [ ! -z "$UNLOCK_PIN" ]; then
-    echo "尝试使用PIN码($UNLOCK_PIN)解锁设备 $DEVICE_SERIAL..."
-    
-    # 输入每个数字
-    for i in $(seq 1 ${#UNLOCK_PIN}); do
-      DIGIT=$(echo "$UNLOCK_PIN" | cut -c$i)
-      adb -s "$DEVICE_SERIAL" shell input text "$DIGIT"
-      sleep 0.2
-    done
-    # 点击回车确认
-    adb -s "$DEVICE_SERIAL" shell input keyevent 66
-    sleep 2
-  fi
-fi
-
-# 最终确认设备状态 (但不执行额外操作，避免影响其他应用)
-FINAL_SCREEN_STATE_1=$(adb -s "$DEVICE_SERIAL" shell dumpsys power | grep 'Display Power' | grep -oE '(ON|OFF)' || echo "")
-FINAL_SCREEN_STATE_2=$(adb -s "$DEVICE_SERIAL" shell dumpsys power | grep 'mWakefulness=' | grep -oE '(Awake|Asleep)' || echo "")
-FINAL_SCREEN_STATE_3=$(adb -s "$DEVICE_SERIAL" shell dumpsys display | grep 'mState=' | grep -oE '(ON|OFF)' || echo "")
-
-if [ "$FINAL_SCREEN_STATE_1" = "ON" ] || [ "$FINAL_SCREEN_STATE_2" = "Awake" ] || [ "$FINAL_SCREEN_STATE_3" = "ON" ]; then
-  echo "设备 $DEVICE_SERIAL 屏幕现在处于点亮状态"
-else
-  echo "警告: 设备 $DEVICE_SERIAL 屏幕可能仍然关闭，这可能会影响测试"
-fi
-
-echo "--- 设备 $DEVICE_SERIAL 检查并解锁完成 ---"
 exit 0 
