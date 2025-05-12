@@ -32,7 +32,23 @@ def wait_for_activity(device: 'Device', expected_activity_suffix: str,
         try:
             current_activity_info = device.get_top_activity()
             if current_activity_info:
-                current_package_name, current_activity_name = current_activity_info
+                # 修改此处以更健壮地处理不同返回格式
+                # current_package_name, current_activity_name = current_activity_info  # 原始代码
+                # 修改为更健壮的版本，处理返回2个值或3个值的情况
+                if isinstance(current_activity_info, (list, tuple)):
+                    # 确保至少有两个元素
+                    if len(current_activity_info) >= 2:
+                        current_package_name = current_activity_info[0]
+                        current_activity_name = current_activity_info[1]
+                    else:
+                        logger.warning(f"[{time.time():.3f}] get_top_activity 返回格式异常: {current_activity_info}")
+                        time.sleep(check_interval)
+                        continue
+                else:
+                    logger.warning(f"[{time.time():.3f}] get_top_activity 返回类型异常: {type(current_activity_info)}")
+                    time.sleep(check_interval)
+                    continue
+                
                 # 只有当Activity名称变化时才记录，或者首次记录
                 if current_activity_name != last_logged_activity:
                     logger.info(f"[{time.time():.3f}] 当前顶层 Activity: {current_package_name}/{current_activity_name}")
