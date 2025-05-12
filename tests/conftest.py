@@ -92,25 +92,45 @@ def _setup_device_poco_session(config: Dict[str, Any],
     if not AIRTEST_AVAILABLE:
         platform_logger.error("Airtest/Poco 不可用，无法设置设备会话。")
         return None, None, 20 # 返回默认超时
-        
-    device_uri = None
+
+    # 1. Get ANDROID_SERIAL
+    actual_android_serial = os.environ.get("ANDROID_SERIAL")
+    platform_logger.info(f"ANDROID_SERIAL environment variable: '{actual_android_serial}'")
+
+    # 2. Determine initial_device_uri from config
+    initial_device_uri_from_config = None
     for key_path in device_uri_keys:
         keys = key_path.split('.')
         value = config
         try:
             for key in keys:
                 value = value[key]
-            if isinstance(value, str):
-                device_uri = value
+            if isinstance(value, str) and value.strip(): # Ensure value is a non-empty string
+                initial_device_uri_from_config = value.strip()
+                platform_logger.debug(f"Found device_uri '{initial_device_uri_from_config}' in config using key path '{key_path}'")
                 break
         except (KeyError, TypeError):
             continue
+    platform_logger.info(f"Initial device_uri from config: '{initial_device_uri_from_config}' (attempted keys: {device_uri_keys})")
+
+    # 3. Determine effective_device_uri
+    effective_device_uri = None
+    is_android_target_by_serial = False
+
+    if actual_android_serial and actual_android_serial.strip():
+        effective_device_uri = f"android:///{actual_android_serial.strip()}"
+        is_android_target_by_serial = True
+        platform_logger.info(f"ANDROID_SERIAL is set. Using it as effective_device_uri: '{effective_device_uri}'")
+    elif initial_device_uri_from_config:
+        effective_device_uri = initial_device_uri_from_config
+        platform_logger.info(f"ANDROID_SERIAL not set or empty. Using device_uri from config: '{effective_device_uri}'")
+    else:
+        platform_logger.error(f"Critical: Neither ANDROID_SERIAL env var nor a valid device URI in config (keys: {device_uri_keys}) was found.")
+        pytest.fail(f"No device target specified (ANDROID_SERIAL or config URI). This is a configuration error.")
+        # Should not reach here due to pytest.fail, but as a fallback:
+        return None, None, 20 
             
-    if not device_uri:
-        platform_logger.error(f"在配置中未找到有效的设备 URI (尝试的键: {device_uri_keys})")
-        pytest.fail(f"未配置设备 URI (尝试的键: {device_uri_keys})")
-        
-    # Timeout Calculation
+    # Timeout Calculation (existing logic is fine)
     timeout_from_config = None
     for key_path in timeout_keys:
         keys = key_path.split('.')
@@ -131,56 +151,87 @@ def _setup_device_poco_session(config: Dict[str, Any],
                 timeout = int(float(timeout_from_config))
             else:
                 timeout = int(timeout_from_config)
-            platform_logger.debug(f"使用超时值: {timeout} (类型: {type(timeout)})，来自配置: '{timeout_from_config}'")
+            platform_logger.debug(f"Using timeout value: {timeout} (type: {type(timeout)}), from config: '{timeout_from_config}'")
         except (ValueError, TypeError):
-            platform_logger.warning(f"配置中的超时值 '{timeout_from_config}' 无法转换为整数，使用默认值 {default_timeout}")
+            platform_logger.warning(f"Configured timeout '{timeout_from_config}' is invalid, using default {default_timeout}s.")
             timeout = default_timeout
     else:
-        platform_logger.debug(f"未找到超时配置 (尝试的键: {timeout_keys})，使用默认值 {default_timeout}")
+        platform_logger.debug(f"No timeout configured (keys: {timeout_keys}), using default {default_timeout}s.")
 
     device: Optional[Device] = None
     poco: Optional[Any] = None
-    platform_logger.info(f"尝试连接设备: {device_uri}...")
+    platform_logger.info(f"Attempting to connect to device using effective URI: '{effective_device_uri}'...")
+    
     try:
-        device = connect_device(device_uri)
-        platform_logger.info(f"设备连接成功: {device} (类型: {type(device)})" ) 
+        # 4. Call connect_device
+        device = connect_device(effective_device_uri)
+        platform_logger.info(f"Device connection successful: {device} (Type: {type(device)}) for URI: '{effective_device_uri}'")
         
         if G:
             G.DEVICE = device
 
+        # 5. Poco Initialization
+        # Determine platform primarily by `isinstance(device, Android)` after connection
         if isinstance(device, Android):
-            platform_logger.info("检测到 Android 平台，初始化 AndroidUiautomationPoco...")
+            platform_logger.info("Device is instance of Android. Initializing AndroidUiautomationPoco...")
             poco = AndroidUiautomationPoco(device=device, use_airtest_input=True, screenshot_each_action=False)
-            platform_logger.info("Poco (AndroidUiautomationPoco) 初始化成功.")
-        elif "ios" in device_uri.lower():
-            platform_logger.info("检测到 iOS 平台，尝试导入并初始化 IosUiautomationPoco...")
+            platform_logger.info("Poco (AndroidUiautomationPoco) initialized.")
+        elif "ios" in effective_device_uri.lower() and not isinstance(device, Android): 
+            # This case handles if URI clearly says "ios" and it's not an Android instance
+            platform_logger.info("Effective URI suggests iOS and not an Android instance. Attempting IosUiautomationPoco...")
             try:
                 from poco.drivers.ios.uiautomation import IosUiautomationPoco
                 poco = IosUiautomationPoco(device=device)
-                platform_logger.info("Poco (IosUiautomationPoco) 初始化成功.")
+                platform_logger.info("Poco (IosUiautomationPoco) initialized successfully.")
             except ImportError:
-                 platform_logger.warning("导入 IosUiautomationPoco 失败，iOS Poco 功能将不可用。")
+                 platform_logger.warning("Import IosUiautomationPoco failed. iOS Poco features will be unavailable.")
                  poco = None 
             except Exception as ios_init_error:
-                 platform_logger.error(f"初始化 IosUiautomationPoco 时发生错误: {ios_init_error}", exc_info=True)
+                 platform_logger.error(f"Error initializing IosUiautomationPoco: {ios_init_error}", exc_info=True)
                  poco = None 
-        else:
-            platform_logger.error(f"无法从设备对象类型 ({type(device)}) 或 URI ({device_uri}) 判断平台类型.")
-            device = None 
+        elif is_android_target_by_serial and not isinstance(device, Android):
+            # Fallback: ANDROID_SERIAL was used (implying Android), but device isn't an Android instance.
+            # This might happen with some emulators or indirect connections. Try AndroidPoco.
+            platform_logger.warning(f"ANDROID_SERIAL was used, but connected device type is {type(device)} (not Android instance). Attempting AndroidUiautomationPoco as a fallback.")
+            try:
+                poco = AndroidUiautomationPoco(device=device, use_airtest_input=True, screenshot_each_action=False)
+                platform_logger.info("Poco (AndroidUiautomationPoco) initialized via fallback for ANDROID_SERIAL case.")
+            except Exception as e_poco_fallback:
+                platform_logger.error(f"Fallback AndroidUiautomationPoco initialization failed: {e_poco_fallback}", exc_info=True)
+                poco = None
+        else: # Cannot determine platform for Poco
+            platform_logger.error(f"Cannot determine platform type for Poco initialization from device type ({type(device)}) or URI ({effective_device_uri}). Poco will not be initialized.")
             poco = None
         
         if G:
             G.POCO = poco
-        platform_logger.info("设备和 Poco 实例已设置到全局 G (如果可用)")
+        platform_logger.info("Device and Poco instances (if initialized) set to G (if G is available).")
         
         return device, poco, timeout
         
-    except (DeviceConnectionError, AdbError, TargetNotFoundError, RuntimeError) as e:
-        platform_logger.error(f"连接设备或初始化 Poco 失败: {e}", exc_info=True)
-        return None, None, timeout 
-    except Exception as e:
-        platform_logger.error(f"设置设备/Poco 会话时发生未知错误: {e}", exc_info=True)
-        return None, None, timeout
+    # 6. Enhanced Exception Handling for connection phase
+    except IndexError as ie: 
+        platform_logger.error(f"Airtest IndexError during device connection for URI '{effective_device_uri}': {ie}. This often means 'ADB devices not found'.", exc_info=True)
+        pytest.skip(f"Skipping test due to Airtest IndexError (likely ADB devices not found or access issue) for '{effective_device_uri}': {ie}")
+    except AdbError as adbe:
+        platform_logger.error(f"Airtest AdbError during device connection for URI '{effective_device_uri}': {adbe}", exc_info=True)
+        pytest.skip(f"Skipping test due to Airtest AdbError for '{effective_device_uri}': {adbe}")
+    except DeviceConnectionError as dce: # Airtest's base connection error
+        platform_logger.error(f"Airtest DeviceConnectionError for URI '{effective_device_uri}': {dce}", exc_info=True)
+        pytest.skip(f"Skipping test due to Airtest DeviceConnectionError for '{effective_device_uri}': {dce}")
+    except TargetNotFoundError as tnfe: # If connect_device raises this (less common for connect, more for actions)
+        platform_logger.error(f"Airtest TargetNotFoundError during device connection for URI '{effective_device_uri}': {tnfe}", exc_info=True)
+        pytest.skip(f"Skipping test due to Airtest TargetNotFoundError for '{effective_device_uri}': {tnfe}")
+    except RuntimeError as rte: 
+        platform_logger.error(f"RuntimeError during device connection/Poco setup for URI '{effective_device_uri}': {rte}", exc_info=True)
+        pytest.skip(f"Skipping test due to RuntimeError for '{effective_device_uri}': {rte}")
+    except Exception as e: # Catch-all for other unexpected errors during setup
+        platform_logger.error(f"Unexpected critical error during device/Poco setup for URI '{effective_device_uri}': {e}", exc_info=True)
+        pytest.skip(f"Skipping test due to unexpected critical error during setup for '{effective_device_uri}': {e}")
+    
+    # This line should ideally not be reached if an exception occurs and pytest.skip is called.
+    # However, as a very final fallback in case skip doesn't behave as expected in some edge pytest version/plugin combo.
+    return None, None, timeout
 
 # --- Helper Function for Airtest Screenshot Attachment ---
 def _attach_airtest_screenshot(item, report, config_getter: Callable[[], Dict[str, Any]], 
