@@ -25,6 +25,12 @@ pipeline {
                description: '微信App的包名', 
                trim: true)
 
+        // ++ 新增的参数 ++
+        string(name: 'CFG_WECHAT_MINI_PROGRAM_TARGET', defaultValue: 'CMpark智慧停车', description: '微信小程序目标名称 (Jenkins Parameter)', trim: true)
+        string(name: 'CFG_WECHAT_OFFICIAL_ACCOUNT_TARGET', defaultValue: 'CMpark招商享停车', description: '微信公众号目标名称 (Jenkins Parameter)', trim: true)
+        string(name: 'CFG_EXPECTED_PAYMENT_ACTIVITY_SUFFIX', defaultValue: '.framework.app.UIPageFragmentActivity', description: '期望的支付Activity后缀 (Jenkins Parameter)', trim: true)
+        // -- 结束新增的参数 --
+
         choice(name: 'TEST_SUITE', choices: ['全部', '冒烟测试', '回归测试'], description: '选择测试套件')
         booleanParam(name: 'SEND_EMAIL', defaultValue: true, description: '是否发送邮件通知')
     }
@@ -196,6 +202,7 @@ pipeline {
 
                             if (params.RUN_APP_RELATED_TESTS) {
                                 def primaryDeviceSerial = params.PRIMARY_APP_DEVICE_SERIAL.trim()
+                                echo "DEBUG: Actual primaryDeviceSerial before device check is: '${primaryDeviceSerial}'" // <-- 已添加调试语句
                                 def secondaryDeviceSerial = params.SECONDARY_APP_DEVICE_SERIAL.trim()
 
                                 boolean useTwoDevices = false
@@ -212,6 +219,9 @@ pipeline {
                                 
                                 if (primaryDeviceSerial && !primaryDeviceSerial.isEmpty()) {
                                     // 设备检查仍然保留，以确保在运行实际测试前设备仍然可见
+                                    // 注意: 下面的 adb kill-server 和 start-server 是为了尝试解决一些 adb 服务不稳定的情况，
+                                    // 但如果 adb 服务本身或设备连接有问题，这可能不足以解决。
+                                    // 同时 grep 条件更改为更通用的 device|offline|unauthorized 来获取更多信息，但最终还是需要 device 状态。
                                     sh """
                                     echo "在容器内再次检查主设备 ${primaryDeviceSerial} ..."
                                     docker run --rm --name adb-recheck-main-${BUILD_NUMBER} \\
@@ -219,10 +229,18 @@ pipeline {
                                       --privileged \\
                                       --network host -e ANDROID_SERIAL="${primaryDeviceSerial}" \\
                                       ${env.DOCKER_IMAGE} sh -c " \\
-                                        echo '--- ADB devices output (recheck main device) ---'; \\
-                                        adb devices; \\
-                                        echo '--- Grepping for ${primaryDeviceSerial}[[:space:]]device (recheck main device) ---'; \\
-                                        adb devices | grep '${primaryDeviceSerial}[[:space:]]device' && echo 'Grep SUCCESSFUL (recheck main device)' || (echo 'Grep FAILED (recheck main device), exiting...' && exit 1) \\
+                                        echo '--- ADB kill-server (primary) ---'; \\
+                                        adb kill-server; \\
+                                        sleep 2; \\
+                                        echo '--- ADB start-server (primary) ---'; \\
+                                        adb start-server; \\
+                                        sleep 2; \\
+                                        echo '--- ADB devices output BEFORE grep (primary) ---'; \\
+                                        adb devices -l; \\
+                                        echo '--- Grepping for ${primaryDeviceSerial} (状态可能是 device, offline, unauthorized) (primary) ---'; \\
+                                        adb devices -l | grep '${primaryDeviceSerial}'; \\
+                                        echo '--- Specifically grepping for ${primaryDeviceSerial}[[:space:]]device (primary) ---'; \\
+                                        adb devices -l | grep '${primaryDeviceSerial}[[:space:]]device' && echo 'Grep for DEVICE status SUCCESSFUL (primary)' || (echo 'Grep for DEVICE status FAILED (primary), exiting...' && exit 1) \\
                                       " || (echo "错误: 容器内再次检查主设备 ${primaryDeviceSerial} 的脚本执行失败或设备未找到/未授权!" && exit 1)
                                     echo "容器内主设备 ${primaryDeviceSerial} 再次检查通过。"
                                     """
@@ -234,10 +252,18 @@ pipeline {
                                           --privileged \\
                                           --network host -e ANDROID_SERIAL="${secondaryDeviceSerial}" \\
                                           ${env.DOCKER_IMAGE} sh -c " \\
-                                            echo '--- ADB devices output (recheck secondary device) ---'; \\
-                                            adb devices; \\
-                                            echo '--- Grepping for ${secondaryDeviceSerial}[[:space:]]device (recheck secondary device) ---'; \\
-                                            adb devices | grep '${secondaryDeviceSerial}[[:space:]]device' && echo 'Grep SUCCESSFUL (recheck secondary device)' || (echo 'Grep FAILED (recheck secondary device), exiting...' && exit 1) \\
+                                            echo '--- ADB kill-server (secondary) ---'; \\
+                                            adb kill-server; \\
+                                            sleep 2; \\
+                                            echo '--- ADB start-server (secondary) ---'; \\
+                                            adb start-server; \\
+                                            sleep 2; \\
+                                            echo '--- ADB devices output BEFORE grep (secondary) ---'; \\
+                                            adb devices -l; \\
+                                            echo '--- Grepping for ${secondaryDeviceSerial} (状态可能是 device, offline, unauthorized) (secondary) ---'; \\
+                                            adb devices -l | grep '${secondaryDeviceSerial}'; \\
+                                            echo '--- Specifically grepping for ${secondaryDeviceSerial}[[:space:]]device (secondary) ---'; \\
+                                            adb devices -l | grep '${secondaryDeviceSerial}[[:space:]]device' && echo 'Grep for DEVICE status SUCCESSFUL (secondary)' || (echo 'Grep for DEVICE status FAILED (secondary), exiting...' && exit 1) \\
                                           " || (echo "错误: 容器内再次检查次设备 ${secondaryDeviceSerial} 的脚本执行失败或设备未找到/未授权!" && exit 1)
                                         echo "容器内次设备 ${secondaryDeviceSerial} 再次检查通过。"
                                         """
@@ -258,6 +284,7 @@ pipeline {
                                           -e DEVICE_URI="Android:///${deviceSerial}" \\
                                           -e JIYU_APP_PACKAGE_NAME="${params.JIYU_APP_PACKAGE}" \\
                                           -e TZ="Asia/Shanghai" \\
+                                          -e PYTEST_EXPECTED_PAYMENT_ACTIVITY_SUFFIX="${params.CFG_EXPECTED_PAYMENT_ACTIVITY_SUFFIX}" \\
                                           -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
                                           -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
                                           -v "${env.HOST_ADB_KEYS_ANDROID_DIR}":/root/.android \\
@@ -283,6 +310,9 @@ pipeline {
                                           -e DEVICE_URI="Android:///${deviceSerial}" \\
                                           -e WECHAT_PACKAGE_NAME="${params.WECHAT_APP_PACKAGE}" \\
                                           -e TZ="Asia/Shanghai" \\
+                                          -e PYTEST_WECHAT_MINI_PROGRAM_TARGET="${params.CFG_WECHAT_MINI_PROGRAM_TARGET}" \\
+                                          -e PYTEST_WECHAT_OFFICIAL_ACCOUNT_TARGET="${params.CFG_WECHAT_OFFICIAL_ACCOUNT_TARGET}" \\
+                                          -e PYTEST_EXPECTED_PAYMENT_ACTIVITY_SUFFIX="${params.CFG_EXPECTED_PAYMENT_ACTIVITY_SUFFIX}" \\
                                           -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
                                           -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
                                           -v "${env.HOST_ADB_KEYS_ANDROID_DIR}":/root/.android \\
