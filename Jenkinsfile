@@ -6,7 +6,7 @@ pipeline {
         choice(name: 'APP_ENV', choices: ['test', 'prod'], description: '选择测试环境')
         booleanParam(name: 'RUN_WEB_TESTS', defaultValue: true, description: '运行Web测试')
         booleanParam(name: 'RUN_API_TESTS', defaultValue: true, description: '运行API测试')
-        booleanParam(name: 'RUN_APP_RELATED_TESTS', defaultValue: false, description: '运行App相关测试 (Mobile 和/或 WeChat)')
+        booleanParam(name: 'RUN_APP_RELATED_TESTS', defaultValue: true, description: '运行App相关测试 (Mobile 和/或 WeChat)') // 默认改为 true 以便测试设备检查
 
         string(name: 'PRIMARY_APP_DEVICE_SERIAL', 
                defaultValue: '20a2da8d', 
@@ -45,12 +45,9 @@ pipeline {
         EMAIL_RECIPIENTS_CREDENTIAL_ID = 'email-recipients'
         EMAIL_USE_SSL_CREDENTIAL_ID = 'email-use-ssl'
 
-        // ***** MODIFIED/ADDED FOR ADB *****
-        // !! 重要: 请将下面的路径替换为你宿主机上实际存放 ADB 密钥的 .android 目录的绝对路径 !!
-        //    例如: '/home/your_minipc_username/my_device_adb_keys/.android'
-        //    或者 如果你的密钥在宿主机的标准用户目录下: '/home/宿主机用户名/.android'
-        //    确保这个目录及其中的 adbkey 和 adbkey.pub 文件存在且已通过设备授权。
-        HOST_ADB_KEYS_ANDROID_DIR = '/home/minipc/my_device_adb_keys/.android' // <--- ****** 必须替换此路径 ******
+        // ***** CRITICAL PATH FOR ADB *****
+        // 确保这个路径是宿主机上存放已授权 ADB 密钥的 .android 目录的绝对路径
+        HOST_ADB_KEYS_ANDROID_DIR = '/home/minipc/my_device_adb_keys/.android' 
 
         HOST_JENKINS_HOME_ON_HOST = '/var/lib/docker/volumes/jenkins_home/_data' 
         HOST_WORKSPACE_PATH = "${HOST_JENKINS_HOME_ON_HOST}/workspace/${env.JOB_NAME}" 
@@ -194,8 +191,8 @@ pipeline {
                             if (params.RUN_APP_RELATED_TESTS) {
                                 def primaryDeviceSerial = params.PRIMARY_APP_DEVICE_SERIAL.trim()
                                 def secondaryDeviceSerial = params.SECONDARY_APP_DEVICE_SERIAL.trim()
-                                def primaryDeviceUri = "Android:///${primaryDeviceSerial}"
-                                def secondaryDeviceUri = secondaryDeviceSerial ? "Android:///${secondaryDeviceSerial}" : ""
+                                // def primaryDeviceUri = "Android:///${primaryDeviceSerial}" // Not used in simplified check
+                                // def secondaryDeviceUri = secondaryDeviceSerial ? "Android:///${secondaryDeviceSerial}" : "" // Not used
 
                                 boolean useTwoDevices = false
                                 if (primaryDeviceSerial && !primaryDeviceSerial.isEmpty() && 
@@ -205,96 +202,54 @@ pipeline {
                                     echo "检测到两台不同设备，Mobile测试将在主设备(${primaryDeviceSerial})运行，WeChat测试将在次设备(${secondaryDeviceSerial})运行，两者并行。"
                                 } else if (primaryDeviceSerial && !primaryDeviceSerial.isEmpty()) {
                                     echo "只使用一台主设备 (${primaryDeviceSerial})。Mobile和WeChat测试将在此设备上串行执行。"
-                                    secondaryDeviceSerial = primaryDeviceSerial 
-                                    secondaryDeviceUri = primaryDeviceUri
+                                    // secondaryDeviceSerial = primaryDeviceSerial // Not needed for simplified check
+                                    // secondaryDeviceUri = primaryDeviceUri // Not needed
                                 } else {
                                     error "[错误]：未指定主App测试设备 (PRIMARY_APP_DEVICE_SERIAL 为空)。无法执行App相关测试。"
                                 }
                                 
                                 if (primaryDeviceSerial && !primaryDeviceSerial.isEmpty()) {
-                                    // ***** DEVICE CHECK WITH DETAILED LOGGING *****
+                                    // ***** SUPER SIMPLIFIED DEVICE CHECK FOR DEBUGGING *****
                                     sh """
-                                    echo "在容器内检查主设备 ${primaryDeviceSerial} ..."
-                                    docker run --rm --name adb-check-primary-${BUILD_NUMBER} \
+                                    echo "在容器内超级简化检查主设备 ${primaryDeviceSerial} ..."
+                                    docker run --rm --name adb-check-super-simple-main-${BUILD_NUMBER} \
                                       -v "${env.HOST_ADB_KEYS_ANDROID_DIR}":/root/.android \
                                       --privileged \
                                       --network host -e ANDROID_SERIAL="${primaryDeviceSerial}" \
                                       ${env.DOCKER_IMAGE} sh -c " \
-                                        echo '--- ADB kill-server (primary) ---'; \
-                                        adb kill-server; \
-                                        echo '--- ADB start-server (primary) ---'; \
-                                        adb start-server; \
-                                        echo '--- ADB devices output BEFORE grep (primary) ---'; \
+                                        echo '--- ADB devices output (super simple main device) ---'; \
                                         adb devices; \
-                                        echo '--- Grepping for ${primaryDeviceSerial}[[:space:]]device (primary) ---'; \
-                                        adb devices | grep '${primaryDeviceSerial}[[:space:]]device' && echo 'Grep SUCCESSFUL (primary)' || (echo 'Grep FAILED (primary), exiting...' && exit 1) \
-                                      " || (echo "错误: 容器内检查主设备 ${primaryDeviceSerial} 的脚本执行失败或设备未找到/未授权!" && exit 1)
-                                    echo "容器内主设备 ${primaryDeviceSerial} 检查通过。"
+                                        echo '--- Grepping for ${primaryDeviceSerial}[[:space:]]device (super simple main device) ---'; \
+                                        adb devices | grep '${primaryDeviceSerial}[[:space:]]device' && echo 'Grep SUCCESSFUL (super simple main device)' || (echo 'Grep FAILED (super simple main device), exiting...' && exit 1) \
+                                      " || (echo "错误: 容器内超级简化检查主设备 ${primaryDeviceSerial} 的脚本执行失败或设备未找到/未授权!" && exit 1)
+                                    echo "容器内主设备 ${primaryDeviceSerial} 超级简化检查通过。"
                                     """
                                     if (useTwoDevices) { 
                                          sh """
-                                        echo "在容器内检查次设备 ${secondaryDeviceSerial} ..."
-                                        docker run --rm --name adb-check-secondary-${BUILD_NUMBER} \
+                                        echo "在容器内超级简化检查次设备 ${secondaryDeviceSerial} ..."
+                                        docker run --rm --name adb-check-super-simple-sec-${BUILD_NUMBER} \
                                           -v "${env.HOST_ADB_KEYS_ANDROID_DIR}":/root/.android \
                                           --privileged \
                                           --network host -e ANDROID_SERIAL="${secondaryDeviceSerial}" \
                                           ${env.DOCKER_IMAGE} sh -c " \
-                                            echo '--- ADB kill-server (secondary) ---'; \
-                                            adb kill-server; \
-                                            echo '--- ADB start-server (secondary) ---'; \
-                                            adb start-server; \
-                                            echo '--- ADB devices output BEFORE grep (secondary) ---'; \
+                                            echo '--- ADB devices output (super simple secondary device) ---'; \
                                             adb devices; \
-                                            echo '--- Grepping for ${secondaryDeviceSerial}[[:space:]]device (secondary) ---'; \
-                                            adb devices | grep '${secondaryDeviceSerial}[[:space:]]device' && echo 'Grep SUCCESSFUL (secondary)' || (echo 'Grep FAILED (secondary), exiting...' && exit 1) \
-                                          " || (echo "错误: 容器内检查次设备 ${secondaryDeviceSerial} 的脚本执行失败或设备未找到/未授权!" && exit 1)
-                                        echo "容器内次设备 ${secondaryDeviceSerial} 检查通过。"
+                                            echo '--- Grepping for ${secondaryDeviceSerial}[[:space:]]device (super simple secondary device) ---'; \
+                                            adb devices | grep '${secondaryDeviceSerial}[[:space:]]device' && echo 'Grep SUCCESSFUL (super simple secondary device)' || (echo 'Grep FAILED (super simple secondary device), exiting...' && exit 1) \
+                                          " || (echo "错误: 容器内超级简化检查次设备 ${secondaryDeviceSerial} 的脚本执行失败或设备未找到/未授权!" && exit 1)
+                                        echo "容器内次设备 ${secondaryDeviceSerial} 超级简化检查通过。"
                                         """
                                     }
 
+                                    // ***** ACTUAL TEST EXECUTION IS COMMENTED OUT FOR NOW *****
+                                    /* 
                                     def runMobileTests = { deviceSerialForMobile, deviceUriForMobile ->
                                         echo "在设备 ${deviceSerialForMobile} 上执行 tests/mobile"
-                                        sh """
-                                        docker run --rm --name pytest-mobile-${BUILD_NUMBER}-${deviceSerialForMobile.replaceAll('[:.]', '-')} \
-                                          -e APP_ENV=${params.APP_ENV} -e TEST_PLATFORM="mobile" \
-                                          -e ANDROID_SERIAL="${deviceSerialForMobile}" -e MOBILE_DEVICE_URI="${deviceUriForMobile}" \
-                                          -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \
-                                          -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \
-                                          -e TEST_SUITE="${env.TEST_SUITE_VALUE}" -e TZ="Asia/Shanghai" \
-                                          -e JIYU_APP_PACKAGE_NAME="\$(grep '^JIYU_APP_PACKAGE_NAME=' .env | cut -d '=' -f2- || echo 'com.zsck.yq')" \
-                                          -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \
-                                          -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \
-                                          -v "${env.HOST_ADB_KEYS_ANDROID_DIR}":/root/.android \
-                                          --privileged \
-                                          --workdir /workspace \
-                                          -v /etc/localtime:/etc/localtime:ro \
-                                          --network host \
-                                          ${env.DOCKER_IMAGE} \
-                                          pytest tests/mobile -n auto --reruns 2 -v --alluredir=/results_out
-                                        """
+                                        sh ""\" // Actual docker run command for mobile tests would go here ""\"
                                     }
                                     def runWechatTests = { deviceSerialForWechat, deviceUriForWechat ->
                                         echo "在设备 ${deviceSerialForWechat} 上执行 tests/wechat"
-                                        sh """
-                                        docker run --rm --name pytest-wechat-${BUILD_NUMBER}-${deviceSerialForWechat.replaceAll('[:.]', '-')} \
-                                          -e APP_ENV=${params.APP_ENV} -e TEST_PLATFORM="wechat" \
-                                          -e ANDROID_SERIAL="${deviceSerialForWechat}" -e MOBILE_DEVICE_URI="${deviceUriForWechat}" \
-                                          -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_USERNAME' : 'TEST_DEFAULT_USERNAME'}="${ACCOUNT_USERNAME}" \
-                                          -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \
-                                          -e TEST_SUITE="${env.TEST_SUITE_VALUE}" -e TZ="Asia/Shanghai" \
-                                          -e WECHAT_PACKAGE_NAME="\$(grep '^WECHAT_PACKAGE_NAME=' .env | cut -d '=' -f2- || echo 'com.tencent.mm')" \
-                                          -e WECHAT_MINI_PROGRAM_TARGET="\$(grep '^WECHAT_MINI_PROGRAM_TARGET=' .env | cut -d '=' -f2- || echo 'CMpark智慧停车')" \
-                                          -e EXPECTED_PAYMENT_ACTIVITY_SUFFIX="\$(grep '^EXPECTED_PAYMENT_ACTIVITY_SUFFIX=' .env | cut -d '=' -f2- || echo '.framework.app.UIPageFragmentActivity')" \
-                                          -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \
-                                          -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \
-                                          -v "${env.HOST_ADB_KEYS_ANDROID_DIR}":/root/.android \
-                                          --privileged \
-                                          --workdir /workspace \
-                                          -v /etc/localtime:/etc/localtime:ro \
-                                          --network host \
-                                          ${env.DOCKER_IMAGE} \
-                                          pytest tests/wechat -n auto --reruns 2 -v --alluredir=/results_out
-                                        """
+                                        sh ""\" // Actual docker run command for wechat tests would go here ""\"
                                     }
 
                                     if (useTwoDevices) {
@@ -305,9 +260,13 @@ pipeline {
                                         parallel appTestsInParallel
                                     } else { 
                                         echo "使用一台设备 (${primaryDeviceSerial}) 串行执行 Mobile 和 WeChat 测试..."
-                                        runMobileTests(primaryDeviceSerial, primaryDeviceUri)
-                                        runWechatTests(primaryDeviceSerial, primaryDeviceUri) 
+                                        def primaryDeviceUriForSingle = "Android:///${primaryDeviceSerial}" // Re-define for clarity
+                                        runMobileTests(primaryDeviceSerial, primaryDeviceUriForSingle)
+                                        runWechatTests(primaryDeviceSerial, primaryDeviceUriForSingle) 
                                     }
+                                    */
+                                    echo ">>> 调试阶段: App测试执行部分已注释。请检查上面的设备检查日志。 <<<"
+
                                 } 
                             } else { 
                                 echo "跳过App相关测试 (Mobile 和 WeChat)"
@@ -319,8 +278,7 @@ pipeline {
                     } catch (err) {
                         echo "测试阶段出现错误: ${err}."
                         currentBuild.result = 'UNSTABLE' 
-                        // 如果设备检查失败，这里会被捕获，并将构建标记为 UNSTABLE
-                        // 如果希望标记为 FAILURE，可以将上面改为 currentBuild.result = 'FAILURE'
+                        // 如果设备检查失败，这里会被捕获
                     }
                 } 
             } 
@@ -465,7 +423,7 @@ pipeline {
                     if (params.RUN_APP_RELATED_TESTS) {
                         def primaryDesc = params.PRIMARY_APP_DEVICE_SERIAL.trim()
                         def secondaryDesc = params.SECONDARY_APP_DEVICE_SERIAL.trim()
-                        if (primaryDesc && !primaryDesc.isEmpty()) { // Ensure primaryDesc is not empty before using it
+                        if (primaryDesc && !primaryDesc.isEmpty()) { 
                             if (secondaryDesc && !secondaryDesc.isEmpty() && secondaryDesc != primaryDesc) {
                                 testTypes.add("App (Mobile on ${primaryDesc}, WeChat on ${secondaryDesc})")
                             } else {
