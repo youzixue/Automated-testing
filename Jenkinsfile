@@ -237,6 +237,9 @@ pipeline {
                                       --privileged \\
                                       --network host -e ANDROID_SERIAL="${primaryDeviceSerial}" \\
                                       ${env.DOCKER_IMAGE} sh -c " \\
+                                        echo '--- Attempting ADB connect (primary) ---'; \\
+                                        adb connect ${primaryDeviceSerial}; \\
+                                        sleep 3; \\
                                         echo '--- ADB kill-server (primary) ---'; \\
                                         adb kill-server; \\
                                         sleep 2; \\
@@ -260,6 +263,9 @@ pipeline {
                                           --privileged \\
                                           --network host -e ANDROID_SERIAL="${secondaryDeviceSerial}" \\
                                           ${env.DOCKER_IMAGE} sh -c " \\
+                                            echo '--- Attempting ADB connect (secondary) ---'; \\
+                                            adb connect ${secondaryDeviceSerial}; \\
+                                            sleep 3; \\
                                             echo '--- ADB kill-server (secondary) ---'; \\
                                             adb kill-server; \\
                                             sleep 2; \\
