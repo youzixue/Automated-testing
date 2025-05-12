@@ -291,7 +291,7 @@ pipeline {
                                           -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
                                           -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
                                           -e ANDROID_SERIAL="${deviceSerial}" \\
-                                          -e DEVICE_URI="Android:///${deviceSerial}" \\
+                                          -e DEVICE_URI="Android:///" \\
                                           -e JIYU_APP_PACKAGE_NAME="${params.JIYU_APP_PACKAGE}" \\
                                           -e TZ="Asia/Shanghai" \\
                                           -e PYTEST_EXPECTED_PAYMENT_ACTIVITY_SUFFIX="${params.CFG_EXPECTED_PAYMENT_ACTIVITY_SUFFIX}" \\
@@ -317,7 +317,7 @@ pipeline {
                                           -e ${params.APP_ENV == 'prod' ? 'PROD_DEFAULT_PASSWORD' : 'TEST_DEFAULT_PASSWORD'}="${ACCOUNT_PASSWORD}" \\
                                           -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
                                           -e ANDROID_SERIAL="${deviceSerial}" \\
-                                          -e DEVICE_URI="Android:///${deviceSerial}" \\
+                                          -e DEVICE_URI="Android:///" \\
                                           -e WECHAT_PACKAGE_NAME="${params.WECHAT_APP_PACKAGE}" \\
                                           -e TZ="Asia/Shanghai" \\
                                           -e PYTEST_WECHAT_MINI_PROGRAM_TARGET="${params.CFG_WECHAT_MINI_PROGRAM_TARGET}" \\
