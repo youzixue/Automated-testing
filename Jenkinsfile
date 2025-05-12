@@ -28,6 +28,7 @@ pipeline {
         string(name: 'CFG_WECHAT_MINI_PROGRAM_TARGET', defaultValue: 'CMpark智慧停车', description: '微信小程序目标名称 (Jenkins Parameter)', trim: true)
         string(name: 'CFG_WECHAT_OFFICIAL_ACCOUNT_TARGET', defaultValue: 'CMpark招商享停车', description: '微信公众号目标名称 (Jenkins Parameter)', trim: true)
         string(name: 'CFG_EXPECTED_PAYMENT_ACTIVITY_SUFFIX', defaultValue: '.framework.app.UIPageFragmentActivity', description: '期望的支付Activity后缀 (Jenkins Parameter)', trim: true)
+        string(name: 'CFG_WECHAT_EXPECTED_PAYMENT_ACTIVITY_SUFFIX', defaultValue: '.web.WebActivity', description: '微信支付期望的Activity后缀 (与Mobile可能不同)', trim: true)
 
         choice(name: 'TEST_SUITE', choices: ['全部', '冒烟测试', '回归测试'], description: '选择测试套件')
         booleanParam(name: 'SEND_EMAIL', defaultValue: true, description: '是否发送邮件通知')
@@ -351,11 +352,14 @@ pipeline {
                                               -e TZ="Asia/Shanghai" \
                                               -e PYTEST_WECHAT_MINI_PROGRAM_TARGET="${params.CFG_WECHAT_MINI_PROGRAM_TARGET}" \
                                               -e PYTEST_WECHAT_OFFICIAL_ACCOUNT_TARGET="${params.CFG_WECHAT_OFFICIAL_ACCOUNT_TARGET}" \
-                                              -e PYTEST_EXPECTED_PAYMENT_ACTIVITY_SUFFIX="${params.CFG_EXPECTED_PAYMENT_ACTIVITY_SUFFIX}" \
+                                              -e PYTEST_EXPECTED_PAYMENT_ACTIVITY_SUFFIX="${params.CFG_WECHAT_EXPECTED_PAYMENT_ACTIVITY_SUFFIX}" \
                                               -e ADB_SERVER_HOST="127.0.0.1" \
                                               -e ADB_SERVER_PORT="${env.ADB_SERVER_PORT}" \
                                               -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \
                                               -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \
+                                              -v "${env.HOST_ADB_KEYS_ANDROID_DIR}":/root/.android \
+                                              -v /dev/bus/usb:/dev/bus/usb \
+                                              --privileged \
                                               --network host \
                                               --workdir /workspace \
                                               -v /etc/localtime:/etc/localtime:ro \
