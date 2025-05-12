@@ -237,21 +237,19 @@ pipeline {
                                       --privileged \\
                                       --network host -e ANDROID_SERIAL="${primaryDeviceSerial}" \
                                       ${env.DOCKER_IMAGE} sh -c " \
-                                        echo '--- Attempting ADB connect (primary) ---'; \
+                                        echo \'--- Attempting ADB connect (primary) ---\'; \
                                         adb connect ${primaryDeviceSerial}; \
                                         connect_status=\$?; \
                                         if [ \$connect_status -ne 0 ]; then \
-                                            echo 'ADB connect command FAILED (primary). Exiting...'; \
+                                            echo \'ADB connect command FAILED (primary) or device not found via connect. Exiting...\'; \
                                             exit 1; \
                                         fi; \
-                                        echo 'ADB connect command reported success or device already connected (primary).'; \
+                                        echo \'ADB connect command reported success or device already connected (primary).\'; \
                                         sleep 3; \
-                                        echo '--- ADB devices output AFTER connect (primary) ---'; \
+                                        echo \'--- ADB devices output AFTER connect (primary) ---\'; \
                                         adb devices -l; \
-                                        echo '--- Grepping for ${primaryDeviceSerial} (状态可能是 device, offline, unauthorized) (primary) ---'; \
-                                        adb devices -l | grep '${primaryDeviceSerial}'; \
-                                        echo '--- Specifically grepping for ${primaryDeviceSerial}[[:space:]]device (primary) ---'; \
-                                        adb devices -l | grep '${primaryDeviceSerial}[[:space:]]device' && echo 'Grep for DEVICE status SUCCESSFUL (primary)' || (echo 'Grep for DEVICE status FAILED (primary), exiting...' && exit 1) \
+                                        echo \'--- Specifically grepping for device status of ${primaryDeviceSerial} (primary) ---\'; \
+                                        adb devices -l | grep '${primaryDeviceSerial}[[:space:]]\\+device' && echo 'Grep for DEVICE status SUCCESSFUL (primary)' || (echo 'Grep for DEVICE status FAILED (primary), exiting...' && exit 1) \
                                       " || (echo "错误: 容器内再次检查主设备 ${primaryDeviceSerial} 的脚本执行失败或设备未找到/未授权!" && exit 1)
                                     echo "容器内主设备 ${primaryDeviceSerial} 再次检查通过。"
                                     """
@@ -263,21 +261,19 @@ pipeline {
                                           --privileged \\
                                           --network host -e ANDROID_SERIAL="${secondaryDeviceSerial}" \
                                           ${env.DOCKER_IMAGE} sh -c " \
-                                            echo '--- Attempting ADB connect (secondary) ---'; \
+                                            echo \'--- Attempting ADB connect (secondary) ---\'; \
                                             adb connect ${secondaryDeviceSerial}; \
                                             connect_status=\$?; \
                                             if [ \$connect_status -ne 0 ]; then \
-                                                echo 'ADB connect command FAILED (secondary). Exiting...'; \
+                                                echo \'ADB connect command FAILED (secondary) or device not found via connect. Exiting...\'; \
                                                 exit 1; \
                                             fi; \
-                                            echo 'ADB connect command reported success or device already connected (secondary).'; \
+                                            echo \'ADB connect command reported success or device already connected (secondary).\'; \
                                             sleep 3; \
-                                            echo '--- ADB devices output AFTER connect (secondary) ---'; \
+                                            echo \'--- ADB devices output AFTER connect (secondary) ---\'; \
                                             adb devices -l; \
-                                            echo '--- Grepping for ${secondaryDeviceSerial} (状态可能是 device, offline, unauthorized) (secondary) ---'; \
-                                            adb devices -l | grep '${secondaryDeviceSerial}'; \
-                                            echo '--- Specifically grepping for ${secondaryDeviceSerial}[[:space:]]device (secondary) ---'; \
-                                            adb devices -l | grep '${secondaryDeviceSerial}[[:space:]]device' && echo 'Grep for DEVICE status SUCCESSFUL (secondary)' || (echo 'Grep for DEVICE status FAILED (secondary), exiting...' && exit 1) \
+                                            echo \'--- Specifically grepping for device status of ${secondaryDeviceSerial} (secondary) ---'; \
+                                            adb devices -l | grep '${secondaryDeviceSerial}[[:space:]]\\+device' && echo 'Grep for DEVICE status SUCCESSFUL (secondary)' || (echo 'Grep for DEVICE status FAILED (secondary), exiting...' && exit 1) \
                                           " || (echo "错误: 容器内再次检查次设备 ${secondaryDeviceSerial} 的脚本执行失败或设备未找到/未授权!" && exit 1)
                                         echo "容器内次设备 ${secondaryDeviceSerial} 再次检查通过。"
                                         """
