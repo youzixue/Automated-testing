@@ -231,34 +231,34 @@ pipeline {
                                     def checkScriptPathInContainer = "/tmp/check_device.sh"
 
                                     // 主设备检查
-                                    // 将命令构建为字符串列表，然后用 .join(' ') 连接，可以避免一些复杂的引用问题
+                                    // 使用双引号确保 Groovy 变量插值
                                     def mainDeviceCheckCommand = [
-                                        'echo "在容器内通过脚本 ${checkScriptPathInContainer} 检查主设备 ${primaryDeviceSerial} ...";',
-                                        'docker run --rm --name adb-check-main-${BUILD_NUMBER}',
-                                        '-v "${env.HOST_ADB_KEYS_ANDROID_DIR}":/root/.android',
-                                        '-v /dev/bus/usb:/dev/bus/usb',
-                                        '-v "${env.HOST_WORKSPACE_PATH}/${checkScriptPathInWs}":"${checkScriptPathInContainer}":ro',
-                                        '--privileged',
-                                        '--network host',
-                                        '${env.DOCKER_IMAGE} sh "${checkScriptPathInContainer}" "${primaryDeviceSerial}"',
-                                        '|| (echo "错误: 容器内检查主设备 ${primaryDeviceSerial} 的脚本执行失败!" && exit 1);',
-                                        'echo "容器内主设备 ${primaryDeviceSerial} 检查通过."'
+                                        "echo \"在容器内通过脚本 ${checkScriptPathInContainer} 检查主设备 ${primaryDeviceSerial} ...\";",
+                                        "docker run --rm --name adb-check-main-${BUILD_NUMBER}",
+                                        "-v \"${env.HOST_ADB_KEYS_ANDROID_DIR}\":/root/.android",
+                                        "-v /dev/bus/usb:/dev/bus/usb",
+                                        "-v \"${env.HOST_WORKSPACE_PATH}/${checkScriptPathInWs}\":\"${checkScriptPathInContainer}\":ro",
+                                        "--privileged",
+                                        "--network host",
+                                        "${env.DOCKER_IMAGE} sh \"${checkScriptPathInContainer}\" \"${primaryDeviceSerial}\"",
+                                        "|| (echo \"错误: 容器内检查主设备 ${primaryDeviceSerial} 的脚本执行失败!\" && exit 1);",
+                                        "echo \"容器内主设备 ${primaryDeviceSerial} 检查通过.\""
                                     ].join(' ')
                                     sh(mainDeviceCheckCommand)
 
                                     if (useTwoDevices) {
                                         // 次设备检查
                                         def secondaryDeviceCheckCommand = [
-                                            'echo "在容器内通过脚本 ${checkScriptPathInContainer} 检查次设备 ${secondaryDeviceSerial} ...";',
-                                            'docker run --rm --name adb-check-sec-${BUILD_NUMBER}',
-                                            '-v "${env.HOST_ADB_KEYS_ANDROID_DIR}":/root/.android',
-                                            '-v /dev/bus/usb:/dev/bus/usb',
-                                            '-v "${env.HOST_WORKSPACE_PATH}/${checkScriptPathInWs}":"${checkScriptPathInContainer}":ro',
-                                            '--privileged',
-                                            '--network host',
-                                            '${env.DOCKER_IMAGE} sh "${checkScriptPathInContainer}" "${secondaryDeviceSerial}"',
-                                            '|| (echo "错误: 容器内检查次设备 ${secondaryDeviceSerial} 的脚本执行失败!" && exit 1);',
-                                            'echo "容器内次设备 ${secondaryDeviceSerial} 检查通过."'
+                                            "echo \"在容器内通过脚本 ${checkScriptPathInContainer} 检查次设备 ${secondaryDeviceSerial} ...\";",
+                                            "docker run --rm --name adb-check-sec-${BUILD_NUMBER}",
+                                            "-v \"${env.HOST_ADB_KEYS_ANDROID_DIR}\":/root/.android",
+                                            "-v /dev/bus/usb:/dev/bus/usb",
+                                            "-v \"${env.HOST_WORKSPACE_PATH}/${checkScriptPathInWs}\":\"${checkScriptPathInContainer}\":ro",
+                                            "--privileged",
+                                            "--network host",
+                                            "${env.DOCKER_IMAGE} sh \"${checkScriptPathInContainer}\" \"${secondaryDeviceSerial}\"",
+                                            "|| (echo \"错误: 容器内检查次设备 ${secondaryDeviceSerial} 的脚本执行失败!\" && exit 1);",
+                                            "echo \"容器内次设备 ${secondaryDeviceSerial} 检查通过.\""
                                         ].join(' ')
                                         sh(secondaryDeviceCheckCommand)
                                     }
