@@ -89,6 +89,10 @@ if [ "$LOCKED" = "true" ]; then
   adb -s "$DEVICE_SERIAL" shell input swipe 500 1500 500 500
   sleep 1
   
+  # 确保设备已唤醒，部分设备可能需要MENU键激活
+  adb -s "$DEVICE_SERIAL" shell input keyevent 82  # MENU键，唤醒一些设备
+  sleep 1
+  
   # 如果提供了PIN码，尝试输入
   if [ ! -z "$UNLOCK_PIN" ]; then
     echo "尝试使用PIN码($UNLOCK_PIN)解锁设备 $DEVICE_SERIAL..."
@@ -105,15 +109,23 @@ if [ "$LOCKED" = "true" ]; then
   fi
 fi
 
-# 最终确认设备状态 (但不执行额外操作，避免影响其他应用)
+# 最终确认设备状态，并确保设备充分活跃
 FINAL_SCREEN_STATE_1=$(adb -s "$DEVICE_SERIAL" shell dumpsys power | grep 'Display Power' | grep -oE '(ON|OFF)' || echo "")
 FINAL_SCREEN_STATE_2=$(adb -s "$DEVICE_SERIAL" shell dumpsys power | grep 'mWakefulness=' | grep -oE '(Awake|Asleep)' || echo "")
 FINAL_SCREEN_STATE_3=$(adb -s "$DEVICE_SERIAL" shell dumpsys display | grep 'mState=' | grep -oE '(ON|OFF)' || echo "")
 
 if [ "$FINAL_SCREEN_STATE_1" = "ON" ] || [ "$FINAL_SCREEN_STATE_2" = "Awake" ] || [ "$FINAL_SCREEN_STATE_3" = "ON" ]; then
   echo "设备 $DEVICE_SERIAL 屏幕现在处于点亮状态"
+  # 点击屏幕中央以确保设备完全活跃
+  adb -s "$DEVICE_SERIAL" shell input tap 500 1000
+  sleep 1
 else
-  echo "警告: 设备 $DEVICE_SERIAL 屏幕可能仍然关闭，这可能会影响测试"
+  echo "警告: 设备 $DEVICE_SERIAL 屏幕可能仍然关闭，尝试再次唤醒..."
+  adb -s "$DEVICE_SERIAL" shell input keyevent 26
+  sleep 1
+  # 尝试点击屏幕中央
+  adb -s "$DEVICE_SERIAL" shell input tap 500 1000
+  sleep 1
 fi
 
 echo "--- 设备 $DEVICE_SERIAL 检查并解锁完成 ---"
