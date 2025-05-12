@@ -91,6 +91,14 @@ pipeline {
                 echo "代码检出完成到 Agent 路径: ${WORKSPACE}"
                 echo "对应的宿主机路径是: ${env.HOST_WORKSPACE_PATH}"
                 sh "echo '>>> Jenkins Agent Workspace Contents:' && ls -la ${WORKSPACE}"
+
+                // ++ 新增的日志打印 ++
+                echo "INFO: Jenkinsfile SCM Checkout - Current GIT_COMMIT is: ${env.GIT_COMMIT}"
+                echo "INFO: Jenkinsfile SCM Checkout - Current GIT_BRANCH is: ${env.GIT_BRANCH}"
+                // 也可以尝试直接打印 Jenkinsfile 的前几行来大致确认版本
+                echo "INFO: First few lines of Jenkinsfile in workspace:"
+                sh "head -n 15 ${WORKSPACE}/Jenkinsfile"
+                // -- 结束新增的日志打印 --
             }
         }
 
