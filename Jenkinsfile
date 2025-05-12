@@ -126,7 +126,7 @@ pipeline {
                 sh """
                     docker run -d --name ${env.ADB_SERVER_CONTAINER_NAME} \
                     -v "${env.HOST_ADB_KEYS_ANDROID_DIR}":/root/.android \
-                    -v "${env.HOST_WORKSPACE_PATH}/ci/scripts":/scripts:ro \
+                    -v "${env.HOST_WORKSPACE_PATH}":/workspace:ro \
                     -v /dev/bus/usb:/dev/bus/usb \
                     --privileged \
                     --network host \
@@ -137,93 +137,19 @@ pipeline {
                 echo "持久化ADB服务已启动，等待3秒确保服务稳定..."
                 sh "sleep 3"
                 
-                // 创建和准备设备解锁脚本
-                sh """
-                    mkdir -p ${WORKSPACE}/ci/scripts
-                    cat > ${WORKSPACE}/ci/scripts/unlock_device.sh << 'EOF'
-#!/bin/bash
-# 设备解锁脚本
-DEVICE_ID="\$1"
-UNLOCK_PIN="\$2"
-
-if [ -z "\$DEVICE_ID" ]; then
-    echo "错误: 必须提供设备ID作为第一个参数"
-    exit 1
-fi
-
-echo "检查设备 \$DEVICE_ID 连接状态..."
-adb -s "\$DEVICE_ID" get-state || { echo "设备 \$DEVICE_ID 未连接"; exit 1; }
-
-echo "检查设备 \$DEVICE_ID 屏幕状态..."
-SCREEN_STATE=\$(adb -s "\$DEVICE_ID" shell dumpsys power | grep 'Display Power' | grep -oE '(ON|OFF)')
-if [ "\$SCREEN_STATE" != "ON" ]; then
-    echo "设备 \$DEVICE_ID 屏幕处于关闭状态，唤醒中..."
-    adb -s "\$DEVICE_ID" shell input keyevent 26  # POWER键
-    sleep 2
-fi
-
-echo "检查设备 \$DEVICE_ID 锁屏状态..."
-LOCKED=\$(adb -s "\$DEVICE_ID" shell dumpsys window | grep -E 'mDreamingLockscreen=(true|false)' | grep -oE '(true|false)')
-if [ "\$LOCKED" = "true" ]; then
-    echo "设备 \$DEVICE_ID 处于锁屏状态，尝试解锁..."
-    # 先尝试滑动解锁
-    adb -s "\$DEVICE_ID" shell input swipe 500 1500 500 500
-    sleep 1
-    
-    # 再次检查锁屏状态
-    LOCKED=\$(adb -s "\$DEVICE_ID" shell dumpsys window | grep -E 'mDreamingLockscreen=(true|false)' | grep -oE '(true|false)')
-    
-    # 如果仍然锁屏且提供了PIN码，尝试输入PIN码
-    if [ "\$LOCKED" = "true" ] && [ ! -z "\$UNLOCK_PIN" ]; then
-        echo "尝试使用PIN码解锁设备 \$DEVICE_ID..."
-        # 输入每个数字
-        for (( i=0; i<\${#UNLOCK_PIN}; i++ )); do
-            DIGIT=\${UNLOCK_PIN:i:1}
-            adb -s "\$DEVICE_ID" shell input text "\$DIGIT"
-            sleep 0.2
-        done
-        # 点击回车确认
-        adb -s "\$DEVICE_ID" shell input keyevent 66
-        sleep 2
-    fi
-    
-    # 最终再次检查
-    LOCKED=\$(adb -s "\$DEVICE_ID" shell dumpsys window | grep -E 'mDreamingLockscreen=(true|false)' | grep -oE '(true|false)')
-    if [ "\$LOCKED" = "true" ]; then
-        echo "警告: 无法解锁设备 \$DEVICE_ID，需要手动干预"
-    else
-        echo "设备 \$DEVICE_ID 已成功解锁"
-    fi
-else
-    echo "设备 \$DEVICE_ID 已处于解锁状态"
-fi
-
-# 确保设备亮屏
-SCREEN_STATE=\$(adb -s "\$DEVICE_ID" shell dumpsys power | grep 'Display Power' | grep -oE '(ON|OFF)')
-if [ "\$SCREEN_STATE" != "ON" ]; then
-    echo "设备 \$DEVICE_ID 屏幕仍然关闭，再次尝试唤醒..."
-    adb -s "\$DEVICE_ID" shell input keyevent 26
-    sleep 1
-fi
-
-echo "设备 \$DEVICE_ID 准备就绪"
-exit 0
-EOF
-                    chmod +x ${WORKSPACE}/ci/scripts/unlock_device.sh
-                """
-                
                 // 检查和解锁主设备
+                echo "检查并解锁主设备 ${params.PRIMARY_APP_DEVICE_SERIAL}..."
                 sh """
-                    docker exec ${env.ADB_SERVER_CONTAINER_NAME} sh -c "adb devices"
-                    docker exec ${env.ADB_SERVER_CONTAINER_NAME} sh -c "bash /scripts/unlock_device.sh '${params.PRIMARY_APP_DEVICE_SERIAL}' '${params.DEVICE_UNLOCK_PIN}'"
+                    docker exec ${env.ADB_SERVER_CONTAINER_NAME} sh -c "cd /workspace && bash ci/scripts/check_device.sh '${params.PRIMARY_APP_DEVICE_SERIAL}' '${params.DEVICE_UNLOCK_PIN}'"
                 """
                 
                 // 如果有次设备且不同于主设备，也检查和解锁
                 script {
                     if (params.SECONDARY_APP_DEVICE_SERIAL && params.SECONDARY_APP_DEVICE_SERIAL.trim() != "" && 
                         params.SECONDARY_APP_DEVICE_SERIAL.trim() != params.PRIMARY_APP_DEVICE_SERIAL.trim()) {
+                        echo "检查并解锁次设备 ${params.SECONDARY_APP_DEVICE_SERIAL}..."
                         sh """
-                            docker exec ${env.ADB_SERVER_CONTAINER_NAME} sh -c "bash /scripts/unlock_device.sh '${params.SECONDARY_APP_DEVICE_SERIAL}' '${params.DEVICE_UNLOCK_PIN}'"
+                            docker exec ${env.ADB_SERVER_CONTAINER_NAME} sh -c "cd /workspace && bash ci/scripts/check_device.sh '${params.SECONDARY_APP_DEVICE_SERIAL}' '${params.DEVICE_UNLOCK_PIN}'"
                         """
                     }
                 }
@@ -366,10 +292,10 @@ EOF
                                         try {
                                             // 在测试开始前，通过持久化ADB服务再次确保设备解锁
                                             sh """
-                                            docker exec ${env.ADB_SERVER_CONTAINER_NAME} sh -c "bash /scripts/unlock_device.sh '${deviceSerial}' '${params.DEVICE_UNLOCK_PIN}'"
+                                            docker exec ${env.ADB_SERVER_CONTAINER_NAME} sh -c "cd /workspace && bash ci/scripts/check_device.sh '${deviceSerial}' '${params.DEVICE_UNLOCK_PIN}'"
                                             """
                                             
-                                            // 修改后的Docker运行命令，使用持久化ADB服务
+                                            // 使用持久化ADB服务
                                             sh """
                                             docker run --rm --name pytest-mobile-${BUILD_NUMBER}-${safeDeviceSerialForName} \
                                               -e APP_ENV=${params.APP_ENV} \
@@ -408,10 +334,10 @@ EOF
                                         try {
                                             // 在测试开始前，通过持久化ADB服务再次确保设备解锁
                                             sh """
-                                            docker exec ${env.ADB_SERVER_CONTAINER_NAME} sh -c "bash /scripts/unlock_device.sh '${deviceSerial}' '${params.DEVICE_UNLOCK_PIN}'"
+                                            docker exec ${env.ADB_SERVER_CONTAINER_NAME} sh -c "cd /workspace && bash ci/scripts/check_device.sh '${deviceSerial}' '${params.DEVICE_UNLOCK_PIN}'"
                                             """
                                             
-                                            // 修改后的Docker运行命令，使用持久化ADB服务
+                                            // 使用持久化ADB服务
                                             sh """
                                             docker run --rm --name pytest-wechat-${BUILD_NUMBER}-${safeDeviceSerialForName} \
                                               -e APP_ENV=${params.APP_ENV} \
