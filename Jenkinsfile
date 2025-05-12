@@ -16,6 +16,14 @@ pipeline {
                defaultValue: '', 
                description: '可选的第二台App测试设备ID。如果留空或与主设备相同，则App/WeChat测试会在主设备上串行。否则Mobile在主设备，WeChat在次设备并行。', 
                trim: true)
+        string(name: 'JIYU_APP_PACKAGE', 
+               defaultValue: 'com.zsck.yq', 
+               description: '积余App的包名', 
+               trim: true)
+        string(name: 'WECHAT_APP_PACKAGE', 
+               defaultValue: 'com.tencent.mm', 
+               description: '微信App的包名', 
+               trim: true)
 
         choice(name: 'TEST_SUITE', choices: ['全部', '冒烟测试', '回归测试'], description: '选择测试套件')
         booleanParam(name: 'SEND_EMAIL', defaultValue: true, description: '是否发送邮件通知')
@@ -247,6 +255,7 @@ pipeline {
                                           -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
                                           -e ANDROID_SERIAL="${deviceSerial}" \\
                                           -e DEVICE_URI="Android:///${deviceSerial}" \\
+                                          -e JIYU_APP_PACKAGE_NAME="${params.JIYU_APP_PACKAGE}" \\
                                           -e TZ="Asia/Shanghai" \\
                                           -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
                                           -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
@@ -270,6 +279,7 @@ pipeline {
                                           -e TEST_SUITE="${env.TEST_SUITE_VALUE}" \\
                                           -e ANDROID_SERIAL="${deviceSerial}" \\
                                           -e DEVICE_URI="Android:///${deviceSerial}" \\
+                                          -e WECHAT_PACKAGE_NAME="${params.WECHAT_APP_PACKAGE}" \\
                                           -e TZ="Asia/Shanghai" \\
                                           -v ${env.HOST_WORKSPACE_PATH}:/workspace:rw \\
                                           -v ${env.HOST_ALLURE_RESULTS_PATH}:/results_out:rw \\
