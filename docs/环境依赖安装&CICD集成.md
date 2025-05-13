@@ -604,36 +604,67 @@
 - **为什么这样做？**
   - 保证敏感信息不写进镜像或代码，安全性高，灵活适配多环境。CI 平台凭据管理是最佳实践。
 
-### 12.5 典型docker run命令模板及参数解释 (结合卷挂载 - CI 流程)
-- **场景：在 CI/CD 中运行测试**
+### 12.5 DooD (Docker-outside-of-Docker) 配置关键点
+
+当您的 Jenkins Agent 本身是一个 Docker 容器，并且需要在流水线中执行 `docker run` 来启动其他容器（如测试容器）时，您需要正确配置 DooD 模式以确保 Agent 能够与宿主机的 Docker Daemon 通信并执行命令：
+
+1.  **挂载 Docker Socket (必需)**: 在启动 Jenkins Agent 容器时，**必须**添加 `-v /var/run/docker.sock:/var/run/docker.sock` 卷挂载。这允许容器内的进程通过这个 Unix Socket 文件与宿主机的 Docker Daemon 进行交互。
+
+2.  **提供 Docker CLI (必需)**: Jenkins Agent 容器内部需要有可执行的 `docker` 命令。有两种常见方式：
+    *   **挂载宿主机 Docker CLI (推荐)**: 在启动 Jenkins Agent 容器时添加 `-v $(which docker):/usr/bin/docker`。这会将宿主机上的 Docker 可执行文件直接映射到容器内的标准路径。请确保宿主机 `docker` 命令路径正确（可用 `which docker` 查找）。
+    *   **在 Agent 镜像中安装 Docker CLI**: 如果不方便挂载，可以在构建 Jenkins Agent 镜像的 `Dockerfile` 中添加安装 Docker Client 的步骤（例如，使用 `apt-get install docker-ce-cli` 或相应包管理器命令）。
+
+3.  **解决 Socket 权限问题 (常见错误点)**: 仅挂载 Socket 和 CLI 还不够，容器内运行 Jenkins 的用户（通常是 `jenkins`，UID 1000）**必须有权限**访问挂载进来的 `/var/run/docker.sock` 文件。
+    *   **问题原因**: 宿主机上的 `/var/run/docker.sock` 文件通常由 `root` 用户拥有，但属于 `docker` 用户组。容器内的 `jenkins` 用户默认不属于这个组，因此访问会被拒绝，导致 `permission denied` 错误 (exit code 126)。
+    *   **解决方案**: 在启动 Jenkins Agent 容器时，使用 `--group-add` 选项将容器内的 `jenkins` 用户添加到宿主机的 `docker` 用户组。
+        *   **步骤 1**: 在宿主机上运行 `getent group docker` 命令，查找 `docker` 组的 GID (Group ID)，例如输出 `docker:x:999:`，则 GID 是 `999`。
+        *   **步骤 2**: 在 `docker run` 命令中添加 `--group-add <查到的GID>`，例如 `--group-add 999`。
+
+**示例 (启动配置完善的 Jenkins Agent 容器):**
+
+```bash
+# 假设宿主机 docker GID 为 999
+docker run --name jenkins-agent \\
+  -p 8080:8080 -p 50000:50000 \\
+  -v jenkins_home:/var/jenkins_home \\
+  -v /var/run/docker.sock:/var/run/docker.sock \\  # 挂载 Socket
+  -v $(which docker):/usr/bin/docker \\          # 挂载 Docker CLI
+  --group-add 999 \\                             # 添加到宿主机 docker 组
+  # -u jenkins # 如果需要明确指定用户
+  # ... 其他参数如时区、卷 ...
+  jenkins/jenkins:lts # 或其他 agent 镜像
+```
+
+### 12.6 典型docker run命令模板及参数解释 (结合卷挂载 - CI 流程)
+- **场景：在 CI/CD 中运行测试 (由已正确配置DooD的Jenkins Agent执行)**
   ```bash
-  docker run --rm \
-    -e APP_ENV=<环境> \
-    -e WEB_BASE_URL=<URL> \
+  docker run --rm \\
+    -e APP_ENV=<环境> \\
+    -e WEB_BASE_URL=<URL> \\
     -e TEST_DEFAULT_USERNAME=<用户名> \
     -e TEST_DEFAULT_PASSWORD=<密码> \
-    -v <宿主机工作区路径>:/workspace:rw \
-    -v <宿主机Allure结果路径>:/results_out:rw \
-    --workdir /workspace \
-    <环境镜像名:标签> \
+    -v <宿主机工作区路径>:/workspace:rw \\
+    -v <宿主机Allure结果路径>:/results_out:rw \\
+    --workdir /workspace \\
+    <环境镜像名:标签> \\
     poetry run pytest --alluredir=/results_out # <命令>
   ```
 - **场景：在 CI/CD Post 阶段生成临时报告 (用于邮件摘要)**
   ```bash
-  docker run --rm \
-    -v <宿主机Allure结果路径>:/results_in:ro \
-    -v <宿主机临时报告路径>:/report_out:rw \
-    <环境镜像名:标签> \
+  docker run --rm \\
+    -v <宿主机Allure结果路径>:/results_in:ro \\
+    -v <宿主机临时报告路径>:/report_out:rw \\
+    <环境镜像名:标签> \\
     allure generate /results_in -o /report_out --clean # <命令>
   ```
 - **场景：在 CI/CD Post 阶段运行通知脚本**
   ```bash
-  docker run --rm \
-    -e <邮件相关环境变量由Jenkins注入> \
-    -e ALLURE_PUBLIC_URL=<Jenkins插件报告URL> \
-    -v <宿主机工作区路径>:/workspace:ro \
-    -v <宿主机临时报告路径>:/report:ro \
-    <环境镜像名:标签> \
+  docker run --rm \\
+    -e <邮件相关环境变量由Jenkins注入> \\
+    -e ALLURE_PUBLIC_URL=<Jenkins插件报告URL> \\
+    -v <宿主机工作区路径>:/workspace:ro \\
+    -v <宿主机临时报告路径>:/report:ro \\
+    <环境镜像名:标签> \\
     python /workspace/ci/scripts/run_and_notify.py # <命令>
   ```
 - **参数说明：**
@@ -646,11 +677,6 @@
   - `--workdir /workspace`：设置容器的工作目录。
   - `<环境镜像名:标签>`：指定包含所有依赖的环境镜像。
   - `<命令>`：在容器内执行的命令。
-
-### 12.6 团队协作和CI/CD流水线下的推荐用法
-- 推荐所有团队成员和CI/CD流水线都用同一个Dockerfile和镜像标签，保证环境一致。
-- CI平台（如 Jenkins）必须使用凭据机制安全注入敏感变量。
-- 主要的报告查看通过 Allure Jenkins 插件进行。
 
 ### 12.7 常见问题与解答
 - **Q: 没有Dockerfile怎么办？**
@@ -684,7 +710,13 @@
 - **Q: Docker 拉取镜像或构建时网络超时/无法连接？**
   - A: 核心是解决 Docker daemon 访问仓库的网络问题。首选方案是配置并验证有效的国内镜像加速器。
 - **Q: Jenkins流水线在Docker容器(DooD模式)中挂载卷找不到文件/内容不正确？**
-  - A: 关键在于区分 Jenkins Agent 容器内的路径 (`${WORKSPACE}`) 和宿主机上的真实路径。必须在 Jenkinsfile 的 `docker run` 命令中使用 `-v` 挂载宿主机上的路径。
+  - A: 关键在于区分 Jenkins Agent 容器内的路径 (`${WORKSPACE}`) 和宿主机上的真实路径。必须在 Jenkinsfile 的 `docker run` 命令中使用 `-v` 挂载**宿主机**上的路径。确保 Jenkinsfile 中的 `HOST_*` 变量正确指向了宿主机上的对应目录。
+- **Q: Jenkins流水线执行 `sh \'docker ...\'` 时报错 `docker: not found` (exit code 127)?**
+  - A: 这是因为运行流水线的 Jenkins Agent 环境（通常是 Jenkins Controller 或 Agent 容器）找不到 `docker` 命令。解决方案是在启动 Jenkins Agent 容器时：1) **必需**挂载 Docker Socket (`-v /var/run/docker.sock:/var/run/docker.sock`) **并且** 2) **必需**提供 Docker CLI。提供 CLI 的方式可以是挂载宿主机的 Docker CLI（推荐 `-v $(which docker):/usr/bin/docker`）或在 Agent 镜像中预先安装 Docker Client。
+- **Q: Jenkins流水线执行 `sh \'docker ...\'` 时报错 `docker: permission denied ... /var/run/docker.sock` (exit code 126)?**
+  - A: 这是因为 Jenkins Agent 容器内的用户（通常是 `jenkins`）没有权限访问挂载进来的宿主机 Docker Socket 文件 (`/var/run/docker.sock`)。解决方案是在启动 Jenkins Agent 容器时，使用 `--group-add <宿主机docker组GID>` 将容器内的用户添加到宿主机的 `docker` 用户组。首先需要在宿主机上用 `getent group docker` 查找到 `docker` 组的 GID。
+- **Q: Jenkins 构建列表或日志显示的时间与本地时间（如北京时间）不一致？**
+  - A: 这是因为运行 Jenkins Controller 或 Agent 的 Docker 容器默认使用 UTC 时间。解决方案是在启动**该容器**时，添加时区环境变量和 localtime 挂载：`-e TZ=Asia/Shanghai -v /etc/localtime:/etc/localtime:ro`。这会影响 Jenkins UI 显示的时间戳以及容器内进程获取到的时间，使其与北京时间一致。
 
 ---
 
@@ -961,7 +993,13 @@ pipeline {
 *   **Q: Docker 拉取镜像或构建时网络超时/无法连接？**
     *   A: 核心是解决 Docker daemon 访问仓库的网络问题。首选方案是配置并验证有效的国内镜像加速器。
 *   **Q: Jenkins流水线在Docker容器(DooD模式)中挂载卷找不到文件/内容不正确？**
-    *   A: 关键在于区分 Jenkins Agent 容器内的路径 (`${WORKSPACE}`) 和宿主机上的真实路径。必须在 Jenkinsfile 的 `docker run` 命令中使用 `-v` 挂载宿主机上的路径。
+    *   A: 关键在于区分 Jenkins Agent 容器内的路径 (`${WORKSPACE}`) 和宿主机上的真实路径。必须在 Jenkinsfile 的 `docker run` 命令中使用 `-v` 挂载**宿主机**上的路径。确保 Jenkinsfile 中的 `HOST_*` 变量正确指向了宿主机上的对应目录。
+*   **Q: Jenkins流水线执行 `sh \'docker ...\'` 时报错 `docker: not found` (exit code 127)?**
+    *   A: 这是因为运行流水线的 Jenkins Agent 环境（通常是 Jenkins Controller 或 Agent 容器）找不到 `docker` 命令。解决方案是在启动 Jenkins Agent 容器时：1) **必需**挂载 Docker Socket (`-v /var/run/docker.sock:/var/run/docker.sock`) **并且** 2) **必需**提供 Docker CLI。提供 CLI 的方式可以是挂载宿主机的 Docker CLI（推荐 `-v $(which docker):/usr/bin/docker`）或在 Agent 镜像中预先安装 Docker Client。
+*   **Q: Jenkins流水线执行 `sh \'docker ...\'` 时报错 `docker: permission denied ... /var/run/docker.sock` (exit code 126)?**
+    *   A: 这是因为 Jenkins Agent 容器内的用户（通常是 `jenkins`）没有权限访问挂载进来的宿主机 Docker Socket 文件 (`/var/run/docker.sock`)。解决方案是在启动 Jenkins Agent 容器时，使用 `--group-add <宿主机docker组GID>` 将容器内的用户添加到宿主机的 `docker` 用户组。首先需要在宿主机上用 `getent group docker` 查找到 `docker` 组的 GID。
+*   **Q: Jenkins 构建列表或日志显示的时间与本地时间（如北京时间）不一致？**
+    *   A: 这是因为运行 Jenkins Controller 或 Agent 的 Docker 容器默认使用 UTC 时间。解决方案是在启动**该容器**时，添加时区环境变量和 localtime 挂载：`-e TZ=Asia/Shanghai -v /etc/localtime:/etc/localtime:ro`。这会影响 Jenkins UI 显示的时间戳以及容器内进程获取到的时间，使其与北京时间一致。
 
 ---
 
