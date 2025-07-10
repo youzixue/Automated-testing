@@ -1077,9 +1077,3 @@ def send_notification(allure_plugin_url): # URL 来自 Jenkins 插件
 - **错误处理**：邮件发送失败不应导致整个 CI 流程失败。
 
 ---
-
-## 变更记录
-- YYYY-MM-DD: **重大更新**: 根据最新的 Jenkinsfile 和 CI 脚本重构，更新了文档。主要变更包括：明确 Allure CLI 仍然需要；更新了 CI 脚本说明；修正了 Jenkinsfile 示例，移除了 Nginx 部署逻辑，准确反映了 Allure 插件 + 手动临时报告生成（用于邮件摘要）+ 清理的流程；澄清了报告访问方式；调整了 FAQ 和邮件通知章节。
-- YYYY-MM-DD: **重大更新**: 将 Web/API URL、Allure 基础 URL、Git 仓库 URL 及所有邮件配置参数化到 Jenkins 凭据。更新了 Jenkins 凭据创建指南和 Jenkinsfile 示例以反映这些变化。将报告生成和通知逻辑移至 `post { always }` 块以强制执行。
-- YYYY-MM-DD: 新增 Jenkins 凭据创建指南，调整邮件通知说明以匹配项目实践，移除 emailext 示例强调 Python 脚本方式。
-- YYYY-MM-DD: 更新 Dockerfile 和 Jenkinsfile 相关描述，移除 GitLab CI 示例，强化 Jenkins 集成说明和 DooD 模式下的路径映射解释。
