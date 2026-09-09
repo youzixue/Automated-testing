@@ -84,7 +84,7 @@
         *   **提高可维护性**: 当 UI 发生变化时，只需要修改对应的屏幕/组件对象中的定位器或方法，而不需要修改所有使用该元素的测试用例。
         *   **提高可读性**: 测试用例代码更关注业务流程，而非具体的 UI 操作细节 (如 `login_page.perform_login("user", "pass")` 而非 `poco("username").set_text("user"); poco("password").set_text("pass"); poco("login_button").click()`)。
         *   **代码复用**: 封装的操作可以在多个测试用例中复用。
-    *   (遵循 `force-business-implementation.mdc`) 应直接实现业务相关的屏幕和操作，避免示例性质的代码。
+    *   屏幕和操作应对应明确场景；允许使用虚构示例及必要说明。
     *   **配置访问**: 屏幕对象应通过 `__init__` 方法接收所需的配置项，而不是全局导入配置模块，以提高可测试性和解耦。
 
 *   **YAML/JSON (数据食谱)**:
@@ -578,24 +578,9 @@ def launch_target_in_wechat(device, poco: UIObjectProxy, config: Dict[str, Any],
 
 ## 7. 遵循的最佳实践与项目规范
 
-在开发 App 和微信自动化测试时，请务必牢记并遵守以下项目规范 (`.cursor/rules/` 目录) 和通用最佳实践：
+项目通用约定见 [AGENTS.md](../AGENTS.md)，平台开发步骤见 [App 与微信端参考指南](../.agents/skills/add-automated-test/references/mobile-wechat.md)。
 
-*   **代码分析优先 (`code-analysis-first`)**: 检查是否已有类似屏幕对象或操作。
-*   **代码风格一致性 (`code-consistency`)**: 使用 Black, Pylint, MyPy。
-*   **强制业务代码实现 (`force-business-implementation`)**: 屏幕对象应反映真实业务。
-*   **接口先行原则 (`interface-first-principle`)**: 复杂屏幕或可复用组件可考虑抽象接口。
-*   **日志标准化 (`logging-standards`)**: 在屏幕对象和测试用例中记录关键信息。
-*   **页面对象模式 (`page-object-pattern`)**: **核心实践**，必须遵循。
-*   **平台特定标准 (`platform-specific-testing`)**: 将代码放在正确的平台目录下 (`mobile`, `wechat`)。
-*   **项目文档优先 (`project-documentation-first`)**: 阅读本文档和架构文档。
-*   **资源管理 (`resource-management`)**: Fixture 负责设备连接和 Poco 实例生命周期。
-*   **安全数据处理 (`secure-data-handling`)**: 不硬编码密码等敏感信息。
-*   **七层架构设计 (`seven-layer-architecture`)**: 代码放置在正确目录。
-*   **智能等待策略 (`smart-wait-strategy`)**: **核心实践**，使用 Poco 等待，禁止 `time.sleep()`。
-*   **异常专一性 (`specific-exceptions`)**: 定义和使用有意义的自定义异常。
-*   **测试数据分离 (`test-data-separation`)**: 使用 `data/` 和参数化。
-*   **类型注解强制 (`type-annotations`)**: 使用类型提示。
-*   **版本控制 (`version-control`)**: 遵循提交规范。
+复用现有屏幕对象和共享流程，保留各入口差异；通过 fixture 管理设备资源，优先使用条件等待，同一设备串行执行。允许虚构示例数据，实际凭据由环境配置提供。
 
 *   **Poco 选择器最佳实践**:
     *   **优先级**: 

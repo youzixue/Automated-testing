@@ -143,4 +143,4 @@ poetry run pytest -m smoke
 ```
 
 ---
-如需扩展新平台、业务或参数化场景，请补充本README并同步更新相关目录文档。遵循项目规范（见 `.cursor/rules/`）。
+如需扩展新平台、业务或参数化场景，请补充本README并同步更新相关目录文档。遵循项目规范（见 [AGENTS.md](../AGENTS.md)）。

@@ -1,3 +1,5 @@
+项目协作约定见 [AGENTS.md](../AGENTS.md)，Agent 开发步骤见 [Web 测试参考指南](../.agents/skills/add-automated-test/references/web.md)。
+
 # Web自动化测试开发指南
 
 ## 1. 引言
@@ -40,7 +42,7 @@
 *   **工具层 (`src/`)**:
     *   `src/utils/`: 提供各种通用工具，如配置加载、日志记录、截图处理、验证码识别（OCR）等。
 
-> **重要**: 在开始编码前，请务必花时间阅读 `docs/enhanced_architecture.md` 文档，以深入理解项目架构。 (遵循 `project-documentation-first` 规则, 详见 `.cursor/rules/project-documentation-first.mdc`)
+> **重要**: 在开始编码前，请务必花时间阅读 `docs/enhanced_architecture.md` 文档，以深入理解项目架构。
 
 ### 2.2 核心组件与技术点解释
 
@@ -51,7 +53,7 @@
     *   **在框架中的作用**:
         1.  **浏览器交互**: 负责启动浏览器、打开页面、查找元素、点击、输入文本、截图等所有与浏览器界面交互的操作。
         2.  **异步优先**: 本项目主要使用 Playwright 的 **异步 API**。这意味着与页面交互的操作（如 `page.click()`, `page.fill()`）都需要使用 `await` 关键字，并且测试函数需要用 `async def` 定义并配合 `@pytest.mark.asyncio` 装饰器。异步可以提高测试执行效率。
-        3.  **自动等待**: Playwright 内置了强大的[自动等待机制](https://playwright.dev/docs/actionability)。当你执行一个操作（如点击按钮）时，Playwright 会自动等待元素变为可操作状态再执行，**大大减少了不稳定和需要手动添加等待的情况** (遵循 `smart-wait-strategy`, 详见 `.cursor/rules/smart-wait-strategy.mdc`)。
+        3.  **自动等待**: Playwright 内置了强大的[自动等待机制](https://playwright.dev/docs/actionability)。当你执行一个操作（如点击按钮）时，Playwright 会自动等待元素变为可操作状态再执行，**大大减少了不稳定和需要手动添加等待的情况**。
         4.  **跨浏览器测试**: 可以轻松地在不同的浏览器引擎上运行相同的测试代码。
         5.  **强大的工具**: 提供了 [Playwright Inspector](https://playwright.dev/docs/inspector)（帮助生成和调试选择器）、[Trace Viewer](https://playwright.dev/docs/trace-viewer)（记录详细的测试执行过程，包括截图、网络请求、控制台日志，非常适合问题排查）等辅助工具。
     *   **测试人员交互**: 你主要通过 `conftest.py` 提供的 `page` **Fixture** 来获取一个已经初始化好的 Playwright 页面实例。然后，你会将这个 `page` 对象传递给你编写的**页面对象 (Page Objects)**，并通过页面对象封装好的方法来间接操作页面元素。
@@ -63,7 +65,7 @@
         2.  **分离**: 将页面交互的实现细节与测试用例的业务逻辑**分离**。
         3.  **提高可维护性**: UI变化时，通常只需修改对应的 Page Object。
         4.  **提高可读性和复用性**: 测试代码更接近自然语言，页面操作逻辑可复用。
-    *   **位置**: 页面对象类通常放在 `src/web/pages/` 目录下 (遵循 `page-object-pattern`, 详见 `.cursor/rules/page-object-pattern.mdc`)。
+    *   **位置**: 页面对象类通常放在 `src/web/pages/` 目录下。
 
 *   **`pytest` (测试引擎与指挥官)**:
     *   **作用**: 同样是Web测试的核心引擎，负责测试发现、执行、断言、Fixture管理等。
@@ -78,7 +80,7 @@
 
 *   **智能等待策略 (Smart Wait Strategy)**:
     *   **核心**: **优先依赖 Playwright 的自动等待机制**。避免使用 `time.sleep()`。
-    *   **何时需要显式等待**: 只有在需要等待非 Playwright 自动处理的特定条件时（如特定网络请求完成、自定义的JS事件），才使用 Playwright 提供的显式等待方法（如 `page.wait_for_selector()`, `page.wait_for_load_state()`, `page.wait_for_event()` 等）。 (遵循 `smart-wait-strategy`, 详见 `.cursor/rules/smart-wait-strategy.mdc`)
+    *   **何时需要显式等待**: 只有在需要等待非 Playwright 自动处理的特定条件时（如特定网络请求完成、自定义的JS事件），才使用 Playwright 提供的显式等待方法（如 `page.wait_for_selector()`, `page.wait_for_load_state()`, `page.wait_for_event()` 等）。
 
 *   **选择器 (Selectors)**:
     *   **是什么**: 用于定位页面元素的字符串表达式。
@@ -110,8 +112,6 @@ poetry run playwright install
 # poetry run playwright install chromium
 ```
 
-(遵循 `environment-setup` 规则, 详见 `.cursor/rules/environment-setup.mdc`)
-
 ### 3.2 配置环境
 
 *   **`.env` 文件**: 可能包含Web测试相关的URL (`WEB_BASE_URL`)、默认用户名/密码、浏览器设置（如 `HEADLESS=false` 用于本地调试）等。
@@ -136,7 +136,7 @@ poetry run playwright install
 ### 步骤 1: 创建/更新页面对象 (Page Object)
 
 *   **位置**: `src/web/pages/login_page.py`
-*   **操作**: 定义 `LoginPage` 类，继承自 `BasePage` (如果存在)，封装元素和操作。 (遵循 `page-object-pattern`, 详见 `.cursor/rules/page-object-pattern.mdc`)
+*   **操作**: 定义 `LoginPage` 类，继承自 `BasePage` (如果存在)，封装元素和操作。
 
 ```python
 # src/web/pages/login_page.py
@@ -369,23 +369,23 @@ async def test_login_with_invalid_password(login_page: LoginPage, test_users: di
 
 在开发Web测试时，请务必牢记并遵守以下项目规范：
 
-*   **页面对象模型 (POM)**: 严格遵循 POM，将元素和操作封装在 `src/web/pages/` 中。 (遵循 `page-object-pattern`, 详见 `.cursor/rules/page-object-pattern.mdc`)
-*   **智能等待**: 优先使用 Playwright 的自动等待。 (遵循 `smart-wait-strategy`, 详见 `.cursor/rules/smart-wait-strategy.mdc`)
+*   **页面对象模型 (POM)**: 严格遵循 POM，将元素和操作封装在 `src/web/pages/` 中。
+*   **智能等待**: 优先使用 Playwright 的自动等待。
 *   **可靠的选择器**: 使用稳定、唯一的选择器（如 `data-testid`、`id`、`name` 或组合的 CSS 选择器），避免使用易变的 XPath 或过于依赖 DOM 结构的选择器。
-*   **代码风格一致性**: 遵循项目代码风格规范。 (遵循 `code-consistency`, 详见 `.cursor/rules/code-consistency.mdc`)
+*   **代码风格一致性**: 遵循项目代码风格规范。
 *   **测试用例独立性**: 每个测试用例应能独立运行，不依赖于其他测试用例的执行顺序或状态。使用 Fixture 来确保测试环境的隔离。
 *   **清晰的断言**: 断言应明确且与测试目的相关。断言消息应清晰说明失败原因。
-*   **日志标准化**: 添加清晰的日志。 (遵循 `logging-standards`, 详见 `.cursor/rules/logging-standards.mdc`)
+*   **日志标准化**: 添加清晰的日志。
 *   **异常处理**: Page Object 方法应妥善处理 Playwright 异常。
-*   **配置外部化**: URL、凭据等应配置化。 (遵循 `external-configuration`, 详见 `.cursor/rules/external-configuration.mdc`)
-*   **资源自动释放**: 浏览器/页面资源由 Fixture 管理。 (遵循 `resource-management`, 详见 `.cursor/rules/resource-management.mdc`)
-*   **安全数据处理**: 不硬编码敏感信息。 (遵循 `secure-data-handling`, 详见 `.cursor/rules/secure-data-handling.mdc`)
-*   **七层架构设计**: 代码放置在正确目录。 (遵循 `seven-layer-architecture`, 详见 `.cursor/rules/seven-layer-architecture.mdc`)
-*   **类型注解强制**: 使用类型提示。 (遵循 `type-annotations`, 详见 `.cursor/rules/type-annotations.mdc`)
-*   **版本控制**: 遵循提交规范。 (遵循 `version-control`, 详见 `.cursor/rules/version-control.mdc`)
-*   **代码分析优先**: 在创建新的页面对象或测试用例前，检查是否已有类似实现。(遵循 `code-analysis-first`, 详见 `.cursor/rules/code-analysis-first.mdc`)
-*   **强制业务代码实现**: 直接编写与业务相关的测试逻辑，不要写示例或通用代码。(遵循 `force-business-implementation`, 详见 `.cursor/rules/force-business-implementation.mdc`)
-*   **测试数据分离**: 如果使用了数据驱动，确保测试数据与逻辑分离。(遵循 `test-data-separation`, 详见 `.cursor/rules/test-data-separation.mdc`)
+*   **配置外部化**: URL、凭据等应配置化。
+*   **资源自动释放**: 浏览器/页面资源由 Fixture 管理。
+*   **安全数据处理**: 不硬编码敏感信息。
+*   **七层架构设计**: 代码放置在正确目录。
+*   **类型注解强制**: 使用类型提示。
+*   **版本控制**: 遵循提交规范。
+*   **代码分析优先**: 在创建新的页面对象或测试用例前，检查是否已有类似实现。
+*   **场景实现**: 围绕明确场景编写可验证的断言，允许虚构示例数据及必要说明。
+*   **测试数据分离**: 如果使用了数据驱动，确保测试数据与逻辑分离。
 *   **(参考)**: 还可以参考 `API自动化测试开发指南.md` 获取更多关于 `pytest`、Fixtures、配置、日志等通用概念的详细信息。
 
 ## 7. 常见问题与调试 (Web UI)

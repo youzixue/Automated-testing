@@ -529,21 +529,9 @@ def test_get_user_invalid_id_format(user_service: UserService, user_api_data: di
 
 ## 6. 遵循的最佳实践与项目规范
 
-在开发API测试时，请务必牢记并遵守以下项目规范 (`.cursor/rules/` 目录)：
+项目通用约定见 [AGENTS.md](../AGENTS.md)，开发步骤见 [API 测试参考指南](../.agents/skills/add-automated-test/references/api.md)。
 
-*   **代码分析优先 (`code-analysis-first`)**: 检查是否已有类似实现。 (详见 `.cursor/rules/code-analysis-first.mdc`)
-*   **代码风格一致性 (`code-consistency`)**: 使用 Black, Pylint, MyPy。 (详见 `.cursor/rules/code-consistency.mdc`)
-*   **强制业务代码实现 (`force-business-implementation`)**: 编写实际业务逻辑。 (详见 `.cursor/rules/force-business-implementation.mdc`)
-*   **接口先行原则 (`interface-first-principle`)**: 复杂服务可考虑接口。 (详见 `.cursor/rules/interface-first-principle.mdc`)
-*   **日志标准化 (`logging-standards`)**: 使用 `logging`。 (详见 `.cursor/rules/logging-standards.mdc`)
-*   **配置外部化 (`external-configuration`)**: 使用 `config/` 和 `.env`。 (详见 `.cursor/rules/external-configuration.mdc`)
-*   **资源自动释放 (`resource-management`)**: **Fixture** 通常负责管理资源。 (详见 `.cursor/rules/resource-management.mdc`)
-*   **安全数据处理 (`secure-data-handling`)**: 不硬编码敏感信息。 (详见 `.cursor/rules/secure-data-handling.mdc`)
-*   **七层架构设计 (`seven-layer-architecture`)**: 代码放置在正确目录。 (详见 `.cursor/rules/seven-layer-architecture.mdc`)
-*   **异常专一性 (`specific-exceptions`)**: 使用**自定义异常**。 (详见 `.cursor/rules/specific-exceptions.mdc`)
-*   **测试数据分离 (`test-data-separation`)**: 使用 `data/` 和**数据驱动**。 (详见 `.cursor/rules/test-data-separation.mdc`)
-*   **类型注解强制 (`type-annotations`)**: 使用类型提示。 (详见 `.cursor/rules/type-annotations.mdc`)
-*   **版本控制 (`version-control`)**: 遵循提交规范。 (详见 `.cursor/rules/version-control.mdc`)
+优先复用服务对象，分离场景数据，明确模型校验与接口业务断言的区别，并通过 fixture 管理客户端。允许虚构示例数据和必要说明；实际凭据由环境配置提供。
 
 ## 7. 常见问题与调试
 

@@ -15,7 +15,5 @@
 - **架构遵循**: 严格遵循七层架构规范 (`seven-layer-architecture.mdc`)，不直接被测试用例层调用，而是通过业务对象层 (`src/business/api/`) 间接调用。
 
 ## 参考
-- `.cursor/rules/platform-specific-testing.mdc`
-- `.cursor/rules/seven-layer-architecture.mdc`
-- `.cursor/rules/specific-exceptions.mdc`
-- `.cursor/rules/logging-standards.mdc` 
+
+项目协作约定见 [AGENTS.md](../../AGENTS.md)。

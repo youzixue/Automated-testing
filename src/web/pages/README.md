@@ -13,5 +13,5 @@
 - 新增页面对象时，务必补充本 README
 
 ## 参考
-- .cursor/rules/page-object-pattern.mdc
-- .cursor/rules/code-consistency.mdc
+
+项目协作约定见 [AGENTS.md](../../../AGENTS.md)。

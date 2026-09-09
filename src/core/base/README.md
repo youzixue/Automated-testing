@@ -37,8 +37,5 @@ class AutomationError(Exception):
 ```
 
 ## 参考
-- .cursor/rules/interface-first-principle.mdc
-- .cursor/rules/code-consistency.mdc
-- .cursor/rules/type-annotations.mdc
-- .cursor/rules/documentation-completeness.mdc
-- .cursor/rules/specific-exceptions.mdc
+
+项目协作约定见 [AGENTS.md](../../../AGENTS.md)。

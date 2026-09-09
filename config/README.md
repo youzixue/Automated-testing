@@ -69,4 +69,5 @@ TEST_ADMIN_PASSWORD=admin123
 ```
 
 ## 参考
-- `.cursor/rules/external-configuration.mdc`
+
+项目协作约定见 [AGENTS.md](../AGENTS.md)。

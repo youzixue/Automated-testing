@@ -26,7 +26,8 @@
 - **`docs/`**: **文档目录** - 存放项目架构、环境部署、规范等详细文档。
 - **`ci/`**: **CI/CD 辅助目录** - 包含 Jenkins Pipeline (`Jenkinsfile`) 及相关脚本。
 - **`output/`**: **输出目录** - 存放生成的报告、日志、截图等临时文件 (不提交到 Git)。
-- **`.cursor/`**: Cursor AI 规则目录，包含项目代码规范和最佳实践。
+- **`AGENTS.md`**: Agent 协作约定和项目入口。
+- **`.agents/skills/`**: 多端测试开发与测试排错 Skills。
 - `pyproject.toml`: 项目元数据及依赖管理 (Poetry)。
 - `Dockerfile`: 测试环境的 Docker 镜像定义。
 - `.env.example`, `.env`: 环境变量配置模板和本地配置 (不提交 `.env`)。
@@ -403,6 +404,17 @@ markers = [
       assert user["expected_message"] in response.json().get("message", "")
   ```
 
+## AI 辅助开发
+
+项目协作入口为 [AGENTS.md](AGENTS.md)，不依赖特定编辑器。任务流程按需使用：
+
+- [多端测试开发](.agents/skills/add-automated-test/SKILL.md)：新增或修改 API、Web、App、小程序和公众号测试，按平台加载参考指南。
+- [测试排错](.agents/skills/debug-test-failure/SKILL.md)：根据配置、日志、截图与断言定位失败原因。
+
+在支持本地 Skills 的 Codex 中，可使用 `$add-automated-test` 或 `$debug-test-failure` 显式指定技能，例如：“使用 $add-automated-test 为 Web 登录补充一个异常场景”。其他 Agent 的自动发现方式以其自身支持为准，也可以直接指定上述 Markdown 文件作为任务参考。
+
+测试数据为虚构示例；实际运行仍需配置目标系统、凭据及对应设备。AI 辅助开发后的交付应说明实际验证范围，不将跳过或未执行的测试计为通过。
+
 ## 参考文档
 
 - `docs/环境依赖安装&CICD集成.md`: 最全面的环境搭建、Docker 使用和 Jenkins 集成指南。
@@ -410,9 +422,9 @@ markers = [
 - `docs/Web自动化测试开发指南.md`: Web UI 测试的专项指南，包含 Playwright 的最佳实践。
 - `docs/API自动化测试开发指南.md`: API 接口测试的专项指南，包含 httpx 的最佳实践。
 - `docs/微信&APP自动化测试开发指南.md`: 移动应用和微信测试的专项指南，包含 Airtest/PocoUI 的最佳实践。
-- `.cursor/rules/`: 项目编码规范和最佳实践规则。
+- [AGENTS.md](AGENTS.md): 项目协作约定及任务 Skills 入口。
 - 各 `src` 和 `tests` 子目录下的 `README.md`: 提供模块的具体说明。
 
 ---
 
-欢迎贡献！请遵循项目规范（见 `.cursor/rules/`）。
+欢迎贡献！请参考 [AGENTS.md](AGENTS.md) 中的项目协作约定。
