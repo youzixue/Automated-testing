@@ -9,14 +9,14 @@
 - **日志接口**: `log_interfaces.py` 定义了日志记录相关的接口或类型。
 - **配置定义**: `config_defs.py` 定义了核心配置相关的结构或类型。
 - **初始化**: `__init__.py` 导出核心基类和异常。
-- 业务对象和平台实现必须依赖接口而非具体实现，禁止跨层依赖
+- 根据复用和扩展需求使用现有接口，保持职责清晰，避免循环依赖；不要求机械地逐层调用。
 - 推荐使用 Python ABC 抽象基类，便于类型检查和扩展
 
 ## 设计原则
-- 先定义接口，再实现具体类（见 interface-first-principle.mdc）
-- 所有公共API必须加类型注解和Google风格docstring（见 type-annotations.mdc、documentation-completeness.mdc）
-- 命名、注释、类型注解需与项目规范一致（见 code-consistency.mdc）
-- 异常体系分层清晰，所有异常类以Error结尾，docstring需说明异常场景（见 specific-exceptions.mdc）
+- 存在多种实现或明确扩展需求时再提炼接口，优先复用现有抽象。
+- 公共 API 补充必要的类型注解和文档说明，沿用项目现有风格。
+- 命名、注释、类型注解需与项目规范一致
+- 异常体系分层清晰，所有异常类以Error结尾，docstring需说明异常场景
 - 新增接口、抽象基类或异常时，务必补充本 README
 
 ## 最佳实践示例

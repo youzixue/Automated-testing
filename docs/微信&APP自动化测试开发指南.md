@@ -21,27 +21,27 @@
 
 ## 2. 项目背景与核心概念
 
-### 2.1 七层架构概览 (遵循 `seven-layer-architecture.mdc`)
+### 2.1 七层架构概览
 
 本项目采用标准的七层架构设计。App 和微信自动化测试主要涉及以下层级和目录：
 
-*   **测试用例层 (`tests/`)**: (遵循 `platform-specific-testing.mdc`)
+*   **测试用例层 (`tests/`)**:
     *   `tests/mobile/`: 存放原生 App 测试脚本 (`test_*.py` 文件)。
     *   `tests/wechat/`: 存放微信小程序、公众号测试脚本 (`test_*.py` 文件)。**这是你主要编写代码的地方**。
-*   **固件层 (`tests/`)**: (遵循 `test-data-separation.mdc`)
+*   **固件层 (`tests/`)**:
     *   `tests/conftest.py`: 全局共享的测试配置和 **Fixtures** (如日志配置)。
     *   `tests/mobile/conftest.py`: 原生 App 测试专用的 Fixtures (如提供设备连接、`Poco` 实例)。
     *   `tests/wechat/conftest.py`: 微信测试专用的 Fixtures (同上，可能包含微信特定操作如启动小程序)。
-*   **业务对象层 (`src/`, `data/`)**: (遵循 `page-object-pattern.mdc`)
+*   **业务对象层 (`src/`, `data/`)**:
     *   `src/mobile/screens/`: **原生 App 的屏幕对象 (Screen Objects)**。封装了特定屏幕的元素定位 (Poco 选择器) 和用户交互操作。
     *   `src/wechat/components/` 或 `src/wechat/screens/`: **微信小程序/公众号的页面或组件对象**。封装 UI 元素和交互。
-    *   `data/mobile/`, `data/wechat/`: 存放 App 和微信测试所需的数据文件 (YAML/JSON 格式)，实现**数据驱动**。 (遵循 `test-data-separation.mdc`)
-*   **平台实现层 (`src/`)**: (遵循 `platform-specific-testing.mdc`)
+    *   `data/mobile/`, `data/wechat/`: 存放 App 和微信测试所需的数据文件 (YAML/JSON 格式)，实现**数据驱动**。
+*   **平台实现层 (`src/`)**:
     *   `src/mobile/`: **Airtest 和 Poco 的具体实现封装**。例如，设备连接的辅助函数、自定义的复杂手势操作、Poco 扩展功能等。测试人员一般**不需要直接修改**此层，而是通过业务对象层调用。
     *   `src/wechat/`: **微信自动化特定的底层操作封装**。如封装好的搜索并启动小程序/公众号的函数，处理微信特定 UI 变化的逻辑等。
-*   **核心抽象层 (`src/`)**: (遵循 `interface-first-principle.mdc`)
-    *   `src/core/base/`: 定义框架的基础接口（如 `Device`, `UiElement` 的抽象基类）、自定义**异常** (`src/core/base/errors.py`, 遵循 `specific-exceptions.mdc`) 等。
-*   **工具层 (`src/`)**: (遵循 `logging-standards.mdc`, `smart-wait-strategy.mdc`)
+*   **核心抽象层 (`src/`)**:
+    *   `src/core/base/`: 定义框架的基础接口（如 `Device`, `UiElement` 的抽象基类）、自定义**异常** (`src/core/base/errors.py`) 等。
+*   **工具层 (`src/`)**:
     *   `src/utils/`: 提供各种通用工具，如配置加载 (`src/utils/config/manager.py`)、日志记录 (`src/utils/logger.py`)、Airtest/Poco 相关的智能等待 (`src/utils/waits.py`)、数据生成等。
 
 > **重要**: 在开始编码前，请务必花时间阅读 `docs/enhanced_architecture.md` 文档，以深入理解项目架构。 (遵循 `project-documentation-first` 规则)
@@ -68,7 +68,7 @@
         *   **跨引擎支持**: 通过不同的 Poco Driver（如 `AndroidUiautomationPoco`, `IOSPoco`, `UnityPoco`, `StdPoco` for Web/SDK）支持不同类型的应用。
         *   **丰富的交互 API**: 提供 `click()`, `swipe()`, `set_text()`, `long_click()`, `scroll()` 等面向 UI 元素的操作。
         *   **属性获取**: 可以方便地获取元素的各种属性（如 `get_text()`, `attr('visible')`, `get_position()`, `get_size()`）。
-        *   **内建智能等待**: 提供 `wait_for_appearance()`, `wait_for_disappearance()`, `wait_for_condition()` 等强大的**隐式等待**机制，极大地提高了脚本的稳定性。 (遵循 `smart-wait-strategy.mdc`)
+        *   **内建智能等待**: 提供 `wait_for_appearance()`, `wait_for_disappearance()`, `wait_for_condition()` 等强大的**隐式等待**机制，极大地提高了脚本的稳定性。
         *   **自动上下文处理 (大部分情况)**: 在原生和 WebView (若可识别或集成 SDK) 之间切换时，通常**无需手动管理上下文**。
     *   **在框架中的作用**: 是**主要的 UI 元素定位和交互方式**。我们优先使用 Poco 来编写测试脚本，因为它更稳定、更易维护。**仅在 Poco 无法有效定位元素时，才考虑使用 Airtest 的图像识别作为补充**。
 
@@ -78,7 +78,7 @@
     *   **参数化**: 用于从 YAML 文件加载数据，实现对不同设备、不同用户、不同场景的测试。
 
 *   **屏幕/组件对象 (Screen/Component Objects, 业务封装者)**:
-    *   **是什么**: 位于 `src/mobile/screens/` 或 `src/wechat/components/` 的 Python 类。(遵循 `page-object-pattern.mdc`)
+    *   **是什么**: 位于 `src/mobile/screens/` 或 `src/wechat/components/` 的 Python 类。
     *   **在框架中的作用**: 它们是**测试用例与底层 UI 操作之间的桥梁**。每个类封装了一个特定的屏幕、页面或可复用组件上的**元素定位逻辑 (Poco 选择器)** 和**用户操作流程** (如登录、搜索、添加到购物车等)。
     *   **为什么重要**:
         *   **提高可维护性**: 当 UI 发生变化时，只需要修改对应的屏幕/组件对象中的定位器或方法，而不需要修改所有使用该元素的测试用例。
@@ -97,7 +97,7 @@
     *   (与 API 指南中的解释类似) 通过 YAML 文件和 `pytest` 参数化实现，用多组数据测试相同的屏幕操作或业务流程。
 
 *   **自定义异常 (错误信号灯)**:
-    *   (与 API 指南中的解释类似) 在 `src/core/base/errors.py` 中定义特定于 UI 自动化的异常（如 `ElementNotFoundError`, `WechatLaunchError`），使错误处理更精确。(遵循 `specific-exceptions.mdc`)
+    *   (与 API 指南中的解释类似) 在 `src/core/base/errors.py` 中定义特定于 UI 自动化的异常（如 `ElementNotFoundError`, `WechatLaunchError`），使错误处理更精确。
 
 ### 2.3 主要挑战总结
 
@@ -188,7 +188,7 @@ poetry install
 
 根据 UI 探索结果，在 `src/mobile/screens/` 目录下创建或修改屏幕对象文件，例如 `login_screen.py` 和 `home_screen.py`。
 
-**示例 `src/mobile/screens/login_screen.py`**: (遵循 `page-object-pattern.mdc`)
+**示例 `src/mobile/screens/login_screen.py`**:
 
 ```python
 # src/mobile/screens/login_screen.py
@@ -253,7 +253,7 @@ class LoginScreen:
         # 这个方法不返回 HomeScreen 实例，由测试用例负责后续的屏幕对象切换和验证
 ```
 
-**示例 `src/mobile/screens/home_screen.py`**: (遵循 `page-object-pattern.mdc`)
+**示例 `src/mobile/screens/home_screen.py`**:
 
 ```python
 # src/mobile/screens/home_screen.py
@@ -303,7 +303,7 @@ else:
 *   方法名应体现**业务含义**。
 *   `__init__` 接收 **Poco 实例** 和 **config 字典** (体现**依赖注入**)。
 *   使用 `wait_for_appearance` 等待元素加载，确保稳定性。
-*   日志记录关键操作。 (遵循 `logging-standards.mdc`)
+*   日志记录关键操作。
 
 ### 步骤 3: 准备测试数据 (YAML Data)
 
@@ -332,7 +332,7 @@ invalid_login:
     *   提供全局配置 (`config`)。
     *   (可选) 提供加载 `login_data.yaml` 的 fixture (`login_test_data`)。
 
-**示例 `test_login.py`**: (遵循 `test-data-separation.mdc`)
+**示例 `test_login.py`**:
 
 ```python
 # tests/mobile/test_login.py
